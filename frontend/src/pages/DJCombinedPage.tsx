@@ -8,7 +8,8 @@ import type { DJBenchmarkResult, DJBenchmarkParams, DJQuantumTrace } from '../ty
 import type { ClassicalResult } from '../types/classical';
 import { ArrowLeft, Download, Play, Gauge } from 'lucide-react';
 
-const caseOptions = ['DJ-01', 'DJ-02', 'DJ-03', 'DJ-04'];
+const sortCaseIds = (caseIds: string[]) =>
+  [...caseIds].sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' }));
 
 function QuantumVisualization({ 
   quantum, 
@@ -148,6 +149,7 @@ function ComparisonSection({ result }: { result: DJBenchmarkResult }) {
 
 export default function DJCombinedPage() {
   const [selectedCaseId, setSelectedCaseId] = useState<string>('DJ-01');
+  const [availableCases, setAvailableCases] = useState<string[]>(['DJ-01']);
   const [classicalResult, setClassicalResult] = useState<ClassicalResult | null>(null);
   const [benchmarkResult, setBenchmarkResult] = useState<DJBenchmarkResult | null>(null);
   const [circuitImage, setCircuitImage] = useState<DJCircuitImage | null>(null);
@@ -182,6 +184,42 @@ export default function DJCombinedPage() {
       console.error('Failed to load quantum trace:', err);
       setQuantumTrace(null);
     }
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadCases = async () => {
+      try {
+        const cases = await djApi.getCases();
+        if (cancelled) return;
+
+        const caseIds = sortCaseIds(
+          cases
+            .map((item) => item.case_id)
+            .filter((caseId): caseId is string => Boolean(caseId))
+        );
+
+        if (caseIds.length > 0) {
+          setAvailableCases(caseIds);
+          setSelectedCaseId((current) => (caseIds.includes(current) ? current : caseIds[0]));
+          return;
+        }
+
+        setAvailableCases(['DJ-01']);
+      } catch (err) {
+        console.error('Failed to load DJ cases:', err);
+        if (!cancelled) {
+          setAvailableCases(['DJ-01']);
+        }
+      }
+    };
+
+    void loadCases();
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const handleRun = useCallback(async () => {
@@ -241,7 +279,9 @@ export default function DJCombinedPage() {
             onChange={(e) => setSelectedCaseId(e.target.value)}
             className="px-4 py-2 border-2 border-dashed border-gray-300 rounded-lg text-sm text-gray-700 bg-white hover:border-gray-400 transition-all cursor-pointer font-mono"
           >
-            {caseOptions.map(c => <option key={c} value={c}>{c}</option>)}
+            {availableCases.map((caseId) => (
+              <option key={caseId} value={caseId}>{caseId}</option>
+            ))}
           </select>
 
           <button
