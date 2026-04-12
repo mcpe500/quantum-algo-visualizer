@@ -14,8 +14,8 @@ export function ClassicalVisualization({ result, onDownload }: ClassicalVisualiz
 
   if (!result) {
     return (
-      <div className="max-w-6xl mx-auto px-4 pb-12 w-full pt-16">
-        <div className="flex flex-col items-center justify-center h-[400px]">
+      <div className="max-w-4xl mx-auto px-4 pb-12 w-full pt-8">
+        <div className="flex flex-col items-center justify-center h-[300px]">
           <div className="text-gray-400 text-sm">Pilih kasus dan klik "Jalankan" untuk memulai.</div>
         </div>
       </div>
@@ -27,56 +27,56 @@ export function ClassicalVisualization({ result, onDownload }: ClassicalVisualiz
   const isConstant = classification === 'CONSTANT';
 
   return (
-    <div className="max-w-6xl mx-auto px-4 pb-12 w-full pt-16">
+    <div className="max-w-4xl mx-auto px-4 pb-12 w-full pt-4">
       <div id="capture-area" ref={captureRef} className="bg-[#FAFAFA]">
         {/* HEADER */}
-        <header className="text-center pt-8 lg:pt-10">
+        <header className="text-center pt-4 pb-2">
           <p className="text-[10px] tracking-[0.2em] text-gray-600 font-bold uppercase">Solusi Klasik - Brute Force</p>
-          <h1 className="text-[28px] lg:text-[34px] font-semibold tracking-tight text-gray-900 mt-2">
+          <h1 className="text-[22px] font-semibold tracking-tight text-gray-900 mt-1">
             {case_id}: {classification}
           </h1>
-          <p className="text-gray-700 mt-2 max-w-lg mx-auto text-[14px] leading-snug">
+          <p className="text-gray-500 mt-1 max-w-lg mx-auto text-[13px] leading-snug">
             Untuk n={n_qubits}, komputer klasik butuh maksimal {maxQueries} query untuk memastikan jenis fungsi.
           </p>
         </header>
 
         {/* MAIN FLOW */}
-        <main className="flex flex-col lg:flex-row items-center justify-center mt-12 lg:mt-16 gap-4">
+        <main className="flex flex-col lg:flex-row items-start justify-center mt-6 lg:mt-8 gap-6">
           <InputsPanel n_qubits={n_qubits} totalSteps={steps.length} />
 
           {/* ARROW */}
-          <div className="hidden lg:block shrink-0 relative z-0">
-            <svg width="48" height="20" viewBox="0 0 48 20" fill="none">
-              <path d="M0 10 H46" stroke="#9CA3AF" strokeWidth="1.5" strokeLinecap="round" />
-              <path d="M42 6 L48 10 L42 14" stroke="#9CA3AF" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+          <div className="hidden lg:flex items-center shrink-0 self-center mt-6">
+            <svg width="40" height="16" viewBox="0 0 40 16" fill="none">
+              <path d="M0 8 H38" stroke="#9CA3AF" strokeWidth="1.5" strokeLinecap="round" />
+              <path d="M34 4 L40 8 L34 12" stroke="#9CA3AF" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
           </div>
-          <div className="lg:hidden w-px h-8 bg-gradient-to-b from-gray-400 to-gray-300" />
+          <div className="lg:hidden w-px h-6 bg-gradient-to-b from-gray-400 to-gray-300" />
 
           <OraclePanel steps={steps} />
 
           {/* ARROW */}
-          <div className="hidden lg:block shrink-0 relative z-0">
-            <svg width="48" height="20" viewBox="0 0 48 20" fill="none">
-              <path d="M0 10 H46" stroke="#9CA3AF" strokeWidth="1.5" strokeLinecap="round" />
-              <path d="M42 6 L48 10 L42 14" stroke="#9CA3AF" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+          <div className="hidden lg:flex items-center shrink-0 self-center mt-6">
+            <svg width="40" height="16" viewBox="0 0 40 16" fill="none">
+              <path d="M0 8 H38" stroke="#9CA3AF" strokeWidth="1.5" strokeLinecap="round" />
+              <path d="M34 4 L40 8 L34 12" stroke="#9CA3AF" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
           </div>
-          <div className="lg:hidden w-px h-8 bg-gradient-to-b from-gray-400 to-gray-300" />
+          <div className="lg:hidden w-px h-6 bg-gradient-to-b from-gray-400 to-gray-300" />
 
           <ResultPanel result={result} />
         </main>
 
         {/* FOOTER */}
-        <footer className="mt-16 text-center">
+        <footer className="mt-8 text-center pb-4">
           <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-gray-100 rounded-full border border-gray-200">
             <span
               className={`w-1.5 h-1.5 rounded-full ${isConstant ? 'bg-blue-500' : 'bg-orange-500'}`}
             />
             <p className="text-[11px] font-medium text-gray-600">
               {isConstant
-                ? 'Klasik: Semua output sama, perlu cek setengah + 1.'
-                : 'Klasik: Ditemukan perbedaan di tengah jalan.'}
+                ? `Klasik: ${steps.length} query, semua output sama → CONSTANT`
+                : `Klasik: Perbedaan ditemukan di query ke-${steps.findIndex(s => s.status === 'differs') + 1} → BALANCED`}
             </p>
           </div>
         </footer>

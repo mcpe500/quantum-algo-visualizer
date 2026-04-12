@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useCallback } from 'react';
 import { djApi } from '../services/api';
 import type { DJDataset, ClassicalResult } from '../types/classical';
 
