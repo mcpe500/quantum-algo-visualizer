@@ -4,6 +4,7 @@ import { djApi } from '../services/api';
 import type { DJCircuitImage } from '../services/api';
 import { ClassicalVisualization } from '../components/dj/ClassicalVisualization';
 import { QuantumTraceTable } from '../components/dj/QuantumTraceTable';
+import { QuantumPhaseGroupedPreview } from '../components/dj/QuantumPhaseGroupedPreview';
 import type { DJBenchmarkResult, DJBenchmarkParams, DJQuantumTrace } from '../types/dj';
 import type { ClassicalResult } from '../types/classical';
 import { ArrowLeft, Download, Play, Gauge } from 'lucide-react';
@@ -17,7 +18,8 @@ function QuantumVisualization({
   shots,
   case_id,
   n_qubits,
-  classification
+  classification,
+  quantumTrace,
 }: { 
   quantum: DJBenchmarkResult['quantum'];
   circuitImage: DJCircuitImage | null;
@@ -25,6 +27,7 @@ function QuantumVisualization({
   case_id: string;
   n_qubits: number;
   classification: string;
+  quantumTrace: DJQuantumTrace | null;
 }) {
   
   return (
@@ -102,6 +105,12 @@ function QuantumVisualization({
             </div>
           </div>
         </div>
+
+        {quantumTrace && (
+          <div className="mt-6 w-full">
+            <QuantumPhaseGroupedPreview trace={quantumTrace} />
+          </div>
+        )}
       </main>
 
       <footer className="mt-4 text-center pb-4 px-4">
@@ -338,6 +347,7 @@ export default function DJCombinedPage() {
                   case_id={benchmarkResult.case_id}
                   n_qubits={benchmarkResult.n_qubits}
                   classification={benchmarkResult.expected_classification}
+                  quantumTrace={quantumTrace}
                 />
                 {quantumTrace && (
                   <QuantumTraceTable trace={quantumTrace} />
