@@ -1,11 +1,18 @@
 import os
 import json
 import time
+import io
+import base64
 from datetime import datetime
 from flask import jsonify, request
 
+import matplotlib
+matplotlib.use('Agg')
+
 from qiskit import QuantumCircuit, QuantumRegister, ClassicalRegister
 from qiskit_aer import AerSimulator
+from qiskit.visualization import circuit_drawer
+import matplotlib.pyplot as plt
 
 from api import api_bp
 
@@ -39,16 +46,20 @@ def create_dj_circuit(n_qubits, truth_table):
     """
     Build Deutsch-Jozsa circuit from truth table.
     Uses n input qubits + 1 ancilla qubit.
+    With barriers for stage separation.
     """
     qr_in = QuantumRegister(n_qubits, "q")
     qr_anc = QuantumRegister(1, "anc")
     cr = ClassicalRegister(n_qubits, "c")
     qc = QuantumCircuit(qr_in, qr_anc, cr, name=f"DJ_n{n_qubits}")
 
+    # BEGINNING: Initialize qubits
     qc.x(qr_anc[0])
     qc.h(qr_in[:])
     qc.h(qr_anc[0])
+    qc.barrier()
 
+    # ORACLE: Apply oracle based on truth table
     outputs = list(truth_table.values())
     num_ones = sum(outputs)
     total = len(outputs)
@@ -64,6 +75,9 @@ def create_dj_circuit(n_qubits, truth_table):
                 for idx in indices:
                     qc.cx(idx, n_qubits)
 
+    qc.barrier()
+
+    # MEASURE: Final Hadamard + measurement
     qc.h(qr_in[:])
     qc.measure(qr_in[:], cr[:])
 
@@ -209,6 +223,40 @@ def dj_circuit(n_qubits):
         'gate_count': len(qc.data),
         'gates': gates
     })
+
+
+@api_bp.route('/dj/circuit-image/<case_id>', methods=['GET'])
+def dj_circuit_image(case_id):
+    """
+    GET /api/dj/circuit-image/<case_id>
+    Returns circuit as PNG base64 image using Qiskit circuit_drawer.
+    """
+    case = load_case(case_id)
+    if not case:
+        return jsonify({'error': f'Case {case_id} not found'}), 404
+    
+    n_qubits = case['n_qubits']
+    truth_table = case['oracle_definition']['truth_table']
+    
+    qc = create_dj_circuit(n_qubits, truth_table)
+    
+    try:
+        fig = circuit_drawer(qc, output='mpl')
+        buf = io.BytesIO()
+        fig.savefig(buf, format='png', bbox_inches='tight', dpi=150, facecolor='white')
+        buf.seek(0)
+        img_base64 = base64.b64encode(buf.getvalue()).decode('utf-8')
+        plt.close(fig)
+        
+        return jsonify({
+            'case_id': case_id,
+            'n_qubits': n_qubits,
+            'image': img_base64,
+            'depth': qc.depth(),
+            'gate_count': len(qc.data)
+        })
+    except Exception as e:
+        return jsonify({'error': f'Failed to generate circuit: {str(e)}'}), 500
 
 
 @api_bp.route('/dj/cases', methods=['GET'])
