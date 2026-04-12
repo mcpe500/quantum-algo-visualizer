@@ -1,0 +1,71 @@
+import { Link } from 'react-router-dom';
+import { Cpu, Waves, Zap, GitBranch } from 'lucide-react';
+
+const algorithms = [
+  {
+    id: 'dj',
+    name: 'Deutsch-Jozsa',
+    description: 'Quantum oracle classification problem',
+    icon: Cpu,
+  },
+  {
+    id: 'qft',
+    name: 'Quantum Fourier Transform',
+    description: 'Quantum version of discrete Fourier transform',
+    icon: Waves,
+  },
+  {
+    id: 'vqe',
+    name: 'Variational Quantum Eigensolver',
+    description: 'Hybrid quantum-classical optimization for ground state',
+    icon: Zap,
+  },
+  {
+    id: 'qaoa',
+    name: 'Quantum Approximate Optimization',
+    description: 'Quantum annealing approach for combinatorial optimization',
+    icon: GitBranch,
+  },
+];
+
+function AlgorithmSelector() {
+  return (
+    <div className="min-h-screen bg-[#FAFAFA] p-8">
+      <div className="max-w-4xl mx-auto">
+        <h1 className="text-3xl font-bold text-gray-900 mb-2">
+          Quantum Algorithm Visualizer
+        </h1>
+        <p className="text-gray-600 mb-8">
+          Select an algorithm to visualize
+        </p>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {algorithms.map((algo) => {
+            const Icon = algo.icon;
+            return (
+              <Link
+                key={algo.id}
+                to={`/${algo.id}`}
+                className="block p-6 bg-white border-2 border-gray-200 rounded-xl hover:border-gray-400 hover:shadow-lg transition-all group"
+              >
+                <div className="flex items-center gap-4">
+                  <div className="p-3 bg-gray-100 rounded-lg group-hover:bg-gray-200 transition-colors">
+                    <Icon className="w-8 h-8 text-gray-700" />
+                  </div>
+                  <div>
+                    <h2 className="text-lg font-semibold text-gray-900">
+                      {algo.name}
+                    </h2>
+                    <p className="text-sm text-gray-500">{algo.description}</p>
+                  </div>
+                </div>
+              </Link>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export default AlgorithmSelector;
