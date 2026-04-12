@@ -1,23 +1,24 @@
 import { useState, useCallback, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { djApi } from '../services/api';
+import type { DJCircuitImage } from '../services/api';
 import { ClassicalVisualization } from '../components/dj/ClassicalVisualization';
-import type { DJBenchmarkResult, DJBenchmarkParams, DJCircuit } from '../types/dj';
+import type { DJBenchmarkResult, DJBenchmarkParams } from '../types/dj';
 import type { ClassicalResult } from '../types/classical';
-import { ArrowLeft, Download, Play, Layers, Cpu, Clock, Gauge } from 'lucide-react';
+import { ArrowLeft, Download, Play, Gauge } from 'lucide-react';
 
 const caseOptions = ['DJ-01', 'DJ-02', 'DJ-03', 'DJ-04'];
 
 function QuantumVisualization({ 
   quantum, 
-  circuit,
+  circuitImage,
   shots,
   case_id,
   n_qubits,
   classification
 }: { 
   quantum: DJBenchmarkResult['quantum'];
-  circuit: DJCircuit | null;
+  circuitImage: DJCircuitImage | null;
   shots: number;
   case_id: string;
   n_qubits: number;
@@ -36,103 +37,67 @@ function QuantumVisualization({
         </p>
       </header>
 
-      <main className="flex flex-col lg:flex-row items-start justify-center mt-6 lg:mt-8 gap-6 px-4 pb-4">
-        <div className="bg-slate-950/80 rounded-2xl p-6 overflow-x-auto min-w-[300px] border border-slate-800">
-          {circuit ? (
-            <div className="flex items-center gap-6 min-w-max">
-              <div className="flex flex-col gap-4">
-                {Array.from({ length: circuit.n_qubits }).map((_, i) => (
-                  <div key={i} className="flex items-center gap-3">
-                    <span className="text-xs font-mono text-cyan-400 w-5">q{i}</span>
-                    <div className="h-[2px] w-20 bg-slate-800" />
-                  </div>
-                ))}
-                <div className="flex items-center gap-3">
-                  <span className="text-xs font-mono text-purple-400 w-5">anc</span>
-                  <div className="h-[2px] w-20 bg-slate-800" />
+      <main className="mt-6 px-4 pb-4 flex flex-col items-center">
+        {circuitImage ? (
+          <div className="bg-slate-950/90 rounded-xl p-4 border border-slate-700 overflow-x-auto">
+            <img 
+              src={`data:image/png;base64,${circuitImage.image}`} 
+              alt={`Quantum Circuit for ${case_id}`}
+              className="max-w-full h-auto"
+            />
+          </div>
+        ) : (
+          <div className="bg-slate-950/80 rounded-xl p-12 border border-slate-800 text-center">
+            <span className="text-slate-500 font-mono text-sm">
+              Circuit akan ditampilkan di sini
+            </span>
+          </div>
+        )}
+
+        <div className="mt-6 w-full max-w-2xl">
+          <div className="bg-purple-50 border border-purple-200 rounded-xl p-4">
+            <p className="text-[10px] font-bold tracking-widest text-purple-800 mb-3">METRICS</p>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div className="flex items-center gap-2">
+                <Gauge className="w-4 h-4 text-purple-500" />
+                <div>
+                  <p className="text-[10px] text-gray-500 uppercase">Circuit Depth</p>
+                  <p className="text-lg font-semibold text-gray-900">{quantum.circuit_depth}</p>
                 </div>
               </div>
-              <div className="flex gap-3">
-                {circuit.gates.slice(0, 12).map((g, idx) => (
-                  <div key={idx} className="flex flex-col items-center gap-1">
-                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-[10px] font-bold border ${
-                      g.name === 'h' ? 'bg-cyan-500 text-slate-950 border-cyan-400' :
-                      g.name === 'x' ? 'bg-purple-500 text-white border-purple-400' :
-                      'bg-slate-800 text-slate-300 border-slate-700'
-                    }`}>
-                      {g.name.toUpperCase()}
-                    </div>
-                  </div>
-                ))}
-                {circuit.gates.length > 12 && (
-                  <div className="flex items-center text-slate-700 font-bold px-2">...</div>
-                )}
+              <div className="flex items-center gap-2">
+                <div className="w-4 h-4 rounded bg-purple-500 flex items-center justify-center text-[8px] text-white font-bold">#</div>
+                <div>
+                  <p className="text-[10px] text-gray-500 uppercase">Gate Count</p>
+                  <p className="text-lg font-semibold text-gray-900">{quantum.gate_count}</p>
+                </div>
               </div>
-            </div>
-          ) : (
-            <div className="text-center py-8">
-              <span className="text-xs text-slate-700 font-mono italic">
-                Circuit visualization
-              </span>
-            </div>
-          )}
-        </div>
-
-        <div className="flex flex-col items-center justify-center shrink-0">
-          <svg width="40" height="16" viewBox="0 0 40 16" fill="none">
-            <path d="M0 8 H38" stroke="#9CA3AF" strokeWidth="1.5" strokeLinecap="round" />
-            <path d="M34 4 L40 8 L34 12" stroke="#9CA3AF" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
-        </div>
-
-        <div className="bg-white border border-gray-200 rounded-xl p-4 min-w-[200px]">
-          <div className="space-y-3">
-            <div className="flex items-center gap-2">
-              <Gauge className="w-4 h-4 text-purple-500" />
-              <div>
-                <p className="text-[10px] text-gray-500 uppercase">Circuit Depth</p>
-                <p className="text-lg font-semibold text-gray-900">{quantum.circuit_depth}</p>
+              <div className="flex items-center gap-2">
+                <div className="w-4 h-4 rounded bg-cyan-500 flex items-center justify-center text-[8px] text-white font-bold">Q</div>
+                <div>
+                  <p className="text-[10px] text-gray-500 uppercase">Qubits</p>
+                  <p className="text-lg font-semibold text-gray-900">{quantum.num_qubits}</p>
+                </div>
               </div>
-            </div>
-            <div className="flex items-center gap-2">
-              <Layers className="w-4 h-4 text-purple-500" />
-              <div>
-                <p className="text-[10px] text-gray-500 uppercase">Gate Count</p>
-                <p className="text-lg font-semibold text-gray-900">{quantum.gate_count}</p>
-              </div>
-            </div>
-            <div className="flex items-center gap-2">
-              <Cpu className="w-4 h-4 text-purple-500" />
-              <div>
-                <p className="text-[10px] text-gray-500 uppercase">Qubits</p>
-                <p className="text-lg font-semibold text-gray-900">{quantum.num_qubits}</p>
-              </div>
-            </div>
-            <div className="flex items-center gap-2">
-              <Clock className="w-4 h-4 text-purple-500" />
-              <div>
-                <p className="text-[10px] text-gray-500 uppercase">Exec Time</p>
-                <p className="text-lg font-semibold text-gray-900">{quantum.execution_time_ms.toFixed(2)}ms</p>
+              <div className="flex items-center gap-2">
+                <div className="w-4 h-4 rounded bg-green-500 flex items-center justify-center text-[8px] text-white font-bold">t</div>
+                <div>
+                  <p className="text-[10px] text-gray-500 uppercase">Exec Time</p>
+                  <p className="text-lg font-semibold text-gray-900">{quantum.execution_time_ms.toFixed(2)}ms</p>
+                </div>
               </div>
             </div>
           </div>
-        </div>
 
-        <div className="flex flex-col items-center justify-center shrink-0">
-          <svg width="40" height="16" viewBox="0 0 40 16" fill="none">
-            <path d="M0 8 H38" stroke="#9CA3AF" strokeWidth="1.5" strokeLinecap="round" />
-            <path d="M34 4 L40 8 L34 12" stroke="#9CA3AF" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
-        </div>
-
-        <div className="bg-purple-50 border border-purple-200 rounded-xl p-4">
-          <p className="text-[10px] font-bold tracking-widest text-purple-800 mb-2">MEASUREMENT ({shots} shots)</p>
-          <div className="flex flex-wrap gap-2">
-            {Object.entries(quantum.counts).map(([state, count]) => (
-              <span key={state} className="px-3 py-1.5 bg-white border border-purple-200 rounded-lg text-sm font-mono">
-                |{state}⟩: {count}
-              </span>
-            ))}
+          <div className="mt-4 bg-white border border-purple-200 rounded-xl p-4">
+            <p className="text-[10px] font-bold tracking-widest text-purple-800 mb-3">MEASUREMENT ({shots} shots)</p>
+            <div className="flex flex-wrap gap-2">
+              {Object.entries(quantum.counts).map(([state, count]) => (
+                <span key={state} className="px-3 py-1.5 bg-slate-100 border border-slate-200 rounded-lg text-sm font-mono">
+                  |{state}⟩: {count}
+                </span>
+              ))}
+            </div>
           </div>
         </div>
       </main>
@@ -184,7 +149,7 @@ export default function DJCombinedPage() {
   const [selectedCaseId, setSelectedCaseId] = useState<string>('DJ-01');
   const [classicalResult, setClassicalResult] = useState<ClassicalResult | null>(null);
   const [benchmarkResult, setBenchmarkResult] = useState<DJBenchmarkResult | null>(null);
-  const [circuit, setCircuit] = useState<DJCircuit | null>(null);
+  const [circuitImage, setCircuitImage] = useState<DJCircuitImage | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -197,12 +162,13 @@ export default function DJCombinedPage() {
     }
   }, []);
 
-  const loadCircuit = useCallback(async (n: number) => {
+  const loadCircuitImage = useCallback(async (caseId: string) => {
     try {
-      const data = await djApi.getCircuit(n);
-      setCircuit(data);
+      const data = await djApi.getCircuitImage(caseId);
+      setCircuitImage(data);
     } catch (err) {
-      console.error('Failed to load circuit:', err);
+      console.error('Failed to load circuit image:', err);
+      setCircuitImage(null);
     }
   }, []);
 
@@ -215,13 +181,13 @@ export default function DJCombinedPage() {
       setBenchmarkResult(data);
       
       await loadClassicalResult(selectedCaseId);
-      await loadCircuit(data.n_qubits);
+      await loadCircuitImage(selectedCaseId);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Benchmark failed');
     } finally {
       setIsLoading(false);
     }
-  }, [selectedCaseId, loadClassicalResult, loadCircuit]);
+  }, [selectedCaseId, loadClassicalResult, loadCircuitImage]);
 
   const handleDownload = useCallback(async () => {
     const html2canvas = (await import('html2canvas')).default;
@@ -242,7 +208,8 @@ export default function DJCombinedPage() {
 
   useEffect(() => {
     loadClassicalResult(selectedCaseId);
-  }, [selectedCaseId, loadClassicalResult]);
+    loadCircuitImage(selectedCaseId);
+  }, [selectedCaseId, loadClassicalResult, loadCircuitImage]);
 
   return (
     <div className="min-h-screen bg-[#FAFAFA] p-4 md:p-8">
@@ -309,11 +276,11 @@ export default function DJCombinedPage() {
               </svg>
             </div>
 
-              {benchmarkResult && (
+            {benchmarkResult && (
               <>
                 <QuantumVisualization 
                   quantum={benchmarkResult.quantum}
-                  circuit={circuit}
+                  circuitImage={circuitImage}
                   shots={benchmarkResult.shots}
                   case_id={benchmarkResult.case_id}
                   n_qubits={benchmarkResult.n_qubits}
