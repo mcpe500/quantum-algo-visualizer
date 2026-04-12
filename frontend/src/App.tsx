@@ -1,12 +1,10 @@
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback } from 'react';
 import { useClassicalDJ } from './hooks/useClassicalDJ';
 import { ClassicalVisualization } from './components/dj/ClassicalVisualization';
 
 function App() {
   const { dataset, result, isLoading, error, loadDataset, runClassical } = useClassicalDJ();
   const [selectedCaseId, setSelectedCaseId] = useState<string>('DJ-01');
-  const captureRef = useRef<HTMLDivElement>(null);
-
   const handleCaseChange = useCallback(
     async (caseId: string) => {
       setSelectedCaseId(caseId);

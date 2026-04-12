@@ -11,7 +11,7 @@ export function OraclePanel({ steps }: OraclePanelProps) {
         <span className="text-[10px] font-bold tracking-widest text-gray-800">ORACLE</span>
         <span className="text-[9px] font-bold text-gray-500">{steps.length}x QUERY</span>
       </div>
-      <div className="space-y-1 h-[180px] overflow-y-auto">
+      <div className="space-y-1">
         {steps.map((step) => {
           const isDiff = step.status === 'differs';
           return (
