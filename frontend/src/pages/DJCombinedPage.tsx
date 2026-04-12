@@ -3,7 +3,8 @@ import { Link } from 'react-router-dom';
 import { djApi } from '../services/api';
 import type { DJCircuitImage } from '../services/api';
 import { ClassicalVisualization } from '../components/dj/ClassicalVisualization';
-import type { DJBenchmarkResult, DJBenchmarkParams } from '../types/dj';
+import { QuantumTraceTable } from '../components/dj/QuantumTraceTable';
+import type { DJBenchmarkResult, DJBenchmarkParams, DJQuantumTrace } from '../types/dj';
 import type { ClassicalResult } from '../types/classical';
 import { ArrowLeft, Download, Play, Gauge } from 'lucide-react';
 
@@ -150,6 +151,7 @@ export default function DJCombinedPage() {
   const [classicalResult, setClassicalResult] = useState<ClassicalResult | null>(null);
   const [benchmarkResult, setBenchmarkResult] = useState<DJBenchmarkResult | null>(null);
   const [circuitImage, setCircuitImage] = useState<DJCircuitImage | null>(null);
+  const [quantumTrace, setQuantumTrace] = useState<DJQuantumTrace | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -169,6 +171,16 @@ export default function DJCombinedPage() {
     } catch (err) {
       console.error('Failed to load circuit image:', err);
       setCircuitImage(null);
+    }
+  }, []);
+
+  const loadQuantumTrace = useCallback(async (caseId: string) => {
+    try {
+      const data = await djApi.getQuantumTrace(caseId);
+      setQuantumTrace(data);
+    } catch (err) {
+      console.error('Failed to load quantum trace:', err);
+      setQuantumTrace(null);
     }
   }, []);
 
@@ -209,7 +221,8 @@ export default function DJCombinedPage() {
   useEffect(() => {
     loadClassicalResult(selectedCaseId);
     loadCircuitImage(selectedCaseId);
-  }, [selectedCaseId, loadClassicalResult, loadCircuitImage]);
+    loadQuantumTrace(selectedCaseId);
+  }, [selectedCaseId, loadClassicalResult, loadCircuitImage, loadQuantumTrace]);
 
   return (
     <div className="min-h-screen bg-[#FAFAFA] p-4 md:p-8">
@@ -286,6 +299,9 @@ export default function DJCombinedPage() {
                   n_qubits={benchmarkResult.n_qubits}
                   classification={benchmarkResult.expected_classification}
                 />
+                {quantumTrace && (
+                  <QuantumTraceTable trace={quantumTrace} />
+                )}
                 <ComparisonSection result={benchmarkResult} />
               </>
             )}

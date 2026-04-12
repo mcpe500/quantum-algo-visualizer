@@ -1,4 +1,4 @@
-import type { DJCase, DJBenchmarkResult, DJCircuit, DJBenchmarkParams } from '../types/dj';
+import type { DJCase, DJBenchmarkResult, DJCircuit, DJBenchmarkParams, DJQuantumTrace } from '../types/dj';
 import type { ClassicalResult, DJDataset } from '../types/classical';
 
 const API_BASE = 'http://127.0.0.1:5000/api';
@@ -64,6 +64,14 @@ export const djApi = {
     });
     if (!res.ok) {
       throw new Error('Classic run failed');
+    }
+    return res.json();
+  },
+
+  async getQuantumTrace(caseId: string): Promise<DJQuantumTrace> {
+    const res = await fetch(`${API_BASE}/dj/trace/${caseId}`);
+    if (!res.ok) {
+      throw new Error('Trace not found');
     }
     return res.json();
   },

@@ -58,3 +58,26 @@ export interface DJBenchmarkParams {
   case_id: string;
   shots: number;
 }
+
+export interface DJTraceStage {
+  step: number;
+  operation: string;
+  inputs: string;
+  ancilla: string;
+  classical: string;
+}
+
+export interface DJTracePartition {
+  stageId: string;
+  label: string;
+  start: number;
+  end: number;
+}
+
+export interface DJQuantumTrace {
+  case_id: string;
+  n_qubits: number;
+  classification: 'CONSTANT' | 'BALANCED';
+  stages: DJTraceStage[];
+  partitions: DJTracePartition[];
+}

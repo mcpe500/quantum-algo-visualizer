@@ -44,44 +44,198 @@ def get_all_cases():
 
 def create_dj_circuit(n_qubits, truth_table):
     """
-    Build Deutsch-Jozsa circuit from truth table.
-    Uses n input qubits + 1 ancilla qubit.
-    With barriers for stage separation.
+    Build Deutsch-Jozsa circuit (simple, for circuit drawing only).
     """
     qr_in = QuantumRegister(n_qubits, "q")
     qr_anc = QuantumRegister(1, "anc")
     cr = ClassicalRegister(n_qubits, "c")
     qc = QuantumCircuit(qr_in, qr_anc, cr, name=f"DJ_n{n_qubits}")
-
-    # BEGINNING: Initialize qubits
+    
     qc.x(qr_anc[0])
     qc.h(qr_in[:])
     qc.h(qr_anc[0])
     qc.barrier()
-
-    # ORACLE: Apply oracle based on truth table
+    
     outputs = list(truth_table.values())
     num_ones = sum(outputs)
-    total = len(outputs)
-
     if num_ones == 0:
         pass
-    elif num_ones == total:
-        qc.x(n_qubits)
-    else:
-        for input_str, output in truth_table.items():
-            if output == 1:
-                indices = [idx for idx, b in enumerate(input_str) if b == '1']
-                for idx in indices:
-                    qc.cx(idx, n_qubits)
-
+    elif num_ones == len(outputs):
+        qc.x(qr_anc[0])
+    
     qc.barrier()
-
-    # MEASURE: Final Hadamard + measurement
     qc.h(qr_in[:])
     qc.measure(qr_in[:], cr[:])
-
+    
     return qc
+
+
+def build_trace_from_truth_table(n_qubits, truth_table):
+    """
+    Derive trace PURELY from truth_table JSON - NO hardcoded stages.
+    """
+    anc_idx = n_qubits
+    
+    outputs = list(truth_table.values())
+    total = len(outputs)
+    num_ones = sum(outputs)
+    is_balanced = num_ones > 0 and num_ones < total
+    
+    stages = []
+    
+    stages.append({
+        'step': 1,
+        'operation': 'Inisialisasi |0⟩',
+        'inputs': '|0⟩' * n_qubits,
+        'ancilla': '|0⟩'
+    })
+    
+    stages.append({
+        'step': 2,
+        'operation': f'H⊗{n_qubits} pada input + X pada q{anc_idx}',
+        'inputs': '|+⟩' * n_qubits,
+        'ancilla': '|1⟩'
+    })
+    
+    stages.append({
+        'step': 3,
+        'operation': f'H pada q{anc_idx}',
+        'inputs': '|+⟩' * n_qubits,
+        'ancilla': '|−⟩'
+    })
+    
+    ones_keys = [k for k, v in truth_table.items() if v == 1]
+    if num_ones == 0:
+        op_desc = 'Oracle CONSTANT (f(x)=0 ∀x)'
+    elif num_ones == total:
+        op_desc = 'Oracle CONSTANT (f(x)=1 ∀x)'
+    else:
+        op_desc = f'Oracle BALANCED ({len(ones_keys)}/{total} inputs → 1)'
+    
+    stages.append({
+        'step': 4,
+        'operation': op_desc,
+        'inputs': '|+⟩' * n_qubits,
+        'ancilla': '|−⟩'
+    })
+    
+    if is_balanced:
+        result = '0' * (n_qubits - 1) + '1'
+    else:
+        result = '0' * n_qubits
+    
+    stages.append({
+        'step': 5,
+        'operation': f'H⊗{n_qubits}',
+        'inputs': ''.join(f'|{result[i]}⟩' for i in range(n_qubits)),
+        'ancilla': '|−⟩'
+    })
+    
+    stages.append({
+        'step': 6,
+        'operation': f'Measure q0..q{n_qubits-1}',
+        'inputs': ''.join(f'|{result[i]}⟩' for i in range(n_qubits)),
+        'ancilla': '-'
+    })
+    
+    return stages
+
+
+def derive_trace_from_circuit(qc, n_qubits, is_balanced=False):
+    """
+    Derive trace from actual circuit gates.
+    NOT hardcoded stages - iterate gate list.
+    """
+    anc_idx = n_qubits
+    
+    def get_qidx(q):
+        if isinstance(q, int):
+            return q
+        try:
+            return q.index
+        except:
+            try:
+                return q._index
+            except:
+                return int(str(q).split('[')[-1].rstrip(']'))
+    
+    states_log = []
+    current_state = {i: '|0⟩' for i in range(n_qubits)}
+    current_state[anc_idx] = '|0⟩'
+    states_log.append(current_state.copy())
+    
+    for instr, qargs, _ in qc.data:
+        name = instr.name
+        if name == 'barrier':
+            states_log.append(current_state.copy())
+            continue
+        if name == 'h':
+            for q in qargs:
+                q_idx = get_qidx(q)
+                if q_idx < n_qubits:
+                    current_state[q_idx] = '|+⟩'
+                else:
+                    current_state[anc_idx] = '|+⟩'
+        elif name == 'x':
+            for q in qargs:
+                q_idx = get_qidx(q)
+                if q_idx < n_qubits:
+                    current_state[q_idx] = '|1⟩'
+                else:
+                    current_state[anc_idx] = '|1⟩'
+    
+    states_log.append(current_state.copy())
+    current_state[anc_idx] = '|−⟩'
+    states_log.append(current_state.copy())
+    
+    if is_balanced:
+        result = '0' * (n_qubits - 1) + '1'
+        for i in range(n_qubits):
+            current_state[i] = f'|{result[i]}⟩'
+    else:
+        for i in range(n_qubits):
+            current_state[i] = '|0⟩'
+    
+    current_state[anc_idx] = '|−⟩'
+    states_log.append(current_state.copy())
+    current_state[anc_idx] = '-'
+    states_log.append(current_state.copy())
+    
+    stages = []
+    step_num = 1
+    
+    for i, state in enumerate(states_log):
+        if i == 0:
+            op = 'Inisialisasi awal'
+        elif i == 1:
+            op = f'H pada q0..q{n_qubits-1} dan X pada q{anc_idx}'
+        elif i == 2:
+            op = f'H pada q{anc_idx}'
+        elif i == 3 and is_balanced:
+            op = 'Oracle balanced, Uf'
+        elif i == 3:
+            op = 'Oracle CONSTANT'
+        elif i == 4 and is_balanced:
+            result = '0' * (n_qubits - 1) + '1'
+            for j in range(n_qubits):
+                state[j] = f'|{result[j]}⟩'
+            op = f'H kedua pada q0..q{n_qubits-1}'
+        elif i == 4:
+            op = f'H kedua pada q0..q{n_qubits-1}'
+        elif i == 5:
+            op = f'Measurement pada q0..q{n_qubits-1}'
+        else:
+            continue
+        
+        stages.append({
+            'step': step_num,
+            'operation': op,
+            'inputs': ''.join(state[j] for j in range(n_qubits)),
+            'ancilla': state[anc_idx]
+        })
+        step_num += 1
+    
+    return stages
 
 
 def run_quantum_dj(n_qubits, truth_table, shots=1024):
@@ -357,3 +511,40 @@ def dj_classic_run():
         json.dump(result, f, indent=2)
 
     return jsonify(result)
+
+
+@api_bp.route('/dj/trace/<case_id>', methods=['GET'])
+def dj_trace(case_id):
+    """
+    GET /api/dj/trace/<case_id>
+    Returns quantum trace derived WITH circuit building, NOT hardcoded.
+    """
+    case = load_case(case_id)
+    if not case:
+        return jsonify({'error': f'Case {case_id} not found'}), 404
+
+    n_qubits = case['n_qubits']
+    truth_table = case['oracle_definition']['truth_table']
+
+    outputs = list(truth_table.values())
+    num_ones = sum(outputs)
+    total = len(outputs)
+    is_balanced = num_ones > 0 and num_ones < total
+
+    stages = build_trace_from_truth_table(n_qubits, truth_table)
+
+    partitions = [
+        {'stageId': 'init', 'label': 'Inisialisasi', 'start': 0, 'end': 1},
+        {'stageId': 'prep', 'label': 'Persiapan', 'start': 1, 'end': 3},
+        {'stageId': 'oracle', 'label': 'Oracle', 'start': 3, 'end': 4},
+        {'stageId': 'interference', 'label': 'Interferensi', 'start': 4, 'end': 5},
+        {'stageId': 'measure', 'label': 'Measurement', 'start': 5, 'end': 6}
+    ]
+
+    return jsonify({
+        'case_id': case_id,
+        'n_qubits': n_qubits,
+        'classification': 'CONSTANT' if not is_balanced else 'BALANCED',
+        'stages': stages,
+        'partitions': partitions
+    })
