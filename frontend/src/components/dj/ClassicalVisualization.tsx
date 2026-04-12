@@ -3,6 +3,7 @@ import type { ClassicalResult } from '../../types/classical';
 import { InputsPanel } from './InputsPanel';
 import { OraclePanel } from './OraclePanel';
 import { ResultPanel } from './ResultPanel';
+import { PseudocodeBlock } from './PseudocodeBlock';
 
 interface ClassicalVisualizationProps {
   result: ClassicalResult | null;
@@ -22,7 +23,7 @@ export function ClassicalVisualization({ result, onDownload }: ClassicalVisualiz
     );
   }
 
-  const { case_id, n_qubits, classification, steps } = result;
+  const { case_id, n_qubits, classification, steps, pseudocode } = result;
   const maxQueries = Math.pow(2, n_qubits - 1) + 1;
   const isConstant = classification === 'CONSTANT';
 
@@ -39,6 +40,11 @@ export function ClassicalVisualization({ result, onDownload }: ClassicalVisualiz
             Untuk n={n_qubits}, komputer klasik butuh maksimal {maxQueries} query untuk memastikan jenis fungsi.
           </p>
         </header>
+
+        {/* PSEUDOCODE BLOCK */}
+        <div className="mt-4 px-8">
+          {pseudocode && <PseudocodeBlock pseudocode={pseudocode} case_id={case_id} />}
+        </div>
 
         {/* MAIN FLOW */}
         <main className="flex flex-col lg:flex-row items-start justify-center mt-6 lg:mt-8 gap-6">

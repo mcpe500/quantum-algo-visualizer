@@ -374,6 +374,46 @@ def dj_dataset(case_id):
     return jsonify(case)
 
 
+def generate_classic_pseudocode(case_id, n_qubits, steps):
+    """
+    Generate pseudocode lines from classical brute force result.
+    Dynamic - uses actual step data, not hardcoded.
+    """
+    lines = []
+    
+    first_input = steps[0]['input']
+    first_output = steps[0]['output']
+    batas_uji = 2 ** (n_qubits - 1) + 1
+    
+    lines.append(f"Algoritma 4.1 Solusi Klasik Deutsch-Jozsa ({case_id})")
+    lines.append(f"01: BACA N = {n_qubits}")
+    lines.append(f"02: OUTPUT_AWAL <- f(\"{first_input}\") = {first_output}")
+    lines.append(f"03: BATAS_UJI <- 2^({n_qubits}-1) + 1 = {batas_uji}")
+    
+    if len(steps) <= 1:
+        lines.append(f"04: TULIS \"{steps[0]['output']}\"")
+        return lines
+    
+    lines.append(f"04: FOR INDEKS <- 1 TO {len(steps) - 1}")
+    
+    is_balanced = any(s['status'] == 'differs' for s in steps)
+    
+    for i, step in enumerate(steps[1:], start=1):
+        if step['status'] == 'checked':
+            lines.append(f"05:     UJI indeks={i}: f(\"{step['input']}\") = {step['output']} = OUTPUT_AWAL -> LANJUT")
+        else:
+            lines.append(f"05:     UJI indeks={i}: f(\"{step['input']}\") = {step['output']} = OUTPUT_AWAL")
+            lines.append(f"06:     KARENA {step['output']} =/= OUTPUT_AWAL")
+            lines.append(f"07:     TULIS \"BALANCED\"")
+            lines.append(f"08:     BERHENTI")
+            return lines
+    
+    lines.append(f"05: END FOR")
+    lines.append(f"06: TULIS \"CONSTANT\"")
+    
+    return lines
+
+
 def run_classic_brute_force_stepped(n_qubits, truth_table, case_id):
     """
     Run classical Brute Force algorithm with step-by-step tracking.
@@ -415,11 +455,14 @@ def run_classic_brute_force_stepped(n_qubits, truth_table, case_id):
                 'status': 'checked'
             })
 
+    pseudocode = generate_classic_pseudocode(case_id, n_qubits, steps)
+    
     return {
         'case_id': case_id,
         'n_qubits': n_qubits,
         'classification': result,
-        'steps': steps
+        'steps': steps,
+        'pseudocode': pseudocode
     }
 
 

@@ -10,6 +10,7 @@ export interface ClassicalResult {
   n_qubits: number;
   classification: 'CONSTANT' | 'BALANCED';
   steps: ClassicalStep[];
+  pseudocode: string[];
 }
 
 export interface DJDataset {
