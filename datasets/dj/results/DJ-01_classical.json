@@ -1,0 +1,37 @@
+{
+  "case_id": "DJ-01",
+  "n_qubits": 3,
+  "classification": "CONSTANT",
+  "steps": [
+    {
+      "index": 0,
+      "input": "000",
+      "output": 0,
+      "status": "checked"
+    },
+    {
+      "index": 1,
+      "input": "001",
+      "output": 0,
+      "status": "checked"
+    },
+    {
+      "index": 2,
+      "input": "010",
+      "output": 0,
+      "status": "checked"
+    },
+    {
+      "index": 3,
+      "input": "011",
+      "output": 0,
+      "status": "checked"
+    },
+    {
+      "index": 4,
+      "input": "100",
+      "output": 0,
+      "status": "checked"
+    }
+  ]
+}

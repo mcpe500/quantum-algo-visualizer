@@ -1,0 +1,17 @@
+{
+  "case_id": "DJ-02",
+  "n_qubits": 3,
+  "expected_classification": "BALANCED",
+  "oracle_definition": {
+    "truth_table": {
+      "000": 0,
+      "001": 1,
+      "010": 0,
+      "011": 1,
+      "100": 0,
+      "101": 1,
+      "110": 0,
+      "111": 1
+    }
+  }
+}
