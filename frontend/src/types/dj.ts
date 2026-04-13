@@ -62,9 +62,9 @@ export interface DJBenchmarkParams {
 export interface DJTraceStage {
   step: number;
   operation: string;
-  inputs: string;
-  ancilla: string;
-  classical: string;
+  wire_markers: Record<string, string>;
+  ancilla_marker: string;
+  phase: string;
 }
 
 export interface DJTracePartition {
@@ -80,4 +80,5 @@ export interface DJQuantumTrace {
   classification: 'CONSTANT' | 'BALANCED';
   stages: DJTraceStage[];
   partitions: DJTracePartition[];
+  pseudocode?: string[];
 }

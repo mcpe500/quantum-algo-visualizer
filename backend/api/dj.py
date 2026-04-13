@@ -117,65 +117,105 @@ def create_dj_circuit(n_qubits, truth_table):
     return qc
 
 
-def build_trace_from_truth_table(n_qubits, truth_table):
+def _gate_to_symbol(op_name):
+    """Convert gate name to visual symbol."""
+    mapping = {
+        'h': 'H',
+        'x': 'X',
+        'cx': '●',
+        'mcx': '●',
+        'measure': 'M',
+        'id': '|',
+        ' Barriers': ' ',
+    }
+    return mapping.get(op_name.lower(), op_name.upper())
+
+
+def _layer_key(layer_info):
+    """Generate key for sorting layers."""
+    layer_idx = layer_info.get('layer_idx', 0)
+    is_barrier = layer_info.get('is_barrier', False)
+    if is_barrier:
+        return (2, layer_idx)  # Barriers sorted last
+    return (1, layer_idx)
+
+
+def build_trace_by_layer(n_qubits, truth_table):
     """
-    Derive trace PURELY from truth_table JSON - NO hardcoded stages.
+    Build trace from circuit - ONE ROW = ONE CIRCUIT COLUMN.
+    Each row corresponds to a visual column in the circuit diagram.
+    Simple and robust implementation.
     """
     anc_idx = n_qubits
-    
     profile = _truth_table_profile(truth_table)
-    
+
     stages = []
     step_num = 0
 
-    def append_stage(operation, current_state):
+    def append_stage(operation, wire_markers, phase_label):
         nonlocal step_num
         step_num += 1
+        markers = {i: wire_markers.get(i, '-') for i in range(n_qubits)}
+        markers[anc_idx] = wire_markers.get(anc_idx, '-')
         stages.append({
             'step': step_num,
             'operation': operation,
-            'inputs': ''.join(current_state[i] for i in range(n_qubits)),
-            'ancilla': current_state[anc_idx]
+            'wire_markers': markers,
+            'ancilla_marker': wire_markers.get(anc_idx, '-'),
+            'phase': phase_label
         })
 
-    current_state = {i: '|0⟩' for i in range(n_qubits)}
-    current_state[anc_idx] = '|0⟩'
-    
-    append_stage('Inisialisasi awal', current_state)
+    # Column 0: X(anc), H(q0..qn-1)
+    col0_markers = {i: 'H' for i in range(n_qubits)}
+    col0_markers[anc_idx] = 'X'
+    append_stage('X H H', col0_markers, 'init')
 
-    current_state[anc_idx] = '|1⟩'
-    append_stage(f'X pada q{anc_idx}', current_state)
+    # Column 1: H(anc)
+    col1_markers = {i: '-' for i in range(n_qubits)}
+    col1_markers[anc_idx] = 'H'
+    append_stage('H (anc)', col1_markers, 'prep')
 
-    for i in range(n_qubits):
-        current_state[i] = '|+⟩'
-    append_stage(f'H pada q0..q{n_qubits-1}', current_state)
-
-    current_state[anc_idx] = '|−⟩'
-    append_stage(f'H pada q{anc_idx}', current_state)
-
-    if profile['is_constant_zero']:
-        op_desc = 'Oracle CONSTANT (identity)'
-    elif profile['is_constant_one']:
-        op_desc = 'Oracle CONSTANT (X all)'
-    else:
-        op_desc = f'Oracle BALANCED ({profile["num_ones"]}/{profile["total"]} inputs → 1)'
-
-    append_stage(op_desc, current_state)
-
+    # Oracle columns for balanced
     if profile['is_balanced']:
-        final_state = {i: '|0⟩' for i in range(n_qubits)}
-        final_state[n_qubits - 1] = '|1⟩'
-    else:
-        final_state = {i: '|0⟩' for i in range(n_qubits)}
+        for input_bits in sorted(truth_table):
+            if truth_table[input_bits] != 1:
+                continue
+            
+            # Column: flip controls (X on qubits where bit=0)
+            flip_markers = {i: ('X' if input_bits[i] == '0' else '-') for i in range(n_qubits)}
+            flip_markers[anc_idx] = '-'
+            append_stage('Flip ' + input_bits, flip_markers, 'oracle')
 
+            # Column: CNOT - show ● for control, ⊕ for target (ancilla)
+            cnot_markers = {i: '●' for i in range(n_qubits)}
+            cnot_markers[anc_idx] = '⊕'  # Target on ancilla
+            append_stage('CNOT ' + input_bits, cnot_markers, 'oracle')
+
+            # Column: restore (undo flips)
+            rest_markers = {i: ('X' if input_bits[i] == '0' else '-') for i in range(n_qubits)}
+            rest_markers[anc_idx] = '-'
+            append_stage('Restore ' + input_bits, rest_markers, 'oracle')
+
+    # Column: H final (interference)
+    h_final_markers = {i: 'H' for i in range(n_qubits)}
+    h_final_markers[anc_idx] = '-'
+    append_stage('H (final)', h_final_markers, 'interference')
+
+    # Measurement columns
     for i in range(n_qubits):
-        current_state[i] = final_state[i]
-    append_stage(f'H kedua pada q0..q{n_qubits-1}', current_state)
+        m_markers = {j: ('M' if j == i else '-') for j in range(n_qubits)}
+        m_markers[anc_idx] = '-'
+        append_stage(f'M on q{i}', m_markers, 'measure')
 
-    current_state[anc_idx] = '-'
-    append_stage(f'Measurement pada q0..q{n_qubits-1}', current_state)
-    
     return stages
+
+
+def build_trace_from_truth_table(n_qubits, truth_table):
+    """
+    Build trace aligned with circuit columns.
+    One row = one circuit column.
+    """
+    return build_trace_by_layer(n_qubits, truth_table)
 
 
 def run_quantum_dj(n_qubits, truth_table, shots=1024):
@@ -612,6 +652,73 @@ def generate_classic_pseudocode(case_id, n_qubits, steps):
     return lines
 
 
+def generate_quantum_pseudocode(case_id, n_qubits, stages):
+    """
+    Generate quantum pseudocode from trace stages (one row = one circuit column).
+    Dynamic - uses actual trace data, not hardcoded.
+    """
+    lines = []
+    
+    lines.append(f"Algoritma 4.2 Solusi Kuantum Deutsch-Jozsa ({case_id})")
+    lines.append(f"01: BACA N = {n_qubits}")
+    lines.append(f"02: BACA ancilla = 1")
+    
+    step = 0
+    for stage in stages:
+        step += 1
+        op = stage['operation']
+        phase = stage['phase']
+        
+        if phase == 'init' and step == 1:
+            lines.append(f"03: X(anc)")
+            lines.append(f"04: H(q0..q{n_qubits-1})")
+            
+        elif phase == 'prep' and step == 2:
+            lines.append(f"05: H(anc)")
+            
+        elif phase == 'oracle':
+            if op.startswith('Flip'):
+                input_bits = op.split()[-1]
+                # X on qubits where bit = 0
+                zero_idxs = [i for i, b in enumerate(input_bits) if b == '0']
+                if zero_idxs:
+                    qubits = ', '.join(f'q{i}' for i in zero_idxs)
+                    lines.append(f"{step+2:02d}: X({qubits}) [flip kontrol]")
+                else:
+                    lines.append(f"{step+2:02d}: (tidak ada flip)")
+                    
+            elif op.startswith('CNOT'):
+                input_bits = op.split()[-1]
+                one_idxs = [i for i, b in enumerate(input_bits) if b == '1']
+                if one_idxs:
+                    controls = ', '.join(f'q{i}' for i in one_idxs)
+                    lines.append(f"{step+2:02d}: CNOT({controls} → anc) [uji holistik]")
+                else:
+                    lines.append(f"{step+2:02d}: CNOT(anc → anc)")
+                    
+            elif op.startswith('Restore'):
+                input_bits = op.split()[-1]
+                zero_idxs = [i for i, b in enumerate(input_bits) if b == '0']
+                if zero_idxs:
+                    qubits = ', '.join(f'q{i}' for i in zero_idxs)
+                    lines.append(f"{step+2:02d}: X({qubits}) [pulih kontrol]")
+                else:
+                    lines.append(f"{step+2:02d}: (tidak ada pulih)")
+                    
+        elif phase == 'interference':
+            lines.append(f"{step+2:02d}: H(q0..q{n_qubits-1})")
+            
+        elif phase == 'measure':
+            q = op.split()[-1] if op else 'q0'
+            lines.append(f"{step+2:02d}: UKUR {q} → bit klasik")
+    
+    lines.append(f"{step+3:02d}: HASIL <- bit klasik")
+    lines.append(f"{step+4:02d}: JIKA semua 0 → CONSTANT")
+    lines.append(f"{step+5:02d}: JIKA bukan 0 → BALANCED")
+    
+    return lines
+
+
 def run_classic_brute_force_stepped(n_qubits, truth_table, case_id):
     """
     Run classical Brute Force algorithm with step-by-step tracking.
@@ -697,7 +804,7 @@ def dj_classic_run():
 def dj_trace(case_id):
     """
     GET /api/dj/trace/<case_id>
-    Returns quantum trace derived WITH circuit building, NOT hardcoded.
+    Returns quantum trace derived WITH circuit building - DYNAMIC based on truth_table.
     """
     case = load_case(case_id)
     if not case:
@@ -708,20 +815,42 @@ def dj_trace(case_id):
     profile = _truth_table_profile(truth_table)
 
     stages = build_trace_from_truth_table(n_qubits, truth_table)
-    stage_count = len(stages)
+
+    # Compute partitions dynamically based on phase labels in stages
+    phase_bounds = {}
+    for idx, stage in enumerate(stages):
+        phase = stage.get('phase', 'unknown')
+        if phase not in phase_bounds:
+            phase_bounds[phase] = {'start': idx, 'end': idx + 1}
+        else:
+            phase_bounds[phase]['end'] = idx + 1
+
+    phase_labels = {
+        'init': 'Inisialisasi',
+        'prep': 'Persiapan',
+        'oracle': 'Oracle',
+        'interference': 'Interferensi',
+        'measure': 'Measurement'
+    }
 
     partitions = [
-        {'stageId': 'init', 'label': 'Inisialisasi', 'start': 0, 'end': 1},
-        {'stageId': 'prep', 'label': 'Persiapan', 'start': 1, 'end': stage_count - 3},
-        {'stageId': 'oracle', 'label': 'Oracle', 'start': stage_count - 3, 'end': stage_count - 2},
-        {'stageId': 'interference', 'label': 'Interferensi', 'start': stage_count - 2, 'end': stage_count - 1},
-        {'stageId': 'measure', 'label': 'Measurement', 'start': stage_count - 1, 'end': stage_count}
+        {
+            'stageId': phase,
+            'label': phase_labels.get(phase, phase.capitalize()),
+            'start': bounds['start'],
+            'end': bounds['end']
+        }
+        for phase, bounds in sorted(phase_bounds.items())
     ]
+
+    # Generate quantum pseudocode from stages
+    pseudocode = generate_quantum_pseudocode(case_id, n_qubits, stages)
 
     return jsonify({
         'case_id': case_id,
         'n_qubits': n_qubits,
         'classification': 'BALANCED' if profile['is_balanced'] else 'CONSTANT',
         'stages': stages,
-        'partitions': partitions
+        'partitions': partitions,
+        'pseudocode': pseudocode
     })

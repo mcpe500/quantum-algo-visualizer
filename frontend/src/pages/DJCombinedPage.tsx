@@ -1,13 +1,14 @@
 import { useState, useCallback, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { djApi, type DJCircuitImage } from '../services/api';
+import { djApi } from '../services/api';
+import type { DJCircuitImage } from '../services/api';
 import { ClassicalVisualization } from '../components/dj/ClassicalVisualization';
 import { QuantumVisualization } from '../components/dj/QuantumVisualization';
 import { ComparisonSection } from '../components/dj/ComparisonSection';
 import { QuantumTraceTable } from '../components/dj/QuantumTraceTable';
 import type { DJBenchmarkParams, DJBenchmarkResult, DJQuantumTrace } from '../types/dj';
 import type { ClassicalResult } from '../types/classical';
-import { ArrowLeft, Download, Play } from 'lucide-react';
+import { ArrowLeft, Download, Play, Cpu, BookOpen } from 'lucide-react';
 
 const sortCaseIds = (caseIds: string[]) =>
   [...caseIds].sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' }));
@@ -22,6 +23,7 @@ export default function DJCombinedPage() {
   const [quantumTrace, setQuantumTrace] = useState<DJQuantumTrace | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<'classic' | 'quantum'>('classic');
 
   const loadClassicalResult = useCallback(async (caseId: string) => {
     try {
@@ -190,13 +192,46 @@ export default function DJCombinedPage() {
 
         {(classicalResult || benchmarkResult) && (
           <div id="capture-area" className="space-y-6">
-            {classicalResult && (
-              <>
-                <ClassicalVisualization 
-                  result={classicalResult} 
-                  onDownload={handleDownload} 
-                />
-              </>
+            {/* Tab Navigation */}
+            <div className="flex justify-center mb-4">
+              <div className="inline-flex bg-gray-100 p-1 rounded-lg">
+                <button
+                  onClick={() => setActiveTab('classic')}
+                  className={`px-4 py-2 rounded-md text-sm font-medium flex items-center gap-2 transition-all ${
+                    activeTab === 'classic'
+                      ? 'bg-white text-gray-900 shadow-sm'
+                      : 'text-gray-600 hover:text-gray-900'
+                  }`}
+                >
+                  <BookOpen className="w-4 h-4" />
+                  Klasik
+                </button>
+                <button
+                  onClick={() => setActiveTab('quantum')}
+                  className={`px-4 py-2 rounded-md text-sm font-medium flex items-center gap-2 transition-all ${
+                    activeTab === 'quantum'
+                      ? 'bg-white text-gray-900 shadow-sm'
+                      : 'text-gray-600 hover:text-gray-900'
+                  }`}
+                >
+                  <Cpu className="w-4 h-4" />
+                  Kuantum
+                </button>
+              </div>
+            </div>
+
+            {/* Classic Tab Content */}
+            {activeTab === 'classic' && classicalResult && (
+              <ClassicalVisualization 
+                result={classicalResult} 
+                onDownload={handleDownload} 
+              />
+            )}
+
+            {activeTab === 'classic' && !classicalResult && (
+              <div className="text-center py-12">
+                <p className="text-gray-400">Belum ada data klasik. Klik "Jalankan" dulu.</p>
+              </div>
             )}
 
             <div className="flex justify-center py-2">
@@ -207,7 +242,8 @@ export default function DJCombinedPage() {
               </svg>
             </div>
 
-            {benchmarkResult && (
+            {/* Quantum Tab Content */}
+            {activeTab === 'quantum' && benchmarkResult && (
               <>
                 <QuantumVisualization 
                   quantum={benchmarkResult.quantum}
@@ -223,6 +259,12 @@ export default function DJCombinedPage() {
                 )}
                 <ComparisonSection result={benchmarkResult} />
               </>
+            )}
+
+            {activeTab === 'quantum' && !benchmarkResult && (
+              <div className="text-center py-12">
+                <p className="text-gray-400">Belum ada data kuantum. Klik "Jalankan" dulu.</p>
+              </div>
             )}
           </div>
         )}
