@@ -1,0 +1,10 @@
+{
+  "case_id": "QAOA-01",
+  "description": "Max-Cut pada graph K3 (triangle)",
+  "problem": "maxcut",
+  "graph": {
+    "nodes": [0, 1, 2],
+    "edges": [[0, 1], [0, 2], [1, 2]]
+  },
+  "p_layers": 1
+}
