@@ -13,6 +13,7 @@ from qiskit import QuantumCircuit, QuantumRegister, ClassicalRegister
 from qiskit_aer import AerSimulator
 from qiskit.visualization import circuit_drawer
 import matplotlib.pyplot as plt
+from matplotlib.patches import Rectangle
 
 from api import api_bp
 
@@ -350,6 +351,203 @@ def dj_circuit_image(case_id):
         })
     except Exception as e:
         return jsonify({'error': f'Failed to generate circuit: {str(e)}'}), 500
+
+
+def _add_phase_boxes_to_figure(fig, qc):
+    """
+    Add phase group boxes on top of the Qiskit circuit figure.
+    Boxes correspond to: init, prep, oracle, interference, measure.
+    """
+    ax = fig.axes[0]
+    x_min, x_max = ax.get_xlim()
+    y_min, y_max = ax.get_ylim()
+    total_width = x_max - x_min
+    total_height = y_max - y_min
+
+    # Analyze qc.data to find phase boundaries
+    # Track instruction indices and find barriers
+    barrier_indices = []
+    for idx, item in enumerate(qc.data):
+        if item.operation.name == 'barrier':
+            barrier_indices.append(idx)
+
+    # Phase definitions with colors
+    PHASES = [
+        ('1', 'Inisialisasi', '#3B82F6'),   # Blue
+        ('2', 'Persiapan', '#10B981'),       # Emerald
+        ('3', 'Oracle', '#F59E0B'),          # Amber
+        ('4', 'Interferensi', '#8B5CF6'),    # Violet
+        ('5', 'Measurement', '#EF4444'),     # Red
+    ]
+
+    # Count instructions per phase
+    # Structure: [init][prep gates...][barrier][oracle...][barrier][interference...][measure...]
+    if len(barrier_indices) >= 2:
+        b1, b2 = barrier_indices[0], barrier_indices[1]
+        # Before first barrier: X(anc) + H(inputs) + H(anc)
+        section0 = list(range(0, b1))
+        # Between barriers: oracle gates
+        section1 = list(range(b1 + 1, b2))
+        # After second barrier: H(inputs) + measure
+        section2 = list(range(b2 + 1, len(qc.data)))
+    else:
+        # Fallback if barriers not found
+        n = len(qc.data)
+        section0 = list(range(0, max(1, n // 5)))
+        section1 = list(range(max(1, n // 5), max(2, 2 * n // 5)))
+        section2 = list(range(max(2, 2 * n // 5), n))
+
+    # Split section0: first gate = init, rest = prep
+    init_indices = section0[:1] if section0 else []
+    prep_indices = section0[1:] if len(section0) > 1 else []
+
+    # Split section2: H gates = interference, measure gates = measure
+    interference_indices = []
+    measure_indices = []
+    for idx in section2:
+        if qc.data[idx].operation.name == 'measure':
+            measure_indices.append(idx)
+        else:
+            interference_indices.append(idx)
+
+    # Oracle = section1 (may be empty for constant-0)
+    oracle_indices = section1
+
+    # Build phase index lists
+    phase_indices = [
+        init_indices,
+        prep_indices,
+        oracle_indices,
+        interference_indices,
+        measure_indices,
+    ]
+
+    # Filter out empty phases
+    active_phases = []
+    for i, indices in enumerate(phase_indices):
+        if indices or i == 2:  # Always show oracle phase even if empty
+            num, label, color = PHASES[i]
+            active_phases.append((num, label, color, indices))
+
+    # Calculate visual weights (instruction count + barrier bonus)
+    total_weight = 0
+    phase_weights = []
+    for num, label, color, indices in active_phases:
+        weight = len(indices) if indices else 0.5  # min weight for empty oracle
+        # Add barrier weight after prep and oracle phases
+        phase_weights.append(weight)
+        total_weight += weight
+
+    # Add barrier weights (visual separators)
+    num_barriers = len(barrier_indices)
+    barrier_weight_total = num_barriers * 0.3
+    total_weight += barrier_weight_total
+
+    # Draw phase boxes
+    current_x = x_min
+    phase_idx = 0
+    barrier_idx = 0
+
+    for num, label, color, indices in active_phases:
+        weight = phase_weights[phase_idx]
+        phase_width = (weight / total_weight) * total_width * (total_width / (total_width + barrier_weight_total))
+
+        # Draw background rectangle
+        rect = Rectangle(
+            (current_x, y_min),
+            phase_width,
+            total_height,
+            linewidth=2,
+            edgecolor=color,
+            facecolor=color,
+            alpha=0.08,
+            linestyle='-',
+            zorder=0
+        )
+        ax.add_patch(rect)
+
+        # Draw left border line
+        ax.axvline(x=current_x, color=color, linewidth=1.5, linestyle='-', alpha=0.6, zorder=1)
+
+        # Draw phase label at top
+        label_x = current_x + phase_width / 2
+        label_y = y_max + total_height * 0.05
+
+        ax.text(
+            label_x,
+            label_y,
+            f'{num}. {label}',
+            ha='center',
+            va='bottom',
+            fontsize=9,
+            fontweight='bold',
+            color=color,
+            bbox=dict(
+                boxstyle='round,pad=0.25',
+                facecolor='white',
+                edgecolor=color,
+                linewidth=1.5,
+                alpha=0.95
+            ),
+            zorder=10
+        )
+
+        current_x += phase_width
+        phase_idx += 1
+
+        # Add barrier separator after prep and oracle phases
+        if phase_idx < len(active_phases):
+            barrier_width = (0.3 / total_weight) * total_width
+            # Draw thin barrier line
+            ax.axvline(x=current_x, color='#6B7280', linewidth=1, linestyle='--', alpha=0.4, zorder=1)
+            current_x += barrier_width
+            barrier_idx += 1
+
+    # Draw final right border
+    ax.axvline(x=current_x, color='#6B7280', linewidth=1.5, linestyle='-', alpha=0.6, zorder=1)
+
+    # Extend y-axis to accommodate labels
+    ax.set_ylim(y_min, y_max + total_height * 0.2)
+
+    # Adjust figure layout
+    fig.tight_layout(pad=1.5)
+
+    return fig
+
+
+@api_bp.route('/dj/circuit-image-boxed/<case_id>', methods=['GET'])
+def dj_circuit_image_boxed(case_id):
+    """
+    GET /api/dj/circuit-image-boxed/<case_id>
+    Returns circuit as PNG base64 image with phase group boxes overlay.
+    """
+    case = load_case(case_id)
+    if not case:
+        return jsonify({'error': f'Case {case_id} not found'}), 404
+
+    n_qubits = case['n_qubits']
+    truth_table = case['oracle_definition']['truth_table']
+
+    qc = create_dj_circuit(n_qubits, truth_table)
+
+    try:
+        fig = circuit_drawer(qc, output='mpl')
+        fig = _add_phase_boxes_to_figure(fig, qc)
+        buf = io.BytesIO()
+        fig.savefig(buf, format='png', bbox_inches='tight', dpi=150, facecolor='white')
+        buf.seek(0)
+        img_base64 = base64.b64encode(buf.getvalue()).decode('utf-8')
+        plt.close(fig)
+
+        return jsonify({
+            'case_id': case_id,
+            'n_qubits': n_qubits,
+            'image': img_base64,
+            'depth': qc.depth(),
+            'gate_count': len(qc.data)
+        })
+    except Exception as e:
+        return jsonify({'error': f'Failed to generate boxed circuit: {str(e)}'}), 500
 
 
 @api_bp.route('/dj/cases', methods=['GET'])

@@ -52,4 +52,4 @@ Example — destructive op:
 
 Code/commits/PRs: write normal. "stop caveman" or "normal mode": revert. Level persist until changed or session end.
 
-use ultra-wenyan
+use wenyan-ultra

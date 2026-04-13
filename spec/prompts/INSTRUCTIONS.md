@@ -92,3 +92,5 @@ dan semua itu masukan kedalam sebuah markdown file.
 didalam folder /spec/ isinya ikuti 3 digit mulai dari 000 sampai 999 jadi XXX. <task nya ngapain>.md
 seperti itu, jangan lupa cek apakah sudah ada file didalam folder spec, kalau sudah ada coba cari siapa tau ada informasi yang related untuk mempercepat research.
 pastikan isinya detail dan juga benar dan tervalidasi.
+
+jangan lupa baca CAVEMAN.md dan BEHAVIOUR.md
