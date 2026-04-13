@@ -27,6 +27,9 @@ import type {
   QAOACircuitImage,
 } from "../types/qaoa";
 
+// Re-export some types so other modules can import them from services/api
+export type { QAOACircuitImage, VQECircuitImage };
+
 const API_BASE = "http://127.0.0.1:5000/api";
 
 export interface DJCircuitImage {
@@ -120,6 +123,9 @@ export interface QFTCircuitImage {
   depth: number;
   gate_count: number;
 }
+
+// (QFTCircuitImage is exported via the interface declaration above)
+
 
 export const qftApi = {
   async getCases(): Promise<QFTCase[]> {

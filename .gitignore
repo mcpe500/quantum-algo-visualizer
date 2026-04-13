@@ -1,1 +1,3 @@
 venv
+export_project_to_txt.py
+project_export.txt
