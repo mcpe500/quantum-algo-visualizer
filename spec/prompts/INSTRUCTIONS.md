@@ -94,3 +94,4 @@ seperti itu, jangan lupa cek apakah sudah ada file didalam folder spec, kalau su
 pastikan isinya detail dan juga benar dan tervalidasi.
 
 jangan lupa baca CAVEMAN.md dan BEHAVIOUR.md
+use ultrathink, use sequential-thinking
