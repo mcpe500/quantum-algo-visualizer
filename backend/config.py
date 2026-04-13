@@ -1,17 +1,17 @@
 import os
 
+
 class Config:
-    SECRET_KEY = os.environ.get('SECRET_KEY') or 'dev-secret-key-quantum-algo'
-    DEBUG = os.environ.get('DEBUG', 'True').lower() in ('true', '1', 'yes')
-    
-    BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    BACKEND_DIR = os.path.dirname(os.path.abspath(__file__))
-    FRONTEND_DIR = os.path.join(BASE_DIR, 'frontend')
-    DATASETS_DIR = os.path.join(BASE_DIR, 'datasets')
-    NOTEBOOKS_DIR = os.path.join(BASE_DIR, 'notebooks')
-    
-    STATIC_FOLDER = os.path.join(FRONTEND_DIR, 'static')
-    
-    QISKIT_AER_BACKEND = 'aer_simulator'
-    DEFAULT_SHOTS = 1024
-    MAX_QUBITS = 20
+    DEBUG = os.getenv('FLASK_DEBUG', '1') == '1'
+    JSON_SORT_KEYS = False
+
+    @staticmethod
+    def as_dict():
+        return {
+            'DEBUG': Config.DEBUG,
+            'JSON_SORT_KEYS': Config.JSON_SORT_KEYS,
+        }
+
+
+def get_config():
+    return Config
