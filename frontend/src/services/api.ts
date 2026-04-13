@@ -43,6 +43,14 @@ export const djApi = {
     return res.json();
   },
 
+  async getCircuitImageBoxed(caseId: string): Promise<DJCircuitImage> {
+    const res = await fetch(`${API_BASE}/dj/circuit-image-boxed/${caseId}`);
+    if (!res.ok) {
+      throw new Error('Boxed circuit image not found');
+    }
+    return res.json();
+  },
+
   async healthCheck(): Promise<{ status: string; message: string }> {
     const res = await fetch(`${API_BASE}/health`);
     return res.json();

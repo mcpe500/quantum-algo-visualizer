@@ -57,5 +57,22 @@
       "output": 0,
       "status": "checked"
     }
+  ],
+  "pseudocode": [
+    "Algoritma 4.1 Solusi Klasik Deutsch-Jozsa (DJ-03)",
+    "01: BACA N = 4",
+    "02: OUTPUT_AWAL <- f(\"0000\") = 0",
+    "03: BATAS_UJI <- 2^(4-1) + 1 = 9",
+    "04: FOR INDEKS <- 1 TO 8",
+    "05:     UJI indeks=1: f(\"0001\") = 0 = OUTPUT_AWAL -> LANJUT",
+    "05:     UJI indeks=2: f(\"0010\") = 0 = OUTPUT_AWAL -> LANJUT",
+    "05:     UJI indeks=3: f(\"0011\") = 0 = OUTPUT_AWAL -> LANJUT",
+    "05:     UJI indeks=4: f(\"0100\") = 0 = OUTPUT_AWAL -> LANJUT",
+    "05:     UJI indeks=5: f(\"0101\") = 0 = OUTPUT_AWAL -> LANJUT",
+    "05:     UJI indeks=6: f(\"0110\") = 0 = OUTPUT_AWAL -> LANJUT",
+    "05:     UJI indeks=7: f(\"0111\") = 0 = OUTPUT_AWAL -> LANJUT",
+    "05:     UJI indeks=8: f(\"1000\") = 0 = OUTPUT_AWAL -> LANJUT",
+    "05: END FOR",
+    "06: TULIS \"CONSTANT\""
   ]
 }

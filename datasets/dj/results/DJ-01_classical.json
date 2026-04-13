@@ -33,5 +33,18 @@
       "output": 0,
       "status": "checked"
     }
+  ],
+  "pseudocode": [
+    "Algoritma 4.1 Solusi Klasik Deutsch-Jozsa (DJ-01)",
+    "01: BACA N = 3",
+    "02: OUTPUT_AWAL <- f(\"000\") = 0",
+    "03: BATAS_UJI <- 2^(3-1) + 1 = 5",
+    "04: FOR INDEKS <- 1 TO 4",
+    "05:     UJI indeks=1: f(\"001\") = 0 = OUTPUT_AWAL -> LANJUT",
+    "05:     UJI indeks=2: f(\"010\") = 0 = OUTPUT_AWAL -> LANJUT",
+    "05:     UJI indeks=3: f(\"011\") = 0 = OUTPUT_AWAL -> LANJUT",
+    "05:     UJI indeks=4: f(\"100\") = 0 = OUTPUT_AWAL -> LANJUT",
+    "05: END FOR",
+    "06: TULIS \"CONSTANT\""
   ]
 }
