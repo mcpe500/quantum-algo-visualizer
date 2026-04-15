@@ -1,4 +1,5 @@
-import { Waves } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { Waves, Grid } from 'lucide-react';
 import { useQFT } from '../hooks/useQFT';
 import {
   AlgorithmPageLayout,
@@ -38,6 +39,14 @@ export default function QFTCombinedPage() {
         isLoading={isLoading}
         hasResult={!!benchmarkResult}
       />
+
+      <Link
+        to="/qft/topography"
+        className="inline-flex items-center gap-2 text-blue-600 hover:text-blue-800 mb-6 transition-colors"
+      >
+        <Grid className="w-4 h-4" />
+        Signal Topography
+      </Link>
 
       {/* Error */}
       {error && (

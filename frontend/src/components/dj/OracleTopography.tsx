@@ -20,13 +20,13 @@ function TruthTableCell({ input, output }: TruthTableCellProps) {
       }`}
     >
       <span
-        className={`text-lg sm:text-xl lg:text-2xl font-mono font-bold mb-1 sm:mb-2 tracking-widest ${
+        className={`text-lg sm:text-xl lg:text-2xl font-mono font-bold mb-1 sm:mb-2 tracking-widest tabular-nums ${
           isOne ? 'text-blue-100' : 'text-slate-400'
         }`}
       >
         {input}
       </span>
-      <span className="text-3xl sm:text-4xl font-black">{output}</span>
+      <span className="text-3xl sm:text-4xl font-black tabular-nums">{output}</span>
     </div>
   );
 }
@@ -71,8 +71,8 @@ function DatasetCard({ data, index, mounted }: DatasetCardProps) {
         </div>
       </div>
 
-      <div className="p-6 sm:p-8 flex-grow flex items-center justify-center bg-white">
-        <div className="grid grid-cols-4 gap-3 sm:gap-4 w-full">
+      <div className="p-6 sm:p-8 flex-grow flex items-start justify-center bg-white">
+        <div className="grid grid-cols-4 content-start gap-3 sm:gap-4 w-full">
           {entries.map(([inp, out]) => (
             <TruthTableCell key={inp} input={inp} output={out} />
           ))}
@@ -168,6 +168,24 @@ export function OracleTopography({ cases: initialCases }: OracleTopographyProps)
     );
   }
 
+  const groupedCases = cases.reduce<Record<number, DJCase[]>>((acc, caseItem) => {
+    const key = caseItem.n_qubits;
+    if (!acc[key]) {
+      acc[key] = [];
+    }
+    acc[key].push(caseItem);
+    return acc;
+  }, {});
+
+  const sortedGroups = Object.entries(groupedCases)
+    .map(([nQubits, groupCases]) => ({
+      nQubits: Number(nQubits),
+      groupCases: [...groupCases].sort((a, b) =>
+        a.case_id.localeCompare(b.case_id, undefined, { numeric: true, sensitivity: 'base' })
+      ),
+    }))
+    .sort((a, b) => a.nQubits - b.nQubits);
+
   return (
     <div className="min-h-screen bg-blue-50/50 p-4 sm:p-8 md:p-12 font-sans selection:bg-blue-200">
       <div className="max-w-[1800px] mx-auto mb-12 text-center flex flex-col items-center">
@@ -182,12 +200,25 @@ export function OracleTopography({ cases: initialCases }: OracleTopographyProps)
         </p>
       </div>
 
-      <div className="max-w-[1800px] mx-auto">
-        <div className="grid grid-cols-1 lg:grid-cols-2 2xl:grid-cols-4 gap-8 xl:gap-10">
-          {cases.map((data, index) => (
-            <DatasetCard key={data.case_id} data={data} index={index} mounted={mounted} />
-          ))}
-        </div>
+      <div className="max-w-[1400px] mx-auto space-y-10 sm:space-y-12">
+        {sortedGroups.map(({ nQubits, groupCases }) => (
+          <section key={nQubits} className="space-y-4">
+            <div className="flex items-center justify-between px-1">
+              <h2 className="text-lg sm:text-xl font-black text-slate-700 tracking-tight">
+                {nQubits} Qubit Oracle Cases
+              </h2>
+              <span className="text-xs sm:text-sm font-bold tracking-widest uppercase text-slate-400">
+                {groupCases.length} Cases
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 xl:grid-cols-2 gap-8 xl:gap-10">
+              {groupCases.map((data, index) => (
+                <DatasetCard key={data.case_id} data={data} index={index} mounted={mounted} />
+              ))}
+            </div>
+          </section>
+        ))}
       </div>
     </div>
   );
