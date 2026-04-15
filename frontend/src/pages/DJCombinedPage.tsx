@@ -8,7 +8,7 @@ import { ComparisonSection } from '../components/dj/ComparisonSection';
 import { QuantumTraceTable } from '../components/dj/QuantumTraceTable';
 import type { DJBenchmarkParams, DJBenchmarkResult, DJQuantumTrace } from '../types/dj';
 import type { ClassicalResult } from '../types/classical';
-import { ArrowLeft, Download, Play, Cpu, BookOpen } from 'lucide-react';
+import { ArrowLeft, Download, Play, Cpu, BookOpen, Grid } from 'lucide-react';
 
 const sortCaseIds = (caseIds: string[]) =>
   [...caseIds].sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' }));
@@ -150,6 +150,14 @@ export default function DJCombinedPage() {
       >
         <ArrowLeft className="w-4 h-4" />
         Back to Algorithms
+      </Link>
+
+      <Link
+        to="/dj/topography"
+        className="inline-flex items-center gap-2 text-blue-600 hover:text-blue-800 mb-6 ml-6 transition-colors"
+      >
+        <Grid className="w-4 h-4" />
+        Oracle Topography
       </Link>
 
       <div className="max-w-6xl mx-auto">
