@@ -53,9 +53,8 @@ def _resolve_signal(case):
         declared_points = len(signal) if signal else 1
 
     declared_points = max(1, declared_points)
-    signal = pad_signal(signal, declared_points)
-
-    n_original = declared_points
+    n_original = len(signal) if len(signal) > 0 else declared_points
+    signal = pad_signal(signal, n_original)
     n_padded = next_power_of_2(n_original)
     padded = pad_signal(signal, n_padded)
     n_qubits = int(math.log2(n_padded))
@@ -69,19 +68,23 @@ def _resolve_signal(case):
     }
 
 
+def _apply_qft_layers(qc, qr, n_qubits):
+    for j in range(n_qubits - 1, -1, -1):
+        for k in range(n_qubits - 1, j, -1):
+            angle = math.pi / (2 ** (k - j))
+            qc.cp(angle, qr[k], qr[j])
+        qc.h(qr[j])
+
+    for i in range(n_qubits // 2):
+        qc.swap(qr[i], qr[n_qubits - 1 - i])
+
+
 def create_qft_circuit(n_qubits):
     qr = QuantumRegister(n_qubits, 'q')
     cr = ClassicalRegister(n_qubits, 'c')
     qc = QuantumCircuit(qr, cr, name=f'QFT_n{n_qubits}')
 
-    for j in range(n_qubits):
-        qc.h(qr[j])
-        for k in range(j + 1, n_qubits):
-            angle = math.pi / (2 ** (k - j))
-            qc.cp(angle, qr[k], qr[j])
-
-    for i in range(n_qubits // 2):
-        qc.swap(qr[i], qr[n_qubits - 1 - i])
+    _apply_qft_layers(qc, qr, n_qubits)
 
     qc.measure(qr, cr)
     return qc
@@ -96,16 +99,26 @@ def run_fft_full(signal_data):
     magnitude = np.abs(fft_result)
     phase = np.angle(fft_result)
 
-    half_n = max(1, n_points // 2)
     spectrum = [
         {'bin': int(i), 'magnitude': float(magnitude[i]), 'phase': float(phase[i])}
-        for i in range(half_n)
+        for i in range(n_points)
     ]
 
     top_count = min(4, len(magnitude))
     top_indices = np.argsort(magnitude)[::-1][:top_count]
     dominant_bins = [int(idx) for idx in top_indices]
     dominant_magnitudes = [float(magnitude[idx]) for idx in top_indices]
+
+    normalized = _normalize_amplitudes(array.tolist())
+    normalized_fft = np.fft.fft(normalized)
+    normalized_power = (np.abs(normalized_fft) ** 2) / max(1, n_points)
+    normalized_power_spectrum = [
+        {'bin': int(i), 'power': float(normalized_power[i])}
+        for i in range(n_points)
+    ]
+    normalized_top_indices = np.argsort(normalized_power)[::-1][:top_count]
+    normalized_power_dominant_bins = [int(idx) for idx in normalized_top_indices]
+    normalized_power_dominant_values = [float(normalized_power[idx]) for idx in normalized_top_indices]
 
     runtime_ms = (time.perf_counter() - started) * 1000.0
 
@@ -116,6 +129,10 @@ def run_fft_full(signal_data):
         'n_points': n_points,
         'time_complexity': f'O({n_points} log {n_points})',
         'spectrum': spectrum,
+        'normalized_power_spectrum': normalized_power_spectrum,
+        'normalized_power_dominant_bins': normalized_power_dominant_bins,
+        'normalized_power_dominant_values': normalized_power_dominant_values,
+        'normalization_note': 'Fair comparison metric uses |FFT(x/||x||)|^2 / N.',
     }
 
 
@@ -146,14 +163,7 @@ def run_qft_from_signal(signal_data, shots=1024):
     from qiskit.circuit.library import Initialize
     qc.append(Initialize(normalized), qr)
 
-    for j in range(n_qubits):
-        qc.h(qr[j])
-        for k in range(j + 1, n_qubits):
-            angle = math.pi / (2 ** (k - j))
-            qc.cp(angle, qr[k], qr[j])
-
-    for i in range(n_qubits // 2):
-        qc.swap(qr[i], qr[n_qubits - 1 - i])
+    _apply_qft_layers(qc, qr, n_qubits)
 
     qc.measure(qr, cr)
 
@@ -165,12 +175,15 @@ def run_qft_from_signal(signal_data, shots=1024):
     probabilities = []
     for state, count in counts.items():
         probability = float(count / total) if total > 0 else 0.0
+        bin_index = int(state, 2)
         probabilities.append({
             'state': state,
+            'bin': bin_index,
             'count': int(count),
             'probability': probability,
         })
     probabilities.sort(key=lambda item: item['probability'], reverse=True)
+    dominant_entries = probabilities[:min(4, len(probabilities))]
 
     runtime_ms = (time.perf_counter() - started) * 1000.0
 
@@ -185,7 +198,10 @@ def run_qft_from_signal(signal_data, shots=1024):
         'n_points_padded': n_padded,
         'input_amplitudes': [float(abs(a)) for a in normalized],
         'probabilities': probabilities[:8],
+        'dominant_bins': [int(entry['bin']) for entry in dominant_entries],
+        'dominant_probabilities': [float(entry['probability']) for entry in dominant_entries],
         'note': 'QFT uses amplitude encoding from the same signal.',
+        'bitstring_mapping_note': 'Measurement bitstring is big-endian; bin = int(state, 2).',
     }
 
 
@@ -205,18 +221,18 @@ def build_qft_trace(n_qubits):
 
     append_stage('Initialize', {i: '|0>' for i in range(n_qubits)}, 'init')
 
-    for j in range(n_qubits):
-        append_stage(
-            f'H on q{j}',
-            {i: ('H' if i == j else '-') for i in range(n_qubits)},
-            'transform',
-        )
-        for k in range(j + 1, n_qubits):
+    for j in range(n_qubits - 1, -1, -1):
+        for k in range(n_qubits - 1, j, -1):
             markers = {i: '-' for i in range(n_qubits)}
             markers[k] = '●'
             markers[j] = 'P'
             angle = math.pi / (2 ** (k - j))
             append_stage(f'CP({angle:.4f}) q{k}->q{j}', markers, 'transform')
+        append_stage(
+            f'H on q{j}',
+            {i: ('H' if i == j else '-') for i in range(n_qubits)},
+            'transform',
+        )
 
     for i in range(n_qubits // 2):
         markers = {j: '-' for j in range(n_qubits)}
@@ -276,6 +292,9 @@ def run_qft_payload(case_id, shots):
 
     fft_result = run_fft_full(padded)
     qft_result = run_qft_from_signal(signal, int(shots))
+    fft_peak_bins = fft_result.get('normalized_power_dominant_bins', [])
+    qft_peak_bins = qft_result.get('dominant_bins', [])
+    shared_peak_bins = [int(bin_value) for bin_value in qft_peak_bins if bin_value in fft_peak_bins]
 
     return {
         'case_id': case_id,
@@ -292,7 +311,11 @@ def run_qft_payload(case_id, shots):
             'fft_complexity': f'O({n_padded} log {n_padded})',
             'qft_complexity': f'O({n_qubits}^2) gates',
             'speedup_factor': 'Simulator runtime is not physical quantum speedup.',
-            'note': 'FFT and QFT are run from the same dataset signal.',
+            'note': 'FFT and QFT are run from the same dataset signal; compare peak bins, not raw values.',
+            'fair_metric': '|FFT(x/||x||)|^2 / N versus QFT measurement probability.',
+            'fft_peak_bins': fft_peak_bins,
+            'qft_peak_bins': qft_peak_bins,
+            'shared_peak_bins': shared_peak_bins,
         },
     }
 

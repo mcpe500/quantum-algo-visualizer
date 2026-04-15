@@ -11,7 +11,8 @@ export function SpectrumChart({ data, title = 'FFT Spectrum' }: SpectrumChartPro
   const padding = 30;
 
   const maxMag = Math.max(...data.map((d) => d.magnitude)) || 1;
-  const barWidth = (width - 2 * padding) / Math.min(data.length, 16);
+  const barWidth = (width - 2 * padding) / data.length;
+  const labelStep = Math.max(1, Math.ceil(data.length / 12));
 
   return (
     <div className="mb-4">
@@ -41,27 +42,29 @@ export function SpectrumChart({ data, title = 'FFT Spectrum' }: SpectrumChartPro
         />
 
         {/* Bars */}
-        {data.slice(0, 16).map((d, i) => {
+        {data.map((d, i) => {
           const barHeight = (d.magnitude / maxMag) * (height - 2 * padding);
           return (
             <g key={d.bin}>
               <rect
                 x={padding + i * barWidth}
                 y={height - padding - barHeight}
-                width={barWidth - 2}
+                width={Math.max(1, barWidth - 1)}
                 height={barHeight}
                 fill="#2563EB"
                 opacity={0.8}
               />
-              <text
-                x={padding + i * barWidth + barWidth / 2}
-                y={height - padding + 12}
-                fontSize="8"
-                fill="#6b7280"
-                textAnchor="middle"
-              >
-                {d.bin}
-              </text>
+              {i % labelStep === 0 && (
+                <text
+                  x={padding + i * barWidth + barWidth / 2}
+                  y={height - padding + 12}
+                  fontSize="8"
+                  fill="#6b7280"
+                  textAnchor="middle"
+                >
+                  {d.bin}
+                </text>
+              )}
             </g>
           );
         })}

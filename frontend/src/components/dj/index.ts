@@ -8,3 +8,4 @@ export { ClassicalVisualization } from './ClassicalVisualization';
 export { InputsPanel } from './InputsPanel';
 export { OraclePanel } from './OraclePanel';
 export { ResultPanel } from './ResultPanel';
+export { OracleTopography } from './OracleTopography';

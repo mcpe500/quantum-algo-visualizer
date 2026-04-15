@@ -12,6 +12,11 @@ export interface FFTSpectrumPoint {
   phase: number;
 }
 
+export interface FFTPowerPoint {
+  bin: number;
+  power: number;
+}
+
 export interface FFTResult {
   dominant_bins: number[];
   dominant_magnitudes: number[];
@@ -19,10 +24,15 @@ export interface FFTResult {
   n_points: number;
   time_complexity: string;
   spectrum: FFTSpectrumPoint[];
+  normalized_power_spectrum: FFTPowerPoint[];
+  normalized_power_dominant_bins: number[];
+  normalized_power_dominant_values: number[];
+  normalization_note: string;
 }
 
 export interface QFTProbabilityPoint {
   state: string;
+  bin: number;
   count: number;
   probability: number;
 }
@@ -38,7 +48,10 @@ export interface QFTResult {
   n_points_padded: number;
   input_amplitudes: number[];
   probabilities: QFTProbabilityPoint[];
+  dominant_bins: number[];
+  dominant_probabilities: number[];
   note: string;
+  bitstring_mapping_note: string;
 }
 
 export interface QFTBenchmarkResult {
@@ -58,6 +71,10 @@ export interface QFTBenchmarkResult {
     qft_complexity: string;
     speedup_factor: string;
     note: string;
+    fair_metric: string;
+    fft_peak_bins: number[];
+    qft_peak_bins: number[];
+    shared_peak_bins: number[];
   };
 }
 

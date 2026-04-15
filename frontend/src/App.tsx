@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import AlgorithmSelector from "./pages/AlgorithmSelector";
 import DJCombinedPage from "./pages/DJCombinedPage";
+import DJTopographyPage from "./pages/DJTopographyPage";
 import QFTCombinedPage from "./pages/QFTCombinedPage";
 import VQECombinedPage from "./pages/VQECombinedPage";
 import QAOACombinedPage from "./pages/QAOACombinedPage";
@@ -11,6 +12,7 @@ function App() {
       <Routes>
         <Route path="/" element={<AlgorithmSelector />} />
         <Route path="/dj" element={<DJCombinedPage />} />
+        <Route path="/dj/topography" element={<DJTopographyPage />} />
         <Route path="/qft" element={<QFTCombinedPage />} />
         <Route path="/vqe" element={<VQECombinedPage />} />
         <Route path="/qaoa" element={<QAOACombinedPage />} />
