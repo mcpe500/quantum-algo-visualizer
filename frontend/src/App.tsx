@@ -6,6 +6,7 @@ import QFTCombinedPage from "./pages/QFTCombinedPage";
 import QFTTopographyPage from "./pages/QFTTopographyPage";
 import VQECombinedPage from "./pages/VQECombinedPage";
 import QAOACombinedPage from "./pages/QAOACombinedPage";
+import QAOADatasetPage from "./pages/QAOADatasetPage";
 
 function App() {
   return (
@@ -13,11 +14,12 @@ function App() {
       <Routes>
         <Route path="/" element={<AlgorithmSelector />} />
         <Route path="/dj" element={<DJCombinedPage />} />
-        <Route path="/dj/topography" element={<DJTopographyPage />} />
+        <Route path="/dj/dataset" element={<DJTopographyPage />} />
         <Route path="/qft" element={<QFTCombinedPage />} />
-        <Route path="/qft/topography" element={<QFTTopographyPage />} />
+        <Route path="/qft/dataset" element={<QFTTopographyPage />} />
         <Route path="/vqe" element={<VQECombinedPage />} />
         <Route path="/qaoa" element={<QAOACombinedPage />} />
+        <Route path="/qaoa/dataset" element={<QAOADatasetPage />} />
       </Routes>
     </BrowserRouter>
   );

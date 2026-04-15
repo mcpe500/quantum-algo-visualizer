@@ -153,11 +153,11 @@ export default function DJCombinedPage() {
       </Link>
 
       <Link
-        to="/dj/topography"
+        to="/dj/dataset"
         className="inline-flex items-center gap-2 text-blue-600 hover:text-blue-800 mb-6 ml-6 transition-colors"
       >
         <Grid className="w-4 h-4" />
-        Oracle Topography
+        Dataset
       </Link>
 
       <div className="max-w-6xl mx-auto">

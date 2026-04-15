@@ -41,11 +41,11 @@ export default function QFTCombinedPage() {
       />
 
       <Link
-        to="/qft/topography"
+        to="/qft/dataset"
         className="inline-flex items-center gap-2 text-blue-600 hover:text-blue-800 mb-6 transition-colors"
       >
         <Grid className="w-4 h-4" />
-        Signal Topography
+        Dataset
       </Link>
 
       {/* Error */}
