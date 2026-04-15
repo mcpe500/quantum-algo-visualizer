@@ -1,4 +1,5 @@
-import { GitBranch } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { GitBranch, Grid } from 'lucide-react';
 import { useQAOA } from '../hooks/useQAOA';
 import {
   AlgorithmPageLayout,
@@ -38,6 +39,14 @@ export default function QAOACombinedPage() {
         isLoading={isLoading}
         hasResult={!!benchmarkResult}
       />
+
+      <Link
+        to="/qaoa/dataset"
+        className="inline-flex items-center gap-2 text-blue-600 hover:text-blue-800 mb-6 transition-colors"
+      >
+        <Grid className="w-4 h-4" />
+        Dataset
+      </Link>
 
       {/* Error */}
       {error && (
