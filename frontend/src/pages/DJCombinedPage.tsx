@@ -6,7 +6,8 @@ import { ClassicalVisualization } from '../components/dj/ClassicalVisualization'
 import { QuantumVisualization } from '../components/dj/QuantumVisualization';
 import { ComparisonSection } from '../components/dj/ComparisonSection';
 import { QuantumTraceTable } from '../components/dj/QuantumTraceTable';
-import type { DJBenchmarkParams, DJBenchmarkResult, DJQuantumTrace } from '../types/dj';
+import { DJQuantumAnimation } from '../components/dj/DJQuantumAnimation';
+import type { DJBenchmarkParams, DJBenchmarkResult, DJQuantumTrace, DJAnimationPayload } from '../types/dj';
 import type { ClassicalResult } from '../types/classical';
 import { ArrowLeft, Download, Play, Cpu, BookOpen, Grid } from 'lucide-react';
 
@@ -21,6 +22,7 @@ export default function DJCombinedPage() {
   const [circuitImage, setCircuitImage] = useState<DJCircuitImage | null>(null);
   const [boxedCircuitImage, setBoxedCircuitImage] = useState<DJCircuitImage | null>(null);
   const [quantumTrace, setQuantumTrace] = useState<DJQuantumTrace | null>(null);
+  const [animationData, setAnimationData] = useState<DJAnimationPayload | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'classic' | 'quantum'>('classic');
@@ -61,6 +63,16 @@ export default function DJCombinedPage() {
     } catch (err) {
       console.error('Failed to load quantum trace:', err);
       setQuantumTrace(null);
+    }
+  }, []);
+
+  const loadAnimation = useCallback(async (caseId: string) => {
+    try {
+      const data = await djApi.getAnimation(caseId);
+      setAnimationData(data);
+    } catch (err) {
+      console.error('Failed to load animation:', err);
+      setAnimationData(null);
     }
   }, []);
 
@@ -111,6 +123,7 @@ export default function DJCombinedPage() {
       await loadClassicalResult(selectedCaseId);
       await loadCircuitImage(selectedCaseId);
       await loadBoxedCircuitImage(selectedCaseId);
+      void loadAnimation(selectedCaseId);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Benchmark failed');
     } finally {
@@ -140,7 +153,8 @@ export default function DJCombinedPage() {
     loadCircuitImage(selectedCaseId);
     loadBoxedCircuitImage(selectedCaseId);
     loadQuantumTrace(selectedCaseId);
-  }, [selectedCaseId, loadClassicalResult, loadCircuitImage, loadBoxedCircuitImage, loadQuantumTrace]);
+    loadAnimation(selectedCaseId);
+  }, [selectedCaseId, loadClassicalResult, loadCircuitImage, loadBoxedCircuitImage, loadQuantumTrace, loadAnimation]);
 
   return (
     <div className="min-h-screen bg-[#FAFAFA] p-4 md:p-8">
@@ -253,6 +267,9 @@ export default function DJCombinedPage() {
             {/* Quantum Tab Content */}
             {activeTab === 'quantum' && benchmarkResult && (
               <>
+                {animationData && quantumTrace && (
+                  <DJQuantumAnimation data={animationData} trace={quantumTrace} />
+                )}
                 <QuantumVisualization 
                   quantum={benchmarkResult.quantum}
                   circuitImage={circuitImage}

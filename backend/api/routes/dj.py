@@ -9,6 +9,7 @@ from services.dj_service import (
     get_dj_classic_trace_payload,
     get_dj_quantum_trace_grouped_payload,
     get_dj_quantum_trace_payload,
+    get_dj_animation_payload,
     run_dj_benchmark_payload,
 )
 
@@ -79,6 +80,14 @@ def dj_quantum_trace_grouped():
     data = request.get_json() or {}
     case_id = data.get('case_id', 'DJ-01')
     payload = get_dj_quantum_trace_grouped_payload(case_id)
+    if payload is None:
+        return jsonify({'error': f'Case {case_id} not found'}), 404
+    return jsonify(payload)
+
+@api_bp.route('/dj/animation/<case_id>', methods=['GET'])
+def dj_animation(case_id):
+    shots = request.args.get('shots', 1024, type=int)
+    payload = get_dj_animation_payload(case_id, shots=shots)
     if payload is None:
         return jsonify({'error': f'Case {case_id} not found'}), 404
     return jsonify(payload)

@@ -1,9 +1,12 @@
 import matplotlib
 matplotlib.use('Agg')
+import math
 import time
 from datetime import datetime
+import numpy as np
 from qiskit import QuantumCircuit, QuantumRegister, ClassicalRegister
 from qiskit_aer import AerSimulator
+from qiskit.quantum_info import Statevector
 from qiskit.visualization import circuit_drawer
 from api.shared.dj_partition import partition_stage_groups
 from api.shared.plotting import add_phase_boxes_to_figure, figure_to_base64
@@ -269,3 +272,161 @@ def get_dj_quantum_trace_grouped_payload(case_id):
     partitions = partition_stage_groups(stages)
     pseudocode = generate_quantum_pseudocode(case_id, n_qubits, stages)
     return {'case_id': case_id, 'n_qubits': n_qubits, 'classification': case['expected_classification'], 'partitions': partitions, 'stages': stages, 'pseudocode': pseudocode}
+
+
+def _build_anim_circuit_no_measure(n_qubits, truth_table):
+    qr_in = QuantumRegister(n_qubits, 'q')
+    qr_anc = QuantumRegister(1, 'anc')
+    total = n_qubits + 1
+    labels = [format(i, f'0{total}b') for i in range(2 ** total)]
+    snapshots = []
+
+    init_sv = Statevector.from_label('0' * total)
+    snapshots.append({
+        'phase': 'init',
+        'operation': 'Initial state |0...0⟩',
+        'description': '{} input qubits + 1 ancilla, semua |0⟩'.format(n_qubits),
+        'probabilities': [float(abs(v) ** 2) for v in init_sv.data],
+        'labels': labels,
+    })
+
+    qc = QuantumCircuit(qr_in, qr_anc)
+    snapshots.append({
+        'phase': 'init',
+        'operation': 'X on ancilla',
+        'description': 'Set ancilla ke |1⟩ untuk phase kickback',
+        'probabilities': [float(abs(v) ** 2) for v in init_sv.data],
+        'labels': labels,
+    })
+
+    qc.x(qr_anc[0])
+    sv = Statevector.from_instruction(qc)
+    snapshots.append({
+        'phase': 'init',
+        'operation': 'After X(anc)',
+        'description': 'Ancilla sekarang |1⟩, input masih |0⟩',
+        'probabilities': [float(abs(v) ** 2) for v in sv.data],
+        'labels': labels,
+    })
+
+    qc.h(qr_in[:])
+    qc.h(qr_anc[0])
+    sv = Statevector.from_instruction(qc)
+    snapshots.append({
+        'phase': 'prep',
+        'operation': 'H on all qubits',
+        'description': 'Superposisi: H pada semua input + ancilla → |+⟩...|+⟩|−⟩',
+        'probabilities': [float(abs(v) ** 2) for v in sv.data],
+        'labels': labels,
+    })
+
+    profile = truth_table_profile(truth_table)
+    if profile['is_constant_zero']:
+        snapshots.append({
+            'phase': 'oracle',
+            'operation': 'Oracle: Identity (f(x)=0)',
+            'description': 'Oracle constant-0: tidak ada operasi, state tidak berubah',
+            'probabilities': [float(abs(v) ** 2) for v in sv.data],
+            'labels': labels,
+        })
+    elif profile['is_constant_one']:
+        qc.x(qr_anc[0])
+        sv = Statevector.from_instruction(qc)
+        snapshots.append({
+            'phase': 'oracle',
+            'operation': 'Oracle: X on ancilla (f(x)=1)',
+            'description': 'Oracle constant-1: X pada ancilla, semua output sama',
+            'probabilities': [float(abs(v) ** 2) for v in sv.data],
+            'labels': labels,
+        })
+    else:
+        for input_bits in sorted(truth_table):
+            if truth_table[input_bits] != 1:
+                continue
+            zero_indices = [idx for idx, bit in enumerate(input_bits) if bit == '0']
+
+            for idx in zero_indices:
+                qc.x(qr_in[idx])
+            sv = Statevector.from_instruction(qc)
+            snapshots.append({
+                'phase': 'oracle',
+                'operation': 'Oracle: X flip for {}'.format(input_bits),
+                'description': 'Flip qubit {} agar kontrol semuanya |1⟩'.format(
+                    ' '.join('q{}'.format(i) for i in zero_indices)) if zero_indices else 'Tidak perlu flip',
+                'probabilities': [float(abs(v) ** 2) for v in sv.data],
+                'labels': labels,
+            })
+
+            qc.mcx(list(qr_in), qr_anc[0])
+            sv = Statevector.from_instruction(qc)
+            snapshots.append({
+                'phase': 'oracle',
+                'operation': 'Oracle: MCX for {} → anc'.format(input_bits),
+                'description': 'Multi-control-X: evaluasi f({})=1 via phase kickback'.format(input_bits),
+                'probabilities': [float(abs(v) ** 2) for v in sv.data],
+                'labels': labels,
+            })
+
+            for idx in zero_indices:
+                qc.x(qr_in[idx])
+            sv = Statevector.from_instruction(qc)
+            snapshots.append({
+                'phase': 'oracle',
+                'operation': 'Oracle: X restore for {}'.format(input_bits),
+                'description': 'Pulihkan qubit kontrol ke state semula',
+                'probabilities': [float(abs(v) ** 2) for v in sv.data],
+                'labels': labels,
+            })
+
+    qc.h(qr_in[:])
+    sv = Statevector.from_instruction(qc)
+    snapshots.append({
+        'phase': 'interference',
+        'operation': 'H on input qubits (interference)',
+        'description': 'Hadamard akhir: interferensi konstruktif (CONSTANT) atau destruktif (BALANCED)',
+        'probabilities': [float(abs(v) ** 2) for v in sv.data],
+        'labels': labels,
+    })
+
+    input_probs = {}
+    for i in range(2 ** total):
+        bits = format(i, f'0{total}b')
+        input_bits = bits[:n_qubits]
+        prob = abs(sv.data[i]) ** 2
+        input_probs[input_bits] = input_probs.get(input_bits, 0.0) + prob
+
+    return snapshots, input_probs
+
+
+def get_dj_animation_payload(case_id, shots=1024):
+    case = get_dj_case_or_none(case_id)
+    if not case:
+        return None
+    n_qubits = case['n_qubits']
+    truth_table = case['oracle_definition']['truth_table']
+
+    snapshots, input_probs = _build_anim_circuit_no_measure(n_qubits, truth_table)
+
+    quantum_result = run_quantum_dj(n_qubits, truth_table, shots)
+
+    truth_table_entries = []
+    for bits in sorted(truth_table):
+        truth_table_entries.append({
+            'input': bits,
+            'output': truth_table[bits],
+        })
+
+    return {
+        'case_id': case_id,
+        'n_qubits': n_qubits,
+        'total_qubits': n_qubits + 1,
+        'expected_classification': case['expected_classification'],
+        'truth_table': truth_table_entries,
+        'snapshots': snapshots,
+        'measurement': {
+            'counts': quantum_result['counts'],
+            'classification': quantum_result['result'],
+            'shots': shots,
+        },
+        'input_probabilities': [{'input_bits': k, 'probability': round(v, 6)} for k, v in sorted(input_probs.items())],
+    }
