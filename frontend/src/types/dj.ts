@@ -82,3 +82,38 @@ export interface DJQuantumTrace {
   partitions: DJTracePartition[];
   pseudocode?: string[];
 }
+
+export interface DJAnimationSnapshot {
+  phase: string;
+  operation: string;
+  description: string;
+  probabilities: number[];
+  labels: string[];
+}
+
+export interface DJAnimationTruthEntry {
+  input: string;
+  output: number;
+}
+
+export interface DJAnimationMeasurement {
+  counts: Record<string, number>;
+  classification: 'CONSTANT' | 'BALANCED';
+  shots: number;
+}
+
+export interface DJAnimationInputProb {
+  input_bits: string;
+  probability: number;
+}
+
+export interface DJAnimationPayload {
+  case_id: string;
+  n_qubits: number;
+  total_qubits: number;
+  expected_classification: 'CONSTANT' | 'BALANCED';
+  truth_table: DJAnimationTruthEntry[];
+  snapshots: DJAnimationSnapshot[];
+  measurement: DJAnimationMeasurement;
+  input_probabilities: DJAnimationInputProb[];
+}

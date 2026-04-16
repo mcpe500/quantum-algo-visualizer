@@ -4,6 +4,7 @@ import type {
   DJCircuit,
   DJBenchmarkParams,
   DJQuantumTrace,
+  DJAnimationPayload,
 } from "../types/dj";
 import type { ClassicalResult, DJDataset } from "../types/classical";
 import type {
@@ -109,6 +110,14 @@ export const djApi = {
     const res = await fetch(`${API_BASE}/dj/trace/${caseId}`);
     if (!res.ok) {
       throw new Error("Trace not found");
+    }
+    return res.json();
+  },
+
+  async getAnimation(caseId: string, shots = 1024): Promise<DJAnimationPayload> {
+    const res = await fetch(`${API_BASE}/dj/animation/${caseId}?shots=${shots}`);
+    if (!res.ok) {
+      throw new Error("Animation data not found");
     }
     return res.json();
   },
