@@ -1,8 +1,8 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { Line, OrbitControls, Text } from '@react-three/drei';
 import * as THREE from 'three';
-import { Eye, EyeOff, Gauge, Lock, Move3D, Pause, Play, RotateCcw, SkipForward } from 'lucide-react';
+import { ChevronRight, Eye, EyeOff, Gauge, Lock, Move3D, Pause, Play, RotateCcw, SkipForward } from 'lucide-react';
 import type { DJAnimationPayload, DJQuantumTrace, DJTraceStage } from '../../types/dj';
 
 interface DJQuantumAnimationProps {
@@ -10,15 +10,23 @@ interface DJQuantumAnimationProps {
   trace: DJQuantumTrace;
 }
 
-type ZoneKey = 'input' | 'superposition' | 'oracle' | 'interference' | 'output';
+const GATE_X = { xGate: -8, hRound1: -4, oracle: 0, hRound2: 4, measure: 8 };
 
-const ZONES: Array<{ key: ZoneKey; label: string; x: number; color: string }> = [
-  { key: 'input', label: 'INPUT', x: -7.8, color: '#2563EB' },
-  { key: 'superposition', label: 'SUPERPOSITION', x: -3.7, color: '#10B981' },
-  { key: 'oracle', label: 'ORACLE', x: 0.2, color: '#F59E0B' },
-  { key: 'interference', label: 'INTERFERENCE', x: 4.1, color: '#8B5CF6' },
-  { key: 'output', label: 'OUTPUT', x: 8.2, color: '#EF4444' },
-];
+const PHASE_X_RANGE: Record<string, [number, number]> = {
+  init: [-10, -6],
+  prep: [-6, -2],
+  oracle: [-2, 2],
+  interference: [2, 6],
+  measure: [6, 10],
+};
+
+const PHASE_COLOR: Record<string, string> = {
+  init: '#2563EB',
+  prep: '#10B981',
+  oracle: '#F59E0B',
+  interference: '#8B5CF6',
+  measure: '#EF4444',
+};
 
 const PHASE_LABEL: Record<string, string> = {
   init: 'Inisialisasi',
@@ -28,28 +36,16 @@ const PHASE_LABEL: Record<string, string> = {
   measure: 'Measurement',
 };
 
-const PHASE_TO_ZONE: Record<string, ZoneKey> = {
-  init: 'input',
-  prep: 'superposition',
-  oracle: 'oracle',
-  interference: 'interference',
-  measure: 'output',
-};
-
 const MARKER_STYLE: Record<string, string> = {
   H: 'bg-blue-100 text-blue-700 border-blue-300',
   X: 'bg-red-100 text-red-700 border-red-300',
   M: 'bg-slate-100 text-slate-700 border-slate-300',
   P: 'bg-amber-100 text-amber-700 border-amber-300',
   S: 'bg-violet-100 text-violet-700 border-violet-300',
-  '●': 'bg-violet-200 text-violet-800 border-violet-400',
-  '⊕': 'bg-amber-200 text-amber-800 border-amber-400',
+  '\u25CF': 'bg-violet-200 text-violet-800 border-violet-400',
+  '\u2295': 'bg-amber-200 text-amber-800 border-amber-400',
   '-': 'bg-slate-50 text-slate-300 border-slate-200',
 };
-
-function zoneX(key: ZoneKey): number {
-  return ZONES.find((zone) => zone.key === key)?.x ?? 0;
-}
 
 function getLaneYs(nQubits: number): number[] {
   const total = nQubits + 1;
@@ -80,16 +76,38 @@ function groupStagesByPhase(stages: DJTraceStage[]) {
   return groups;
 }
 
+function computeOrbX(currentStep: number, snapshots: { phase: string }[]): number {
+  if (currentStep >= snapshots.length - 1) return GATE_X.measure;
+  const snap = snapshots[currentStep];
+  const phase = snap.phase;
+  const range = PHASE_X_RANGE[phase];
+  if (!range) return GATE_X.measure;
+
+  let phaseStart = -1;
+  let phaseEnd = -1;
+  for (let i = 0; i < snapshots.length; i++) {
+    if (snapshots[i].phase === phase) {
+      if (phaseStart === -1) phaseStart = i;
+      phaseEnd = i;
+    }
+  }
+
+  const totalInPhase = phaseEnd - phaseStart + 1;
+  const stepInPhase = currentStep - phaseStart;
+  const frac = totalInPhase > 1 ? stepInPhase / (totalInPhase - 1) : 0.5;
+  return range[0] + frac * (range[1] - range[0]);
+}
+
 function CameraRig({ mode }: { mode: 'fixed' | 'orbit' }) {
   const { camera } = useThree();
 
   useEffect(() => {
     if (mode === 'fixed') {
-      camera.position.set(0, 0, 18.5);
-      camera.lookAt(0, 0, 0);
+      camera.position.set(0, -0.5, 20);
+      camera.lookAt(0, -0.5, 0);
     } else {
-      camera.position.set(2.4, 1.8, 15.5);
-      camera.lookAt(0, 0, 0);
+      camera.position.set(2, 1.5, 17);
+      camera.lookAt(0, -0.5, 0);
     }
     camera.updateProjectionMatrix();
   }, [camera, mode]);
@@ -97,73 +115,185 @@ function CameraRig({ mode }: { mode: 'fixed' | 'orbit' }) {
   return null;
 }
 
-function ZonePanels({ activeZone, laneHeight, showOutput }: {
-  activeZone: ZoneKey;
-  laneHeight: number;
-  showOutput: boolean;
+function GateBox({ position, label, color = '#3B82F6', highlight = false, width = 0.9, height = 0.9 }: {
+  position: [number, number, number];
+  label: string;
+  color?: string;
+  highlight?: boolean;
+  width?: number;
+  height?: number;
 }) {
   return (
-    <group>
-      {ZONES.map((zone) => {
-        const active = zone.key === activeZone || (showOutput && zone.key === 'output');
-        return (
-          <group key={zone.key} position={[zone.x, 0, -0.7]}>
-            <mesh>
-              <planeGeometry args={[2.75, laneHeight + 2.45]} />
-              <meshStandardMaterial
-                color={active ? zone.color : '#E2E8F0'}
-                transparent
-                opacity={active ? 0.18 : 0.08}
-              />
-            </mesh>
-            <lineSegments>
-              <edgesGeometry args={[new THREE.PlaneGeometry(2.75, laneHeight + 2.45)]} />
-              <lineBasicMaterial color={active ? zone.color : '#CBD5E1'} transparent opacity={0.55} />
-            </lineSegments>
-            <Text
-              position={[0, laneHeight / 2 + 1.45, 0.05]}
-              fontSize={0.26}
-              color={active ? zone.color : '#94A3B8'}
-              anchorX="center"
-              anchorY="middle"
-            >
-              {zone.label}
-            </Text>
-          </group>
-        );
-      })}
+    <group position={position}>
+      <mesh>
+        <boxGeometry args={[width, height, 0.5]} />
+        <meshPhysicalMaterial
+          color={color}
+          transparent
+          opacity={highlight ? 0.35 : 0.15}
+          roughness={0.1}
+          depth={0.3}
+        />
+      </mesh>
+      <mesh>
+        <boxGeometry args={[width, height, 0.5]} />
+        <meshBasicMaterial color={color} wireframe transparent opacity={highlight ? 0.7 : 0.25} />
+      </mesh>
+      <Text
+        position={[0, height / 2 + 0.25, 0.05]}
+        fontSize={0.28}
+        color={highlight ? color : '#64748B'}
+        anchorX="center"
+        anchorY="middle"
+        font={undefined}
+      >
+        {label}
+      </Text>
     </group>
   );
 }
 
-function LaneGrid({ laneYs, labels }: { laneYs: number[]; labels: string[] }) {
+function OracleGateBox({ laneHeight, highlight }: { laneHeight: number; highlight: boolean }) {
+  const coreRef = useRef<THREE.Mesh>(null);
+
+  useFrame((_, delta) => {
+    if (coreRef.current) {
+      coreRef.current.rotation.x += delta * 0.6;
+      coreRef.current.rotation.y += delta * 0.8;
+    }
+  });
+
+  return (
+    <group position={[GATE_X.oracle, 0, 0.1]}>
+      <mesh>
+        <boxGeometry args={[1.8, laneHeight + 1.2, 1.0]} />
+        <meshPhysicalMaterial
+          color="#1E293B"
+          transparent
+          opacity={highlight ? 0.7 : 0.5}
+          roughness={0.4}
+          metalness={0.6}
+        />
+      </mesh>
+      <mesh>
+        <boxGeometry args={[1.9, laneHeight + 1.3, 1.1]} />
+        <meshBasicMaterial color="#F59E0B" wireframe transparent opacity={highlight ? 0.5 : 0.2} />
+      </mesh>
+      <mesh ref={coreRef}>
+        <octahedronGeometry args={[0.3, 0]} />
+        <meshStandardMaterial color="#F59E0B" emissive="#F59E0B" emissiveIntensity={0.4} wireframe />
+      </mesh>
+      <Text
+        position={[0, laneHeight / 2 + 1.0, 0.6]}
+        fontSize={0.3}
+        color={highlight ? '#F59E0B' : '#94A3B8'}
+        anchorX="center"
+        anchorY="middle"
+      >
+        U_f
+      </Text>
+    </group>
+  );
+}
+
+function MeasureBox({ position, highlight }: { position: [number, number, number]; highlight: boolean }) {
+  return (
+    <group position={position}>
+      <mesh>
+        <boxGeometry args={[0.7, 0.9, 0.4]} />
+        <meshStandardMaterial color="#64748B" transparent opacity={highlight ? 0.6 : 0.2} metalness={0.5} roughness={0.3} />
+      </mesh>
+      <mesh>
+        <boxGeometry args={[0.7, 0.9, 0.4]} />
+        <meshBasicMaterial color="#64748B" wireframe transparent opacity={highlight ? 0.5 : 0.15} />
+      </mesh>
+      <Text
+        position={[0, 0.7, 0.05]}
+        fontSize={0.22}
+        color={highlight ? '#334155' : '#94A3B8'}
+        anchorX="center"
+        anchorY="middle"
+      >
+        M
+      </Text>
+    </group>
+  );
+}
+
+function CircuitLayout({ laneYs, labels, nQubits, orbX }: {
+  laneYs: number[];
+  labels: string[];
+  nQubits: number;
+  orbX: number;
+}) {
+  const passedX = orbX >= GATE_X.xGate - 0.5;
+  const passedH1 = orbX >= GATE_X.hRound1 - 0.5;
+  const passedOracle = orbX >= GATE_X.oracle - 1;
+  const passedH2 = orbX >= GATE_X.hRound2 - 0.5;
+  const passedMeasure = orbX >= GATE_X.measure - 1;
+  const laneHeight = laneYs.length > 1 ? Math.abs(laneYs[0] - laneYs[laneYs.length - 1]) : 1.45;
+
   return (
     <group>
       {laneYs.map((y, i) => (
         <Line
-          key={`lane-${labels[i]}`}
-          points={[
-            [-9.3, y, 0],
-            [9.3, y, 0],
-          ]}
-          color="#94A3B8"
-          transparent
-          opacity={0.52}
+          key={`wire-${labels[i]}`}
+          points={[[-10.5, y, -0.05], [10.5, y, -0.05]]}
+          color="#CBD5E1"
           lineWidth={1}
         />
       ))}
 
       {laneYs.map((y, i) => (
         <Text
-          key={`lane-label-${labels[i]}`}
-          position={[-10.15, y, 0.12]}
-          fontSize={0.25}
+          key={`wl-${labels[i]}`}
+          position={[-11.2, y, 0.1]}
+          fontSize={0.24}
           color="#475569"
           anchorX="right"
           anchorY="middle"
         >
           {labels[i]}
         </Text>
+      ))}
+
+      <GateBox
+        position={[GATE_X.xGate, laneYs[laneYs.length - 1], 0]}
+        label="X"
+        color="#EF4444"
+        highlight={passedX}
+        width={0.7}
+        height={0.7}
+      />
+
+      {laneYs.map((y, i) => (
+        <GateBox
+          key={`h1-${i}`}
+          position={[GATE_X.hRound1, y, 0]}
+          label="H"
+          color="#3B82F6"
+          highlight={passedH1}
+        />
+      ))}
+
+      <OracleGateBox laneHeight={laneHeight} highlight={passedOracle} />
+
+      {laneYs.slice(0, nQubits).map((y, i) => (
+        <GateBox
+          key={`h2-${i}`}
+          position={[GATE_X.hRound2, y, 0]}
+          label="H"
+          color="#8B5CF6"
+          highlight={passedH2}
+        />
+      ))}
+
+      {laneYs.slice(0, nQubits).map((y, i) => (
+        <MeasureBox
+          key={`m-${i}`}
+          position={[GATE_X.measure, y, 0]}
+          highlight={passedMeasure}
+        />
       ))}
     </group>
   );
@@ -174,48 +304,72 @@ function QubitOrbNode({
   y,
   pOne,
   targetX,
-  ringColor,
+  phaseColor,
 }: {
   label: string;
   y: number;
   pOne: number;
   targetX: number;
-  ringColor: string;
+  phaseColor: string;
 }) {
   const groupRef = useRef<THREE.Group>(null);
+  const matRef = useRef<THREE.MeshStandardMaterial>(null);
+  const lightRef = useRef<THREE.PointLight>(null);
   const isZero = pOne < 0.15;
   const isOne = pOne > 0.85;
   const isSuper = !isZero && !isOne;
-  const color = isSuper ? '#8B5CF6' : isOne ? '#F97316' : '#2563EB';
+  const color = isSuper ? '#8B5CF6' : isOne ? '#F97316' : '#3B82F6';
   const stateText = isSuper ? '0|1' : isOne ? '1' : '0';
 
   useFrame((state, delta) => {
     if (!groupRef.current) return;
-    groupRef.current.position.x = THREE.MathUtils.lerp(groupRef.current.position.x, targetX, delta * 5.6);
-    groupRef.current.position.y = y + (isSuper ? Math.sin(state.clock.elapsedTime * 2.4 + y) * 0.05 : 0);
+    groupRef.current.position.x = THREE.MathUtils.lerp(groupRef.current.position.x, targetX, delta * 4.5);
+    const bobY = isSuper ? Math.sin(state.clock.elapsedTime * 2.2 + y) * 0.08 : 0;
+    groupRef.current.position.y = THREE.MathUtils.lerp(groupRef.current.position.y, y + bobY, delta * 6);
+
+    if (matRef.current) {
+      const target = new THREE.Color(color);
+      matRef.current.color.lerp(target, delta * 4);
+      const tgtOpacity = isSuper ? 0.65 : 1.0;
+      matRef.current.opacity += (tgtOpacity - matRef.current.opacity) * delta * 4;
+      matRef.current.wireframe = isSuper;
+      const tgtEmissive = isSuper ? target : new THREE.Color(0x000000);
+      matRef.current.emissive.lerp(tgtEmissive, delta * 4);
+      matRef.current.emissiveIntensity += ((isSuper ? 0.5 : 0.15) - matRef.current.emissiveIntensity) * delta * 4;
+    }
+
+    if (lightRef.current) {
+      lightRef.current.intensity += ((isSuper ? 1.5 : 0) - lightRef.current.intensity) * delta * 4;
+      lightRef.current.color.lerp(new THREE.Color(color), delta * 4);
+    }
   });
 
   return (
-    <group ref={groupRef} position={[targetX, y, 0.1]}>
+    <group ref={groupRef} position={[targetX, y, 0.15]}>
       <mesh>
-        <sphereGeometry args={[0.72, 52, 52]} />
+        <sphereGeometry args={[0.52, 36, 36]} />
         <meshStandardMaterial
+          ref={matRef}
           color={color}
           emissive={color}
-          emissiveIntensity={isSuper ? 0.34 : 0.22}
-          roughness={0.24}
-          metalness={0.03}
+          emissiveIntensity={isSuper ? 0.5 : 0.15}
+          transparent
+          opacity={isSuper ? 0.65 : 1.0}
+          wireframe={isSuper}
+          roughness={0.2}
+          metalness={0.3}
         />
       </mesh>
+      <pointLight ref={lightRef} distance={2.5} intensity={0} />
 
       <mesh rotation={[Math.PI / 2, 0, 0]}>
-        <torusGeometry args={[0.87, 0.03, 16, 96]} />
-        <meshStandardMaterial color={ringColor} emissive={ringColor} emissiveIntensity={0.25} />
+        <torusGeometry args={[0.65, 0.025, 12, 64]} />
+        <meshStandardMaterial color={phaseColor} emissive={phaseColor} emissiveIntensity={0.2} />
       </mesh>
 
       <Text
-        position={[0, 0, 0.84]}
-        fontSize={0.3}
+        position={[0, 0, 0.65]}
+        fontSize={0.24}
         color="#FFFFFF"
         anchorX="center"
         anchorY="middle"
@@ -224,8 +378,8 @@ function QubitOrbNode({
       </Text>
 
       <Text
-        position={[0, -1.03, 0.05]}
-        fontSize={0.2}
+        position={[0, -0.78, 0.05]}
+        fontSize={0.17}
         color="#334155"
         anchorX="center"
         anchorY="middle"
@@ -236,124 +390,56 @@ function QubitOrbNode({
   );
 }
 
-function OracleChamber({ visible, laneHeight }: { visible: boolean; laneHeight: number }) {
-  const ringRef = useRef<THREE.Mesh>(null);
-  const coreRef = useRef<THREE.Mesh>(null);
+type OracleToken = { input: string; output: number };
 
-  useFrame((_, delta) => {
-    if (!visible) return;
-    if (ringRef.current) ringRef.current.rotation.z += delta * 0.55;
-    if (coreRef.current) {
-      coreRef.current.rotation.x += delta * 0.8;
-      coreRef.current.rotation.y += delta * 1.05;
-    }
-  });
-
-  return (
-    <group visible={visible} position={[zoneX('oracle'), 0, 0.18]}>
-      <mesh>
-        <boxGeometry args={[2.35, laneHeight + 1.0, 1.3]} />
-        <meshStandardMaterial color="#FEF3C7" transparent opacity={0.28} roughness={0.3} />
-      </mesh>
-      <lineSegments>
-        <edgesGeometry args={[new THREE.BoxGeometry(2.35, laneHeight + 1.0, 1.3)]} />
-        <lineBasicMaterial color="#F59E0B" transparent opacity={0.92} />
-      </lineSegments>
-      <mesh ref={ringRef} rotation={[Math.PI / 2, 0, 0]}>
-        <torusGeometry args={[0.76, 0.06, 16, 72]} />
-        <meshStandardMaterial color="#F59E0B" emissive="#F59E0B" emissiveIntensity={0.35} />
-      </mesh>
-      <mesh ref={coreRef}>
-        <octahedronGeometry args={[0.38, 0]} />
-        <meshStandardMaterial color="#F59E0B" emissive="#F59E0B" emissiveIntensity={0.42} wireframe />
-      </mesh>
-    </group>
-  );
-}
-
-type OracleToken = {
-  input: string;
-  output: number;
-};
-
-function TokenCard3D({ token, index, zone }: { token: OracleToken; index: number; zone: ZoneKey }) {
+function TokenCard3D({ token, index, orbX }: { token: OracleToken; index: number; orbX: number }) {
   const groupRef = useRef<THREE.Group>(null);
-  const totalCols = 4;
-  const col = index % totalCols;
-  const row = Math.floor(index / totalCols);
-  const startY = 4.1 - row * 0.6;
+  const col = index % 4;
+  const row = Math.floor(index / 4);
+  const topY = 4.5 - row * 0.55;
 
   useFrame((state, delta) => {
     if (!groupRef.current) return;
     const t = state.clock.elapsedTime;
-
-    let targetX = zoneX('input') - 0.9 + col * 0.62;
-    let targetY = startY;
-    let targetZ = 0.95;
-
-    if (zone === 'superposition') {
-      targetX = zoneX('superposition') - 0.8 + col * 0.55;
-      targetY = startY + Math.sin(t * 2 + index) * 0.14;
-    } else if (zone === 'oracle') {
-      targetX = zoneX('oracle') - 0.8 + col * 0.55;
-      targetY = startY - 0.2 + Math.cos(t * 2.2 + index) * 0.08;
-    } else if (zone === 'interference') {
-      targetX = zoneX('interference') - 0.65 + col * 0.5;
-      targetY = startY - 0.35;
-      targetZ = 0.8;
-    }
-
-    groupRef.current.position.x = THREE.MathUtils.lerp(groupRef.current.position.x, targetX, delta * 5);
-    groupRef.current.position.y = THREE.MathUtils.lerp(groupRef.current.position.y, targetY, delta * 5);
-    groupRef.current.position.z = THREE.MathUtils.lerp(groupRef.current.position.z, targetZ, delta * 5);
+    const tx = orbX - 1.2 + col * 0.6;
+    const ty = topY + Math.sin(t * 1.8 + index) * 0.1;
+    groupRef.current.position.x = THREE.MathUtils.lerp(groupRef.current.position.x, tx, delta * 4);
+    groupRef.current.position.y = THREE.MathUtils.lerp(groupRef.current.position.y, ty, delta * 4);
+    groupRef.current.position.z = THREE.MathUtils.lerp(groupRef.current.position.z, 0.9, delta * 4);
   });
 
   return (
-    <group ref={groupRef} position={[zoneX('input'), startY, 0.95]}>
+    <group ref={groupRef} position={[orbX, topY, 0.9]}>
       <mesh>
-        <boxGeometry args={[0.95, 0.36, 0.12]} />
+        <boxGeometry args={[0.5, 0.28, 0.08]} />
         <meshStandardMaterial
           color={token.output === 1 ? '#FEE2E2' : '#DBEAFE'}
           emissive={token.output === 1 ? '#FCA5A5' : '#93C5FD'}
-          emissiveIntensity={0.15}
-          roughness={0.28}
+          emissiveIntensity={0.12}
+          roughness={0.3}
         />
       </mesh>
-      <Text
-        position={[0, 0.02, 0.07]}
-        fontSize={0.12}
-        color={token.output === 1 ? '#B91C1C' : '#1D4ED8'}
-        anchorX="center"
-        anchorY="middle"
-      >
+      <Text position={[0, 0.02, 0.05]} fontSize={0.09} color={token.output === 1 ? '#B91C1C' : '#1D4ED8'} anchorX="center" anchorY="middle">
         {token.input}
       </Text>
-      <Text
-        position={[0.31, -0.11, 0.07]}
-        fontSize={0.08}
-        color="#475569"
-        anchorX="center"
-        anchorY="middle"
-      >
-        out={token.output}
+      <Text position={[0.18, -0.08, 0.05]} fontSize={0.06} color="#475569" anchorX="center" anchorY="middle">
+        {token.output}
       </Text>
     </group>
   );
 }
 
-function OracleTokenRibbon({ truthTable, zone, visible }: {
+function OracleTokenRibbon({ truthTable, orbX, visible }: {
   truthTable: OracleToken[];
-  zone: ZoneKey;
+  orbX: number;
   visible: boolean;
 }) {
   const tokens = useMemo(() => truthTable.slice(0, 8), [truthTable]);
-
   if (!visible) return null;
-
   return (
     <group>
       {tokens.map((token, index) => (
-        <TokenCard3D key={`${token.input}-${index}`} token={token} index={index} zone={zone} />
+        <TokenCard3D key={`${token.input}-${index}`} token={token} index={index} orbX={orbX} />
       ))}
     </group>
   );
@@ -375,33 +461,19 @@ function ResultBoard({ classification, visible }: {
   });
 
   return (
-    <group ref={groupRef} position={[zoneX('output'), 0, 0.24]} scale={[0.001, 0.001, 0.001]}>
+    <group ref={groupRef} position={[GATE_X.measure + 0.5, 0, 0.3]} scale={[0.001, 0.001, 0.001]}>
       <mesh>
-        <planeGeometry args={[2.5, 2.1]} />
+        <planeGeometry args={[2.2, 1.8]} />
         <meshStandardMaterial color={isConstant ? '#DBEAFE' : '#FFEDD5'} transparent opacity={0.95} />
       </mesh>
       <lineSegments>
-        <edgesGeometry args={[new THREE.PlaneGeometry(2.5, 2.1)]} />
+        <edgesGeometry args={[new THREE.PlaneGeometry(2.2, 1.8)]} />
         <lineBasicMaterial color={isConstant ? '#2563EB' : '#EA580C'} />
       </lineSegments>
-      <Text
-        position={[0, 0.34, 0.06]}
-        fontSize={0.32}
-        color={isConstant ? '#1D4ED8' : '#C2410C'}
-        anchorX="center"
-        anchorY="middle"
-      >
+      <Text position={[0, 0.28, 0.06]} fontSize={0.28} color={isConstant ? '#1D4ED8' : '#C2410C'} anchorX="center" anchorY="middle">
         {classification}
       </Text>
-      <Text
-        position={[0, -0.34, 0.06]}
-        fontSize={0.14}
-        color="#334155"
-        maxWidth={2.05}
-        textAlign="center"
-        anchorX="center"
-        anchorY="middle"
-      >
+      <Text position={[0, -0.28, 0.06]} fontSize={0.12} color="#334155" maxWidth={1.8} textAlign="center" anchorX="center" anchorY="middle">
         {isConstant ? 'Semua hasil ukur input = 0' : 'Ada hasil ukur input bukan 0'}
       </Text>
     </group>
@@ -427,17 +499,13 @@ function StoryScene({
   };
   const snapshot = snapshots[currentStep];
   const storyPhase = snapshot?.phase || 'init';
-  const storyZone = PHASE_TO_ZONE[storyPhase] || 'input';
   const showResult = currentStep >= snapshots.length - 1;
-  const panelZone = showResult ? 'output' : storyZone;
-  const orbZone = storyZone;
 
   const laneYs = useMemo(() => getLaneYs(n_qubits), [n_qubits]);
   const laneLabels = useMemo(
     () => [...Array.from({ length: n_qubits }, (_, i) => `q${i}`), 'anc'],
     [n_qubits]
   );
-  const laneHeight = Math.abs(laneYs[0] - laneYs[laneYs.length - 1]);
 
   const qubitStates = useMemo(() => {
     const probs = snapshot?.probabilities || [];
@@ -446,27 +514,27 @@ function StoryScene({
     return Array.from({ length: totalQubits }, (_, i) => getQubitP1(probs, labels, i, totalQubits));
   }, [n_qubits, snapshot?.labels, snapshot?.probabilities]);
 
-  const ringColor = ZONES.find((zone) => zone.key === panelZone)?.color || '#2563EB';
+  const orbX = computeOrbX(currentStep, snapshots);
+  const phaseColor = showResult ? PHASE_COLOR.measure : PHASE_COLOR[storyPhase] || '#2563EB';
 
   return (
     <>
       <CameraRig mode={cameraMode} />
-      <ambientLight intensity={0.8} />
-      <directionalLight position={[4, 7, 7]} intensity={0.65} />
-      <directionalLight position={[-5, 2, 5]} intensity={0.35} color="#BFDBFE" />
+      <ambientLight intensity={0.7} />
+      <directionalLight position={[5, 8, 8]} intensity={0.8} />
+      <directionalLight position={[-6, 3, 5]} intensity={0.3} color="#BFDBFE" />
 
       <OrbitControls
         enabled={cameraMode === 'orbit'}
         enablePan={false}
         enableZoom
         minDistance={10}
-        maxDistance={22}
-        minPolarAngle={Math.PI * 0.33}
-        maxPolarAngle={Math.PI * 0.65}
+        maxDistance={24}
+        minPolarAngle={Math.PI * 0.3}
+        maxPolarAngle={Math.PI * 0.7}
       />
 
-      <ZonePanels activeZone={panelZone} laneHeight={laneHeight} showOutput={showResult} />
-      <LaneGrid laneYs={laneYs} labels={laneLabels} />
+      <CircuitLayout laneYs={laneYs} labels={laneLabels} nQubits={n_qubits} orbX={orbX} />
 
       {qubitStates.map((pOne, i) => (
         <QubitOrbNode
@@ -474,18 +542,17 @@ function StoryScene({
           label={laneLabels[i]}
           y={laneYs[i]}
           pOne={pOne}
-          targetX={zoneX(orbZone)}
-          ringColor={ringColor}
+          targetX={orbX}
+          phaseColor={phaseColor}
         />
       ))}
 
-      <OracleChamber visible={storyZone === 'oracle'} laneHeight={laneHeight} />
-      <OracleTokenRibbon truthTable={truthTable} zone={storyZone} visible={showTokens && storyZone !== 'output'} />
+      <OracleTokenRibbon truthTable={truthTable} orbX={orbX} visible={showTokens && !showResult} />
       <ResultBoard classification={measurement.classification} visible={showResult} />
 
       <Text
-        position={[0, laneHeight / 2 + 2.05, 0.3]}
-        fontSize={0.34}
+        position={[0, Math.max(...laneYs) + 1.6, 0.2]}
+        fontSize={0.3}
         color="#0F172A"
         anchorX="center"
         anchorY="middle"
@@ -502,85 +569,69 @@ function MarkerBadge({ marker }: { marker: string }) {
   return <span className={`inline-flex min-w-8 justify-center rounded border px-1.5 py-0.5 font-mono text-[10px] ${classes}`}>{value}</span>;
 }
 
-function StageCard({ stage, nQubits, active }: { stage: DJTraceStage; nQubits: number; active: boolean }) {
+function CompactGateTimeline({
+  trace,
+  activePhase,
+  nQubits,
+  currentStep,
+  onJumpPhase,
+}: {
+  trace: DJQuantumTrace;
+  activePhase: string;
+  nQubits: number;
+  currentStep: number;
+  onJumpPhase: (phase: string) => void;
+}) {
+  const groups = useMemo(() => groupStagesByPhase(trace.stages), [trace.stages]);
+  const activeStage = trace.stages[currentStep];
   const labels = useMemo(
     () => [...Array.from({ length: nQubits }, (_, i) => `q${i}`), 'anc'],
     [nQubits]
   );
 
   return (
-    <div className={`min-w-[176px] rounded-lg border p-3 ${active ? 'border-violet-400 bg-violet-50 shadow-sm' : 'border-slate-200 bg-white'}`}>
-      <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500">Step {stage.step}</p>
-      <p className="mt-1 text-[12px] font-semibold text-slate-800 leading-snug">{stage.operation}</p>
-      <div className="mt-3 space-y-1.5">
-        {labels.map((label, idx) => {
-          const marker = idx === nQubits ? stage.ancilla_marker : stage.wire_markers[String(idx)] || '-';
+    <div className="px-4 py-2 space-y-1.5">
+      <div className="flex items-center gap-1 overflow-x-auto">
+        {groups.map((group, i) => {
+          const isActive = group.phase === activePhase;
           return (
-            <div key={`${stage.step}-${label}`} className="flex items-center justify-between gap-2">
-              <span className="text-[11px] font-mono text-slate-500">{label}</span>
-              <MarkerBadge marker={marker} />
-            </div>
+            <Fragment key={group.phase}>
+              {i > 0 && <ChevronRight className="h-3 w-3 shrink-0 text-slate-300" />}
+              <button
+                onClick={() => onJumpPhase(group.phase)}
+                className={`shrink-0 rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.12em] transition-colors ${
+                  isActive
+                    ? 'bg-violet-600 text-white'
+                    : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
+                }`}
+              >
+                {PHASE_LABEL[group.phase] || group.phase}
+                <span className="ml-1 font-normal opacity-70">({group.items.length})</span>
+              </button>
+            </Fragment>
           );
         })}
       </div>
-    </div>
-  );
-}
 
-function GateTimeline({
-  trace,
-  activePhase,
-  nQubits,
-}: {
-  trace: DJQuantumTrace;
-  activePhase: string;
-  nQubits: number;
-}) {
-  const groups = useMemo(() => groupStagesByPhase(trace.stages), [trace.stages]);
-  const activeGroup = groups.find((group) => group.phase === activePhase) || groups[0];
-
-  return (
-    <div className="space-y-3 px-4 pb-4">
-      <div className="grid gap-3 lg:grid-cols-[1.5fr,1fr]">
-        <div className="rounded-xl border border-slate-200 bg-white p-4">
-          <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500">Gate dari Python</p>
-          <h3 className="mt-1 text-sm font-semibold text-slate-900">Fase aktif: {PHASE_LABEL[activePhase] || activePhase}</h3>
-          <div className="mt-3 flex flex-wrap gap-2">
-            {activeGroup.items.map((stage) => (
-              <span key={`active-op-${stage.step}`} className="rounded-full border border-violet-200 bg-violet-50 px-3 py-1 text-[11px] text-violet-700">
-                {stage.operation}
-              </span>
-            ))}
+      {activeStage && (
+        <div className="flex items-center gap-1.5 overflow-x-auto text-[11px] text-slate-600">
+          <span className="shrink-0 font-semibold text-slate-800">
+            Step {activeStage.step}: {activeStage.operation}
+          </span>
+          <span className="text-slate-300">&middot;</span>
+          <div className="flex items-center gap-1">
+            {labels.map((label, idx) => {
+              const marker = idx === nQubits ? activeStage.ancilla_marker : activeStage.wire_markers[String(idx)] || '-';
+              return (
+                <span key={`mk-${label}`} className="flex items-center gap-0.5 shrink-0">
+                  <span className="text-[10px] text-slate-400">{label}</span>
+                  <MarkerBadge marker={marker} />
+                </span>
+              );
+            })}
           </div>
         </div>
-
-        <div className="rounded-xl border border-slate-200 bg-white p-4">
-          <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500">Legend</p>
-          <div className="mt-3 grid grid-cols-2 gap-2 text-[11px] text-slate-600">
-            <span><strong>Orb</strong> = state qubit</span>
-            <span><strong>Timeline</strong> = gate asli Python</span>
-            <span><strong>0 / 1 / 0|1</strong> = state orb</span>
-            <span><strong>Token data</strong> = input oracle opsional</span>
-          </div>
-        </div>
-      </div>
-
-      {groups.map((group) => (
-        <div key={`group-${group.phase}`} className={`rounded-xl border p-3 ${group.phase === activePhase ? 'border-violet-300 bg-violet-50/60' : 'border-slate-200 bg-slate-50/70'}`}>
-          <div className="mb-3 flex items-center gap-2">
-            <span className={`rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.18em] ${group.phase === activePhase ? 'bg-violet-600 text-white' : 'bg-slate-200 text-slate-600'}`}>
-              {PHASE_LABEL[group.phase] || group.phase}
-            </span>
-            <span className="text-[11px] text-slate-500">{group.items.length} gate step</span>
-          </div>
-
-          <div className="flex gap-3 overflow-x-auto pb-1">
-            {group.items.map((stage) => (
-              <StageCard key={`stage-card-${stage.step}`} stage={stage} nQubits={nQubits} active={group.phase === activePhase} />
-            ))}
-          </div>
-        </div>
-      ))}
+      )}
     </div>
   );
 }
@@ -597,7 +648,7 @@ export function DJQuantumAnimation({ data, trace }: DJQuantumAnimationProps) {
   const snapshot = data.snapshots[currentStep];
   const storyPhase = snapshot?.phase || 'init';
   const activeGatePhase = currentStep >= totalSteps - 1 ? 'measure' : storyPhase;
-  const phaseColor = ZONES.find((zone) => zone.key === PHASE_TO_ZONE[activeGatePhase])?.color || '#2563EB';
+  const phaseColor = PHASE_COLOR[activeGatePhase] || '#2563EB';
   const isLastStep = currentStep >= totalSteps - 1;
 
   const stopTimer = useCallback(() => {
@@ -647,6 +698,15 @@ export function DJQuantumAnimation({ data, trace }: DJQuantumAnimationProps) {
     setCurrentStep(0);
   };
 
+  const handleJumpPhase = useCallback((phase: string) => {
+    const idx = trace.stages.findIndex((s) => s.phase === phase);
+    if (idx >= 0 && idx < totalSteps) {
+      setCurrentStep(idx);
+      setIsPlaying(false);
+      stopTimer();
+    }
+  }, [trace.stages, totalSteps, stopTimer]);
+
   const footerTitle = isLastStep ? 'Measurement & Result' : snapshot?.operation;
   const footerDescription = isLastStep
     ? data.measurement.classification === 'CONSTANT'
@@ -661,7 +721,7 @@ export function DJQuantumAnimation({ data, trace }: DJQuantumAnimationProps) {
         <h2 className="mt-1 text-xl font-semibold text-slate-900">{data.case_id} - input, gate, oracle, output</h2>
       </header>
 
-      <GateTimeline trace={trace} activePhase={activeGatePhase} nQubits={data.n_qubits} />
+      <CompactGateTimeline trace={trace} activePhase={activeGatePhase} nQubits={data.n_qubits} currentStep={currentStep} onJumpPhase={handleJumpPhase} />
 
       <div className="px-4 pb-2 flex flex-wrap items-center justify-between gap-3 text-[11px] text-slate-600">
         <div className="flex flex-wrap items-center gap-3">
@@ -685,9 +745,9 @@ export function DJQuantumAnimation({ data, trace }: DJQuantumAnimationProps) {
         </div>
       </div>
 
-      <div className="relative mx-4 rounded-xl border border-slate-300 overflow-hidden" style={{ height: '560px' }}>
+      <div className="relative mx-4 rounded-xl border border-slate-300 overflow-hidden" style={{ height: '480px' }}>
         <Canvas
-          camera={{ position: [0, 0, 18.5], fov: 34, near: 0.1, far: 100 }}
+          camera={{ position: [0, -0.5, 20], fov: 36, near: 0.1, far: 100 }}
           style={{ background: 'linear-gradient(180deg, #f8fafc 0%, #e2e8f0 100%)' }}
           gl={{ antialias: true }}
         >
