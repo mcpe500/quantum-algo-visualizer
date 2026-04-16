@@ -280,7 +280,14 @@ export default function DJCombinedPage() {
                   classification={benchmarkResult.expected_classification}
                 />
                 {quantumTrace && (
-                  <QuantumTraceTable trace={quantumTrace} />
+                  <details className="group">
+                    <summary className="cursor-pointer select-none rounded-xl border border-purple-200 bg-white px-4 py-3 text-[12px] font-semibold text-purple-700 hover:bg-purple-50 transition-colors">
+                      Detail Trace Table ({quantumTrace.stages.length} gate steps)
+                    </summary>
+                    <div className="mt-2">
+                      <QuantumTraceTable trace={quantumTrace} />
+                    </div>
+                  </details>
                 )}
                 <ComparisonSection result={benchmarkResult} />
               </>
