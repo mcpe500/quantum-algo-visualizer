@@ -14,6 +14,7 @@ interface DJQuantumAnimationProps {
 }
 
 const PHASE_COLOR: Record<string, string> = {
+  'pre-init': '#94A3B8',
   init: '#2563EB',
   prep: '#10B981',
   oracle: '#F59E0B',
@@ -22,6 +23,7 @@ const PHASE_COLOR: Record<string, string> = {
 };
 
 const PHASE_LABEL: Record<string, string> = {
+  'pre-init': 'Keadaan Awal |0⟩',
   init: 'Inisialisasi Register',
   prep: 'Persiapan Ancilla',
   oracle: 'Oracle Nyata',
@@ -30,6 +32,7 @@ const PHASE_LABEL: Record<string, string> = {
 };
 
 const SCENE_PHASE_LABEL: Record<string, string> = {
+  'pre-init': '|0⟩',
   init: 'Init',
   prep: 'Prep anc',
   oracle: 'Oracle',
@@ -738,7 +741,7 @@ function StoryScene({
   const { startX, endX, gap, columnXs } = useMemo(() => getColumnLayout(data.timeline.length), [data.timeline.length]);
   const cameraDistance = data.timeline.length > 24 ? 23 : 21.5;
   const phaseColor = PHASE_COLOR[activeStep.phase] || '#2563EB';
-  const showResult = activeStep.phase === 'measure';
+  const showResult = activeStep.phase === 'measure' && currentStep === data.timeline.length - 1;
   const resultX = endX + 2.1;
 
   const qubitStates = useMemo(() => {
@@ -806,19 +809,23 @@ function StoryScene({
         />
       ))}
 
-      {qubitStates.map((pOne, index) => (
-        <BlochSphereNode
-          key={`orb-${index}`}
-          y={laneYs[index]}
-          targetX={columnXs[currentStep]}
-          phaseColor={phaseColor}
-          blochState={
-            blochStates && blochStates[index]
-              ? blochStates[index]
-              : { bx: 0, by: 0, bz: pOne < 0.15 ? 1 : pOne > 0.85 ? -1 : 0, label: pOne < 0.15 ? '|0⟩' : pOne > 0.85 ? '|1⟩' : '0|1' }
-          }
-        />
-      ))}
+      {qubitStates.map((pOne, index) => {
+        // const sphereOffset = currentStep === 0 ? 0 : Math.min(gap * 0.35, 0.6);
+        const sphereOffset = 0;
+        return (
+          <BlochSphereNode
+            key={`orb-${index}`}
+            y={laneYs[index]}
+            targetX={columnXs[currentStep] + sphereOffset}
+            phaseColor={phaseColor}
+            blochState={
+              blochStates && blochStates[index]
+                ? blochStates[index]
+                : { bx: 0, by: 0, bz: pOne < 0.15 ? 1 : pOne > 0.85 ? -1 : 0, label: pOne < 0.15 ? '|0⟩' : pOne > 0.85 ? '|1⟩' : '0|1' }
+            }
+          />
+        );
+      })}
 
       <ResultBoard x={resultX} classification={data.measurement.classification} visible={showResult} />
     </>
@@ -1304,7 +1311,7 @@ export function DJQuantumAnimation({ data, onExportingChange }: DJQuantumAnimati
     }
 
     if (!ffmpegReady) {
-      setExportError('Browser ini tidak mendukung konversi MP4 (memerlukan SharedArrayBuffer). Gunakan Chrome atau Edge terbaru.');
+      setExportError('Browser ini tidak mendukung konversi MP4 di sisi klien. Gunakan Chrome, Edge, atau Firefox terbaru.');
       return;
     }
 
@@ -1600,7 +1607,7 @@ export function DJQuantumAnimation({ data, onExportingChange }: DJQuantumAnimati
                 )}
                 {!ffmpegReady && (
                   <p className="text-amber-600">
-                    MP4 tidak tersedia (memerlukan SharedArrayBuffer). Gunakan Chrome atau Edge terbaru.
+                    MP4 tidak tersedia di browser ini. Gunakan browser modern yang mendukung WebAssembly + Worker.
                   </p>
                 )}
                 {exportError && (

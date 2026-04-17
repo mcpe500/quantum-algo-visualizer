@@ -33,6 +33,18 @@ export type { QAOACircuitImage, VQECircuitImage };
 
 const API_BASE = "http://127.0.0.1:5000/api";
 
+async function readApiError(response: Response, fallback: string): Promise<string> {
+  try {
+    const data = await response.json();
+    if (data?.error && typeof data.error === 'string') {
+      return data.error;
+    }
+  } catch {
+    // ignore JSON parse errors
+  }
+  return fallback;
+}
+
 export interface DJCircuitImage {
   case_id: string;
   n_qubits: number;
@@ -68,7 +80,7 @@ export const djApi = {
   async getCircuitImage(caseId: string): Promise<DJCircuitImage> {
     const res = await fetch(`${API_BASE}/dj/circuit-image/${caseId}`);
     if (!res.ok) {
-      throw new Error("Circuit image not found");
+      throw new Error(await readApiError(res, "Circuit image not found"));
     }
     return res.json();
   },
@@ -76,7 +88,7 @@ export const djApi = {
   async getCircuitImageBoxed(caseId: string): Promise<DJCircuitImage> {
     const res = await fetch(`${API_BASE}/dj/circuit-image-boxed/${caseId}`);
     if (!res.ok) {
-      throw new Error("Boxed circuit image not found");
+      throw new Error(await readApiError(res, "Boxed circuit image not found"));
     }
     return res.json();
   },

@@ -43,21 +43,35 @@ def dj_circuit(n_qubits):
 
 @api_bp.route('/dj/circuit-image/<case_id>', methods=['GET'])
 def dj_circuit_image(case_id):
-    payload = get_dj_circuit_image_payload(case_id=case_id, boxed=False)
-    if payload is None:
-        return jsonify({'error': f'Case {case_id} not found'}), 404
-    if 'error' in payload:
-        return jsonify(payload), 500
-    return jsonify(payload)
+    import traceback
+    try:
+        payload = get_dj_circuit_image_payload(case_id=case_id, boxed=False)
+        if payload is None:
+            return jsonify({'error': f'Case {case_id} not found'}), 404
+        if 'error' in payload:
+            return jsonify(payload), 500
+        return jsonify(payload)
+    except Exception as e:
+        error_msg = f'Error generating circuit image: {str(e)}'
+        print(error_msg)
+        traceback.print_exc()
+        return jsonify({'error': error_msg, 'trace': traceback.format_exc()}), 500
 
 @api_bp.route('/dj/circuit-image-boxed/<case_id>', methods=['GET'])
 def dj_circuit_image_boxed(case_id):
-    payload = get_dj_circuit_image_payload(case_id=case_id, boxed=True)
-    if payload is None:
-        return jsonify({'error': f'Case {case_id} not found'}), 404
-    if 'error' in payload:
-        return jsonify(payload), 500
-    return jsonify(payload)
+    import traceback
+    try:
+        payload = get_dj_circuit_image_payload(case_id=case_id, boxed=True)
+        if payload is None:
+            return jsonify({'error': f'Case {case_id} not found'}), 404
+        if 'error' in payload:
+            return jsonify(payload), 500
+        return jsonify(payload)
+    except Exception as e:
+        error_msg = f'Error generating boxed circuit image: {str(e)}'
+        print(error_msg)
+        traceback.print_exc()
+        return jsonify({'error': error_msg, 'trace': traceback.format_exc()}), 500
 
 @api_bp.route('/dj/classic-run', methods=['POST'])
 def dj_classic_run():

@@ -1,6 +1,6 @@
 def partition_stage_groups(stages):
     """Group stage sequence into contiguous partitions by phase."""
-    ordered = ['init', 'prep', 'oracle', 'interference', 'measure']
+    ordered = ['pre-init', 'init', 'prep', 'oracle', 'interference', 'measure']
     grouped = {phase: [] for phase in ordered}
     for stage in stages:
         phase = stage.get('phase', 'oracle')
