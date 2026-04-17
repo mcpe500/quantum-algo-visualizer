@@ -1,3 +1,10 @@
+const CHART_SIZE = {
+  width: 400,
+  height: 150,
+} as const;
+
+const CHART_PADDING = 30;
+
 interface SignalChartProps {
   data: number[];
   color?: string;
@@ -7,9 +14,9 @@ interface SignalChartProps {
 export function SignalChart({ data, color = '#2563EB', title = 'Signal' }: SignalChartProps) {
   if (!data || data.length === 0) return null;
 
-  const width = 400;
-  const height = 150;
-  const padding = 30;
+  const width = CHART_SIZE.width;
+  const height = CHART_SIZE.height;
+  const padding = CHART_PADDING;
 
   const minVal = Math.min(...data);
   const maxVal = Math.max(...data);

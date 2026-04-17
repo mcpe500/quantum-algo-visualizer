@@ -8,6 +8,8 @@ interface SpeedupCardProps {
 export function SpeedupCard({ result }: SpeedupCardProps) {
   if (!result) return null;
 
+  const transactionId = `${result.case_id}-${result.timestamp.replace(/[^0-9]/g, '').slice(-8)}`;
+
   return (
     <div className="relative overflow-hidden bg-gradient-to-br from-cyan-500/10 to-purple-500/10 border border-cyan-500/20 rounded-3xl p-8">
       <div className="absolute top-0 right-0 p-8 opacity-10">
@@ -35,7 +37,7 @@ export function SpeedupCard({ result }: SpeedupCardProps) {
             </span>
           </div>
           <div className="text-xs text-slate-500 font-mono">
-            ID Transaksi: DJ-{Math.floor(Math.random() * 100000)}
+            ID Transaksi: {transactionId}
           </div>
         </div>
       </div>

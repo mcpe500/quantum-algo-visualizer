@@ -4,6 +4,18 @@ interface CutHistoryChartProps {
   title: string;
 }
 
+const CHART_SIZE = {
+  width: 460,
+  height: 170,
+} as const;
+
+const CHART_PADDING = {
+  left: 40,
+  right: 20,
+  top: 15,
+  bottom: 32,
+} as const;
+
 export function CutHistoryChart({
   data,
   optimalCut,
@@ -11,9 +23,9 @@ export function CutHistoryChart({
 }: CutHistoryChartProps) {
   if (!data || data.length === 0) return null;
 
-  const vw = 460;
-  const vh = 170;
-  const pad = { left: 40, right: 20, top: 15, bottom: 32 };
+  const vw = CHART_SIZE.width;
+  const vh = CHART_SIZE.height;
+  const pad = CHART_PADDING;
   const cw = vw - pad.left - pad.right;
   const ch = vh - pad.top - pad.bottom;
 

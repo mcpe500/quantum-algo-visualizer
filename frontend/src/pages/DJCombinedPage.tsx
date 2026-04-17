@@ -10,9 +10,11 @@ import { DJQuantumAnimation } from '../components/dj/DJQuantumAnimation';
 import type { DJBenchmarkParams, DJBenchmarkResult, DJQuantumTrace, DJAnimationPayload } from '../types/dj';
 import type { ClassicalResult } from '../types/classical';
 import { ArrowLeft, Download, Play, Cpu, BookOpen, Grid } from 'lucide-react';
-
-const sortCaseIds = (caseIds: string[]) =>
-  [...caseIds].sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' }));
+import { CAPTURE_IDS, DEFAULT_SHOTS } from '../constants/app';
+import { PAGE_BACKGROUND_CLASS, STATE_CLASSES, UI_MESSAGES } from '../constants/ui';
+import { InlineEmptyState, PageEmptyState } from '../components/layout';
+import { sortCaseIds } from '../utils/sorting';
+import { downloadElementAsPNG } from '../utils/download';
 
 export default function DJCombinedPage() {
   const [selectedCaseId, setSelectedCaseId] = useState<string>('DJ-01');
@@ -117,7 +119,7 @@ export default function DJCombinedPage() {
     setIsLoading(true);
     setError(null);
     try {
-      const params: DJBenchmarkParams = { case_id: selectedCaseId, shots: 1024 };
+      const params: DJBenchmarkParams = { case_id: selectedCaseId, shots: DEFAULT_SHOTS };
       const data = await djApi.runBenchmark(params);
       setBenchmarkResult(data);
       
@@ -130,23 +132,10 @@ export default function DJCombinedPage() {
     } finally {
       setIsLoading(false);
     }
-  }, [selectedCaseId, loadClassicalResult, loadCircuitImage, loadBoxedCircuitImage]);
+  }, [selectedCaseId, loadClassicalResult, loadCircuitImage, loadBoxedCircuitImage, loadAnimation]);
 
   const handleDownload = useCallback(async () => {
-    const html2canvas = (await import('html2canvas')).default;
-    const element = document.getElementById('capture-area');
-    if (!element) return;
-
-    const canvas = await html2canvas(element, {
-      backgroundColor: '#FAFAFA',
-      scale: 2,
-      useCORS: true,
-    });
-
-    const link = document.createElement('a');
-    link.download = `dj_combined_${selectedCaseId}.png`;
-    link.href = canvas.toDataURL('image/png');
-    link.click();
+    await downloadElementAsPNG(CAPTURE_IDS.djQuantum, `dj_combined_${selectedCaseId}.png`);
   }, [selectedCaseId]);
 
   useEffect(() => {
@@ -158,7 +147,7 @@ export default function DJCombinedPage() {
   }, [selectedCaseId, loadClassicalResult, loadCircuitImage, loadBoxedCircuitImage, loadQuantumTrace, loadAnimation]);
 
   return (
-    <div className="min-h-screen bg-[#FAFAFA] p-4 md:p-8">
+    <div className={`min-h-screen ${PAGE_BACKGROUND_CLASS} p-4 md:p-8`}>
       <Link
         to="/"
         className={`inline-flex items-center gap-2 text-gray-600 hover:text-gray-900 mb-6 transition-colors ${isVideoExporting ? 'pointer-events-none opacity-45' : ''}`}
@@ -210,13 +199,13 @@ export default function DJCombinedPage() {
         </div>
 
         {error && (
-          <div className="mb-6 px-4 py-2 bg-red-100 border border-red-300 text-red-700 text-sm rounded-lg">
+          <div className={STATE_CLASSES.errorBanner}>
             {error}
           </div>
         )}
 
         {(classicalResult || benchmarkResult) && (
-          <div id="capture-area" className="space-y-6">
+          <div id={CAPTURE_IDS.djQuantum} className="space-y-6">
             {/* Tab Navigation */}
             <div className="flex justify-center mb-4">
               <div className="inline-flex bg-gray-100 p-1 rounded-lg">
@@ -251,14 +240,13 @@ export default function DJCombinedPage() {
             {activeTab === 'classic' && classicalResult && (
               <ClassicalVisualization 
                 result={classicalResult} 
-                onDownload={handleDownload} 
+                onDownload={handleDownload}
+                captureId={CAPTURE_IDS.djClassic}
               />
             )}
 
             {activeTab === 'classic' && !classicalResult && (
-              <div className="text-center py-12">
-                <p className="text-gray-400">Belum ada data klasik. Klik "Jalankan" dulu.</p>
-              </div>
+              <InlineEmptyState message={UI_MESSAGES.emptyClassic} />
             )}
 
             <div className="flex justify-center py-2">
@@ -299,17 +287,13 @@ export default function DJCombinedPage() {
             )}
 
             {activeTab === 'quantum' && !benchmarkResult && (
-              <div className="text-center py-12">
-                <p className="text-gray-400">Belum ada data kuantum. Klik "Jalankan" dulu.</p>
-              </div>
+              <InlineEmptyState message={UI_MESSAGES.emptyQuantum} />
             )}
           </div>
         )}
 
         {!classicalResult && !benchmarkResult && !isLoading && (
-          <div className="text-center py-20">
-            <p className="text-gray-500">Pilih kasus dan klik "Jalankan" untuk memulai.</p>
-          </div>
+          <PageEmptyState message={'Pilih kasus dan klik "Jalankan" untuk memulai.'} />
         )}
       </div>
     </div>

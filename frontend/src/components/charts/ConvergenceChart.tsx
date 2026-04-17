@@ -7,6 +7,18 @@ interface ConvergenceChartProps {
   dataLabel?: string;
 }
 
+const CHART_SIZE = {
+  width: 500,
+  height: 200,
+} as const;
+
+const CHART_PADDING = {
+  left: 54,
+  right: 20,
+  top: 18,
+  bottom: 36,
+} as const;
+
 export function ConvergenceChart({
   data,
   optimalValue,
@@ -17,9 +29,9 @@ export function ConvergenceChart({
 }: ConvergenceChartProps) {
   if (!data || data.length === 0) return null;
 
-  const vw = 500;
-  const vh = 200;
-  const pad = { left: 54, right: 20, top: 18, bottom: 36 };
+  const vw = CHART_SIZE.width;
+  const vh = CHART_SIZE.height;
+  const pad = CHART_PADDING;
   const cw = vw - pad.left - pad.right;
   const ch = vh - pad.top - pad.bottom;
 

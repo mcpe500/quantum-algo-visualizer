@@ -5,7 +5,9 @@ import { MetricsGrid, MetricCard } from '../layout/MetricsGrid';
 import { ConvergenceChart } from '../charts/ConvergenceChart';
 import { CircuitDisplay } from '../layout/CircuitDisplay';
 import { TraceTable } from '../layout/TraceTable';
+import { InlineEmptyState, SectionCard } from '../layout';
 import { Cpu } from 'lucide-react';
+import { UI_MESSAGES } from '../../constants/ui';
 
 interface VQEQuantumTabProps {
   result: VQEBenchmarkResult | null;
@@ -15,22 +17,12 @@ interface VQEQuantumTabProps {
 
 export function VQEQuantumTab({ result, circuitImage, trace }: VQEQuantumTabProps) {
   if (!result) {
-    return (
-      <div className="text-center py-12">
-        <p className="text-gray-400">Belum ada data kuantum. Klik "Jalankan" dulu.</p>
-      </div>
-    );
+    return <InlineEmptyState message={UI_MESSAGES.emptyQuantum} />;
   }
 
   return (
     <div className="space-y-6">
-      {/* VQE Metrics */}
-      <div className="bg-white border-2 border-gray-200 rounded-xl p-6">
-        <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
-          <Cpu className="w-5 h-5" />
-          Variational Quantum Eigensolver (VQE)
-        </h2>
-
+      <SectionCard title="Variational Quantum Eigensolver (VQE)" icon={<Cpu className="w-5 h-5" />}>
         <MetricsGrid>
           <MetricCard label="Qubits" value={result.n_qubits} />
           <MetricCard label="Iterations" value={result.quantum.iterations} />
@@ -38,7 +30,6 @@ export function VQEQuantumTab({ result, circuitImage, trace }: VQEQuantumTabProp
           <MetricCard label="Gate Count" value={result.quantum.gate_count} />
         </MetricsGrid>
 
-        {/* Ansatz info */}
         <div className="flex flex-wrap gap-3 mb-6">
           <span className="px-3 py-1 bg-purple-100 text-purple-800 text-xs font-mono rounded-full">
             ansatz: {result.ansatz_type}
@@ -54,7 +45,6 @@ export function VQEQuantumTab({ result, circuitImage, trace }: VQEQuantumTabProp
           </span>
         </div>
 
-        {/* Energy result */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
           <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
             <div className="text-xs text-purple-600 uppercase tracking-wide mb-1">VQE Energy</div>
@@ -70,7 +60,6 @@ export function VQEQuantumTab({ result, circuitImage, trace }: VQEQuantumTabProp
           </div>
         </div>
 
-        {/* Convergence Chart */}
         {result.quantum.convergence_history.length > 0 && (
           <div className="mb-6">
             <ConvergenceChart
@@ -84,7 +73,6 @@ export function VQEQuantumTab({ result, circuitImage, trace }: VQEQuantumTabProp
           </div>
         )}
 
-        {/* Optimal Parameters */}
         {result.quantum.optimal_parameters.length > 0 && (
           <div className="mb-6">
             <h3 className="text-sm font-medium text-gray-700 mb-2">
@@ -100,15 +88,13 @@ export function VQEQuantumTab({ result, circuitImage, trace }: VQEQuantumTabProp
           </div>
         )}
 
-        {/* Circuit Image */}
         <CircuitDisplay
           imageBase64={circuitImage?.image ?? null}
           title="Ansatz Circuit"
           alt="VQE Ansatz Circuit"
         />
-      </div>
+      </SectionCard>
 
-      {/* Trace Table */}
       {trace && (
         <TraceTable
           stages={trace.stages}
@@ -117,9 +103,7 @@ export function VQEQuantumTab({ result, circuitImage, trace }: VQEQuantumTabProp
         />
       )}
 
-      {/* Comparison */}
-      <div className="bg-white border-2 border-gray-200 rounded-xl p-6">
-        <h2 className="text-lg font-semibold text-gray-900 mb-4">Comparison: FCI vs VQE</h2>
+      <SectionCard title="Comparison: FCI vs VQE">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
           <div className="bg-gray-50 p-4 rounded-lg">
             <div className="text-xs text-gray-500 uppercase tracking-wide mb-1">FCI (Classical Exact)</div>
@@ -137,7 +121,7 @@ export function VQEQuantumTab({ result, circuitImage, trace }: VQEQuantumTabProp
             <strong>Note:</strong> {result.comparison.note}
           </p>
         </div>
-      </div>
+      </SectionCard>
     </div>
   );
 }

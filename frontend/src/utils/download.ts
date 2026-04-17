@@ -1,3 +1,5 @@
+import { HTML2CANVAS_CAPTURE_OPTIONS } from '../constants/app';
+
 export async function downloadElementAsPNG(
   elementId: string, 
   filename: string
@@ -9,11 +11,7 @@ export async function downloadElementAsPNG(
     throw new Error(`Element with id '${elementId}' not found`);
   }
 
-  const canvas = await html2canvas(element, {
-    backgroundColor: '#FAFAFA',
-    scale: 2,
-    useCORS: true,
-  });
+  const canvas = await html2canvas(element, HTML2CANVAS_CAPTURE_OPTIONS);
 
   const link = document.createElement('a');
   link.download = filename;

@@ -1,3 +1,12 @@
+const CHART_SIZE = {
+  width: 300,
+  height: 120,
+} as const;
+
+const CHART_PADDING = 30;
+const BAR_WIDTH = 30;
+const BAR_GAP = 10;
+
 interface ProbabilityChartProps {
   data: { state: string; probability: number }[];
   title?: string;
@@ -9,9 +18,9 @@ export function ProbabilityChart({
 }: ProbabilityChartProps) {
   if (!data || data.length === 0) return null;
 
-  const width = 300;
-  const height = 120;
-  const padding = 30;
+  const width = CHART_SIZE.width;
+  const height = CHART_SIZE.height;
+  const padding = CHART_PADDING;
 
   return (
     <div className="mb-4">
@@ -23,16 +32,15 @@ export function ProbabilityChart({
         className="border border-gray-200 rounded bg-white"
       >
         {data.map((d, i) => {
-          const barWidth = 30;
           const barHeight = d.probability * (height - 2 * padding);
-          const x = padding + i * (barWidth + 10);
+          const x = padding + i * (BAR_WIDTH + BAR_GAP);
           const y = height - padding - barHeight;
 
           return (
             <g key={d.state}>
-              <rect x={x} y={y} width={barWidth} height={barHeight} fill="#7c3aed" opacity={0.8} />
+              <rect x={x} y={y} width={BAR_WIDTH} height={barHeight} fill="#7c3aed" opacity={0.8} />
               <text
-                x={x + barWidth / 2}
+                x={x + BAR_WIDTH / 2}
                 y={height - padding + 12}
                 fontSize="10"
                 fill="#6b7280"
@@ -40,7 +48,7 @@ export function ProbabilityChart({
               >
                 |{d.state}⟩
               </text>
-              <text x={x + barWidth / 2} y={y - 5} fontSize="9" fill="#7c3aed" textAnchor="middle">
+              <text x={x + BAR_WIDTH / 2} y={y - 5} fontSize="9" fill="#7c3aed" textAnchor="middle">
                 {(d.probability * 100).toFixed(1)}%
               </text>
             </g>

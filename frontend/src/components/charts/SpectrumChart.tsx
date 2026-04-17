@@ -1,3 +1,10 @@
+const CHART_SIZE = {
+  width: 400,
+  height: 150,
+} as const;
+
+const CHART_PADDING = 30;
+
 interface SpectrumChartProps {
   data: { bin: number; magnitude: number }[];
   title?: string;
@@ -6,9 +13,9 @@ interface SpectrumChartProps {
 export function SpectrumChart({ data, title = 'FFT Spectrum' }: SpectrumChartProps) {
   if (!data || data.length === 0) return null;
 
-  const width = 400;
-  const height = 150;
-  const padding = 30;
+  const width = CHART_SIZE.width;
+  const height = CHART_SIZE.height;
+  const padding = CHART_PADDING;
 
   const maxMag = Math.max(...data.map((d) => d.magnitude)) || 1;
   const barWidth = (width - 2 * padding) / data.length;

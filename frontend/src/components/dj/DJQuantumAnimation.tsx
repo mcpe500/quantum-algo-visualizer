@@ -63,6 +63,12 @@ const EXPORT_OUTRO_MS = 2200;
 const EXPORT_VIDEO_WIDTH = 1920;
 const EXPORT_VIDEO_HEIGHT = 1080;
 const EXPORT_VIDEO_BITRATE = 16_000_000;
+
+const SPEED_SLIDER = {
+  min: 250,
+  max: 2000,
+  step: 100,
+} as const;
 const VIDEO_MIME_TYPES = [
   'video/webm;codecs=vp9',
   'video/webm;codecs=vp8',
@@ -1642,7 +1648,16 @@ export function DJQuantumAnimation({ data, onExportingChange }: DJQuantumAnimati
 
                 <div className="ml-1 flex min-w-[220px] flex-1 items-center gap-2">
                   <Gauge className="h-4 w-4 text-slate-500" />
-                  <input type="range" min={250} max={2000} step={100} value={speed} disabled={isExporting} onChange={(event) => setSpeed(Number(event.target.value))} className="h-1.5 flex-1 accent-violet-600 disabled:cursor-not-allowed disabled:opacity-40" />
+                  <input
+                    type="range"
+                    min={SPEED_SLIDER.min}
+                    max={SPEED_SLIDER.max}
+                    step={SPEED_SLIDER.step}
+                    value={speed}
+                    disabled={isExporting}
+                    onChange={(event) => setSpeed(Number(event.target.value))}
+                    className="h-1.5 flex-1 accent-violet-600 disabled:cursor-not-allowed disabled:opacity-40"
+                  />
                   <span className="w-[62px] text-[11px] text-slate-600">{speed}ms</span>
                 </div>
 
