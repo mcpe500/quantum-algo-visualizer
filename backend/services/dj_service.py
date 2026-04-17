@@ -4,6 +4,7 @@ import math
 import time
 from datetime import datetime
 import numpy as np
+import matplotlib.pyplot as plt
 from qiskit import QuantumCircuit, QuantumRegister, ClassicalRegister
 from qiskit_aer import AerSimulator
 from qiskit.quantum_info import Statevector
@@ -66,6 +67,9 @@ def build_trace_by_layer(n_qubits, truth_table):
         stages.append({'step': step_num, 'operation': operation, 'wire_markers': markers, 'ancilla_marker': wire_markers.get(anc_idx, '-'), 'phase': phase_label})
     col0_markers = {i: 'H' for i in range(n_qubits)}
     col0_markers[anc_idx] = 'X'
+    pre_init_markers = {i: '-' for i in range(n_qubits)}
+    pre_init_markers[anc_idx] = '-'
+    append_stage('Init |0⟩', pre_init_markers, 'pre-init')
     append_stage('X H H', col0_markers, 'init')
     col1_markers = {i: '-' for i in range(n_qubits)}
     col1_markers[anc_idx] = 'H'
@@ -120,17 +124,23 @@ def _compute_bloch_from_statevector(statevector_data, total_qubits, qubit_idx):
         dict with theta, phi, bx, by, bz, and human-readable label
     """
     N = total_qubits
-    dim = 2 ** N
     statevec = np.array(statevector_data, dtype=complex)
     statevec = statevec.reshape([2] * N)
+
+    # Qiskit statevector uses little-endian qubit indexing:
+    # - qubit 0 is the least-significant bit (last tensor axis)
+    # - qubit N-1 is the most-significant bit (first tensor axis)
+    # We receive qubit_idx in circuit order (q0..q{n-1}, anc), so map
+    # to the corresponding tensor axis explicitly.
+    axis = N - 1 - qubit_idx
 
     rho_i = np.zeros((2, 2), dtype=complex)
     for a in range(2):
         for b in range(2):
             idx_a = [slice(0, 2)] * N
             idx_b = [slice(0, 2)] * N
-            idx_a[qubit_idx] = a
-            idx_b[qubit_idx] = b
+            idx_a[axis] = a
+            idx_b[axis] = b
             rho_i[a, b] = np.sum(statevec[tuple(idx_a)] * np.conj(statevec[tuple(idx_b)]))
 
     rho00 = float(np.real(rho_i[0, 0]))
@@ -193,6 +203,8 @@ def _describe_animation_stage(stage, n_qubits):
     operation = stage['operation']
     focus_bits = _extract_input_bits(operation)
 
+    if phase == 'pre-init':
+        return 'Semua qubit dimulai dari keadaan dasar |0⟩ sebelum operasi apapun diterapkan.'
     if phase == 'init':
         return 'Ancilla diubah ke |1⟩ dan semua qubit input diberi Hadamard agar register awal siap membentuk superposisi.'
     if phase == 'prep':
@@ -231,7 +243,9 @@ def _build_animation_timeline(n_qubits, truth_table, stages):
         focus_bits = _extract_input_bits(operation)
         kind = phase
 
-        if phase == 'init' and operation == 'X H H':
+        if phase == 'pre-init':
+            kind = 'pre-init'
+        elif phase == 'init' and operation == 'X H H':
             qc.x(qr_anc[0])
             qc.h(qr_in[:])
             kind = 'init-register'
@@ -427,11 +441,72 @@ def get_dj_circuit_image_payload(case_id, boxed=False):
     n_qubits = case['n_qubits']
     truth_table = case['oracle_definition']['truth_table']
     qc = create_dj_circuit(n_qubits, truth_table)
+
+    def _render_text_circuit(qc_obj):
+        text_diagram = qc_obj.draw(output='text').single_string()
+        lines = text_diagram.splitlines() or ['']
+        longest = max(len(line) for line in lines)
+        fig_width = max(9.0, min(28.0, longest * 0.12))
+        fig_height = max(2.6, min(24.0, len(lines) * 0.30 + 1.2))
+        fig, ax = plt.subplots(figsize=(fig_width, fig_height))
+        ax.axis('off')
+        ax.text(
+            0.01,
+            0.99,
+            text_diagram,
+            transform=ax.transAxes,
+            ha='left',
+            va='top',
+            fontfamily='monospace',
+            fontsize=10,
+            color='#111827',
+        )
+        fig.tight_layout(pad=0.6)
+        return fig
+
     try:
-        fig = circuit_drawer(qc, output='mpl')
-        if boxed:
-            fig = add_phase_boxes_to_figure(fig, qc)
-        return {'case_id': case_id, 'n_qubits': n_qubits, 'image': figure_to_base64(fig), 'depth': qc.depth(), 'gate_count': len(qc.data)}
+        render_mode = 'mpl'
+        warning = None
+        try:
+            fig = circuit_drawer(qc, output='mpl')
+        except Exception as draw_error:
+            fig = _render_text_circuit(qc)
+            render_mode = 'text-fallback'
+            warning = f'MPL drawer unavailable, using text fallback: {str(draw_error)}'
+
+        if boxed and render_mode == 'mpl':
+            try:
+                fig = add_phase_boxes_to_figure(fig, qc)
+            except Exception as boxed_error:
+                warning = f'Phase box overlay failed: {str(boxed_error)}'
+
+        try:
+            image_base64 = figure_to_base64(fig)
+        except Exception as save_error:
+            if render_mode != 'text-fallback':
+                try:
+                    plt.close(fig)
+                except Exception:
+                    pass
+                fig = _render_text_circuit(qc)
+                render_mode = 'text-fallback'
+                existing_warning = f'{warning} | ' if warning else ''
+                warning = f'{existing_warning}MPL save failed, using text fallback: {str(save_error)}'
+                image_base64 = figure_to_base64(fig)
+            else:
+                raise
+
+        payload = {
+            'case_id': case_id,
+            'n_qubits': n_qubits,
+            'image': image_base64,
+            'depth': qc.depth(),
+            'gate_count': len(qc.data),
+            'render_mode': render_mode,
+        }
+        if warning:
+            payload['warning'] = warning
+        return payload
     except Exception as e:
         msg = 'Failed to generate boxed circuit' if boxed else 'Failed to generate circuit'
         return {'error': f'{msg}: {str(e)}'}
