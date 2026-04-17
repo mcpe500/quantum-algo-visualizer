@@ -6,6 +6,7 @@ import * as THREE from 'three';
 import { ChevronRight, Gauge, LoaderCircle, Lock, Move3D, Pause, Play, RotateCcw, SkipForward, Video } from 'lucide-react';
 import type { DJAnimationPayload, DJAnimationPartition, DJAnimationStep } from '../../types/dj';
 import { downloadBlob } from '../../utils/download';
+import { convertWebmToMp4, isFFmpegSupported } from '../../utils/videoConvert';
 
 interface DJQuantumAnimationProps {
   data: DJAnimationPayload;
@@ -28,6 +29,14 @@ const PHASE_LABEL: Record<string, string> = {
   measure: 'Measurement',
 };
 
+const SCENE_PHASE_LABEL: Record<string, string> = {
+  init: 'Init',
+  prep: 'Prep anc',
+  oracle: 'Oracle',
+  interference: 'H akhir',
+  measure: 'Ukur',
+};
+
 const PROFILE_LABEL: Record<string, string> = {
   'constant-zero': 'CONSTANT 0',
   'constant-one': 'CONSTANT 1',
@@ -44,7 +53,8 @@ const MARKER_STYLE: Record<string, string> = {
 };
 
 const EXPORT_FPS = 30;
-const EXPORT_STEP_MS_MIN = 900;
+const DEFAULT_STEP_MS = 1300;
+const EXPORT_STEP_MS_MIN = 1400;
 const EXPORT_INTRO_MS = 1600;
 const EXPORT_OUTRO_MS = 2200;
 const EXPORT_VIDEO_WIDTH = 1920;
@@ -188,12 +198,109 @@ function formatCountsSummary(counts: Record<string, number>) {
     .join('   ');
 }
 
+function hasMarker(step: DJAnimationStep, marker: string, nQubits: number) {
+  const wireHasMarker = Array.from({ length: nQubits }, (_, index) => step.wire_markers[String(index)] || '-')
+    .some((value) => value === marker);
+  return wireHasMarker || step.ancilla_marker === marker;
+}
+
+function getStepHeadline(step: DJAnimationStep) {
+  if (step.phase === 'init') return 'Set register awal';
+  if (step.phase === 'prep') {
+    if (step.ancilla_marker === 'H') return 'Bentuk |−⟩ pada ancilla';
+    return 'Masuk ke superposisi';
+  }
+  if (step.phase === 'oracle') {
+    if (step.operation.toLowerCase().includes('flip') && step.focus_input_bits) {
+      return `Siapkan kontrol untuk input ${step.focus_input_bits}`;
+    }
+    if (step.focus_input_bits) return `Terapkan oracle untuk input ${step.focus_input_bits}`;
+    return 'Terapkan oracle';
+  }
+  if (step.phase === 'interference') return 'Gabungkan fase menjadi amplitudo';
+  if (step.phase === 'measure') return 'Ukur qubit input';
+  return step.operation;
+}
+
+function getStepExplanation(step: DJAnimationStep, totalSteps: number) {
+  if (step.phase === 'init') {
+    return 'Semua qubit mulai dari |0⟩ (vector menunjuk ke North Pole). Gerbang X merotasi ancilla 180° ke |1⟩. Gerbang H merotasi input qubits 90° ke bidang equator (superposisi).';
+  }
+  if (step.phase === 'prep') {
+    if (step.ancilla_marker === 'H') {
+      return 'Gerbang H pada ancilla merotasi 90° dari sumbu Z ke sumbu X negatif, membentuk |−⟩ = (|0⟩ − |1⟩)/√2. Vector ancilla sekarang menunjuk ke −X, siap untuk phase kickback.';
+    }
+    return 'Gerbang Hadamard (H) merotasi vector input 90° ke bidang equator, membentuk superposisi. Semua input diuji sekaligus dalam satu sirkuit.';
+  }
+  if (step.phase === 'oracle') {
+    if (step.operation.toLowerCase().includes('flip') && step.focus_input_bits) {
+      return `Gerbang X membalik qubit kontrol dari |0⟩ ke |1⟩ (rotasi 180°). Ini agar pola ${step.focus_input_bits} cocok dengan kondisi MCX yang membutuhkan semua kontrol = 1.`;
+    }
+    if ((step.operation.toLowerCase().includes('mcx') || step.operation.toLowerCase().includes('cnot')) && step.focus_input_bits) {
+      return `MCX gate: semua qubit input = 1abelle menyebabkan phase kickback pada ancilla. Vector ancilla berputar 180° dalam φ. Ini adalah informasi quantum yang dikodekan dalam fase.`;
+    }
+    if (step.operation.toLowerCase().includes('restore') && step.focus_input_bits) {
+      return `Gerbang X merestore qubit kontrol kembali ke |0⟩. Ini membalikkan rotasi 180° sebelumnya, mengembalikan vector ke posisi semula.`;
+    }
+    return step.description;
+  }
+  if (step.phase === 'interference') {
+    return 'Hadamard akhir merotasi vector input qubits 90° kembali ke sumbu Z. Phase dari oracle menentukan apakah vector menunjuk ke |0⟩ atau |1⟩. Ini mengubah informasi fase menjadi amplitude terukur.';
+  }
+  if (step.phase === 'measure') {
+    return 'Qubit input diukur. Jika semua vector menunjuk ke |0⟩ → CONSTANT. Jika ada vector menunjuk ke |1⟩ → BALANCED. Ini adalah pembacaan hasil akhir algoritma.';
+  }
+  return step.description || `Langkah ${step.step} dari ${totalSteps}.`;
+}
+
+function getStepAccent(step: DJAnimationStep, totalSteps: number) {
+  if (step.phase === 'init') return 'Setiap qubit direpresentasikan sebagai Bloch sphere dengan vector yang menunjuk ke состояние quantum.';
+  if (step.phase === 'prep') return 'Gerakan fokus pembacaan berpindah ke kolom aktif, bukan qubit berjalan secara fisik.';
+  if (step.focus_input_bits) return `Pola dataset aktif: ${step.focus_input_bits}`;
+  return `Langkah ${step.step} dari ${totalSteps}`;
+}
+
+function getContextGlossary(step: DJAnimationStep, nQubits: number) {
+  const notes = [
+    'Qubit = Bloch sphere dengan vector state.',
+    'Gate menyala = operasi pada kolom itu sedang diterapkan.',
+    'Ancilla = qubit bantu untuk phase kickback.',
+    'Vector menunjuk ke состояние qubit pada sphere.',
+  ];
+
+  if (hasMarker(step, 'H', nQubits)) {
+    notes.push('H = Hadamard, merotasi vector 90° untuk membentuk superposisi.');
+  }
+
+  if (step.phase === 'prep' && step.ancilla_marker === 'H') {
+    notes.push('|−⟩ = (|0⟩ − |1⟩)/√2, vector menunjuk ke −X.');
+  }
+
+  if (hasMarker(step, '●', nQubits)) {
+    notes.push('● = qubit control yang harus aktif.');
+  }
+
+  if (hasMarker(step, '⊕', nQubits)) {
+    notes.push('⊕ = target X, biasanya di ancilla.');
+  }
+
+  if (step.operation.toLowerCase().includes('mcx') || (hasMarker(step, '●', nQubits) && hasMarker(step, '⊕', nQubits))) {
+    notes.push('MCX = multi-controlled X gate.');
+  }
+
+  if (step.phase === 'interference') {
+    notes.push('H akhir merotasi vector input 90° untuk memisahkan fase.');
+  }
+
+  return Array.from(new Set(notes)).slice(0, 6);
+}
+
 function getExportNarration(mode: ExportOverlayMode, data: DJAnimationPayload, step: DJAnimationStep) {
   if (mode === 'intro') {
     return {
-      headline: 'Video Quantum Deutsch-Jozsa',
-      detail: 'Orb bergerak melintasi kolom gate nyata. Jika semua bit input kembali ke 0, fungsi CONSTANT. Jika ada bit non-zero, hasilnya BALANCED.',
-      accent: 'Mulai dari register awal, masuk ke superposisi, lalu oracle memberi pola fase yang akan dibaca saat measurement.',
+      headline: 'Cara baca animasi Deutsch-Jozsa',
+      detail: 'Setiap qubit direpresentasikan sebagai Bloch sphere. Vector panah menunjuk ke состояние quantum aktual. 1 kolom = 1 operasi sirkuit.',
+      accent: 'Gate atau kolom yang menyala berarti operasi sedang diterapkan pada vector qubit.',
     };
   }
 
@@ -208,12 +315,28 @@ function getExportNarration(mode: ExportOverlayMode, data: DJAnimationPayload, s
   }
 
   return {
-    headline: `${PHASE_LABEL[step.phase] || step.phase} · ${step.operation}`,
-    detail: step.description,
-    accent: step.focus_input_bits
-      ? `Pola dataset aktif: ${step.focus_input_bits}`
-      : `Langkah ${step.step} dari ${data.timeline.length}`,
+    headline: `${PHASE_LABEL[step.phase] || step.phase} · ${getStepHeadline(step)}`,
+    detail: getStepExplanation(step, data.timeline.length),
+    accent: getStepAccent(step, data.timeline.length),
   };
+}
+
+function drawLegendPill(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  label: string,
+  fill: string,
+  textColor = '#E2E8F0',
+) {
+  ctx.font = '600 13px Inter, Segoe UI, Arial, sans-serif';
+  const width = ctx.measureText(label).width + 26;
+  roundedRect(ctx, x, y, width, 28, 999);
+  ctx.fillStyle = fill;
+  ctx.fill();
+  ctx.fillStyle = textColor;
+  ctx.fillText(label, x + 13, y + 19);
+  return width;
 }
 
 function drawVideoFrame({
@@ -236,7 +359,7 @@ function drawVideoFrame({
   const narration = getExportNarration(mode, data, step);
   const overlayPadding = Math.round(width * 0.038);
   const bottomPanelHeight = Math.round(height * 0.23);
-  const topPanelHeight = Math.round(height * 0.125);
+  const topPanelHeight = Math.round(height * 0.15);
   const topY = overlayPadding;
   const bottomY = height - bottomPanelHeight - overlayPadding;
   const bodyMaxWidth = width - overlayPadding * 2 - 32;
@@ -282,6 +405,13 @@ function drawVideoFrame({
   ctx.fillStyle = '#FFFFFF';
   ctx.font = '700 30px Inter, Segoe UI, Arial, sans-serif';
   ctx.fillText(`Deutsch-Jozsa · ${data.case_id}`, overlayPadding + 28, topY + 68);
+
+  let legendX = overlayPadding + 28;
+  const legendY = topY + 88;
+  legendX += drawLegendPill(ctx, legendX, legendY, 'Qubit = Bloch sphere', 'rgba(139, 92, 246, 0.20)') + 10;
+  legendX += drawLegendPill(ctx, legendX, legendY, 'Gate terang = langkah aktif', 'rgba(59, 130, 246, 0.16)') + 10;
+  legendX += drawLegendPill(ctx, legendX, legendY, 'Ancilla = qubit bantu', 'rgba(16, 185, 129, 0.16)') + 10;
+  drawLegendPill(ctx, legendX, legendY, '● control / ⊕ target', 'rgba(245, 158, 11, 0.16)');
 
   roundedRect(ctx, width - overlayPadding - 250, topY + 22, 222, 44, 999);
   ctx.fillStyle = `${phaseColor}55`;
@@ -354,15 +484,17 @@ function PhaseBand({
         <meshBasicMaterial color={color} transparent opacity={0.07} />
       </mesh>
       <Line points={[[(-width / 2), topY, 0], [width / 2, topY, 0]]} color={color} lineWidth={1} />
-      <Text
-        position={[0, topY + 0.38, 0.02]}
-        fontSize={0.2}
-        color={color}
-        anchorX="center"
-        anchorY="middle"
-      >
-        {label}
-      </Text>
+      {width >= 1.55 && (
+        <Text
+          position={[0, topY + 0.34, 0.02]}
+          fontSize={width < 2.2 ? 0.14 : 0.18}
+          color={color}
+          anchorX="center"
+          anchorY="middle"
+        >
+          {label}
+        </Text>
+      )}
     </group>
   );
 }
@@ -475,34 +607,34 @@ function StageColumn({
         if (marker === '⊕') return <TargetMarker key={`${step.step}-${index}-target`} x={x} y={y} active={active} />;
         return null;
       })}
-
-      {active && (
-        <Text position={[x, laneYs[0] + 0.78, 0.14]} fontSize={0.22} color="#4C1D95" anchorX="center" anchorY="middle">
-          {`S${step.step}`}
-        </Text>
-      )}
     </group>
   );
 }
 
-function QubitOrbNode({
+function BlochSphereNode({
   y,
-  pOne,
   targetX,
   phaseColor,
+  blochState,
 }: {
   y: number;
-  pOne: number;
   targetX: number;
   phaseColor: string;
+  blochState: { bx: number; by: number; bz: number; label: string };
 }) {
   const groupRef = useRef<THREE.Group>(null);
   const matRef = useRef<THREE.MeshStandardMaterial>(null);
-  const isZero = pOne < 0.15;
-  const isOne = pOne > 0.85;
+  const arrowRef = useRef<THREE.Group>(null);
+  const currentDirRef = useRef(new THREE.Vector3(0, 1, 0));
+
+  const { bx, by, bz, label } = blochState;
+
+  const isZero = Math.abs(bz - 1) < 0.05;
+  const isOne = Math.abs(bz + 1) < 0.05;
   const isSuper = !isZero && !isOne;
   const color = isSuper ? '#8B5CF6' : isOne ? '#F97316' : '#2563EB';
-  const stateText = isSuper ? '0|1' : isOne ? '1' : '0';
+
+  const targetDir = new THREE.Vector3(bx, bz, by);
 
   useFrame((state, delta) => {
     if (!groupRef.current) return;
@@ -518,6 +650,12 @@ function QubitOrbNode({
       matRef.current.opacity += (((isSuper ? 0.68 : 0.96)) - matRef.current.opacity) * delta * 4;
       matRef.current.wireframe = isSuper;
     }
+
+    if (arrowRef.current) {
+      currentDirRef.current.lerp(targetDir, delta * 4.0);
+      currentDirRef.current.normalize();
+      arrowRef.current.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), currentDirRef.current);
+    }
   });
 
   return (
@@ -526,12 +664,32 @@ function QubitOrbNode({
         <sphereGeometry args={[0.38, 26, 26]} />
         <meshStandardMaterial ref={matRef} color={color} emissive={color} emissiveIntensity={isSuper ? 0.48 : 0.15} transparent opacity={isSuper ? 0.68 : 0.96} wireframe={isSuper} roughness={0.24} metalness={0.18} />
       </mesh>
+
+      <mesh ref={arrowRef} position={[0, 0, 0]}>
+        <group>
+          <mesh position={[0, 0.22, 0]}>
+            <coneGeometry args={[0.055, 0.14, 8]} />
+            <meshStandardMaterial color={color} emissive={color} emissiveIntensity={0.5} />
+          </mesh>
+          <mesh position={[0, 0.08, 0]}>
+            <cylinderGeometry args={[0.022, 0.022, 0.16, 8]} />
+            <meshStandardMaterial color={color} emissive={color} emissiveIntensity={0.35} />
+          </mesh>
+        </group>
+      </mesh>
+
       <mesh rotation={[Math.PI / 2, 0, 0]}>
         <torusGeometry args={[0.5, 0.025, 12, 48]} />
         <meshStandardMaterial color={phaseColor} emissive={phaseColor} emissiveIntensity={0.22} />
       </mesh>
-      <Text position={[0, 0, 0.52]} fontSize={0.18} color="#FFFFFF" anchorX="center" anchorY="middle">
-        {stateText}
+
+      <mesh position={[0, 0.6, 0]}>
+        <sphereGeometry args={[0.06, 12, 12]} />
+        <meshStandardMaterial color={color} emissive={color} emissiveIntensity={0.6} />
+      </mesh>
+
+      <Text position={[0, -0.52, 0]} fontSize={0.16} color={color} anchorX="center" anchorY="middle">
+        {label}
       </Text>
     </group>
   );
@@ -576,7 +734,7 @@ function StoryScene({
 }) {
   const activeStep = data.timeline[currentStep];
   const laneYs = useMemo(() => getLaneYs(data.n_qubits), [data.n_qubits]);
-  const laneLabels = useMemo(() => [...Array.from({ length: data.n_qubits }, (_, index) => `q${index}`), 'anc'], [data.n_qubits]);
+  const laneLabels = useMemo(() => [...Array.from({ length: data.n_qubits }, (_, index) => `q${index}`), 'ancilla'], [data.n_qubits]);
   const { startX, endX, gap, columnXs } = useMemo(() => getColumnLayout(data.timeline.length), [data.timeline.length]);
   const cameraDistance = data.timeline.length > 24 ? 23 : 21.5;
   const phaseColor = PHASE_COLOR[activeStep.phase] || '#2563EB';
@@ -587,6 +745,13 @@ function StoryScene({
     const totalQubits = data.total_qubits;
     return Array.from({ length: totalQubits }, (_, index) => getQubitP1(activeStep.probabilities, activeStep.labels, index, totalQubits));
   }, [activeStep.labels, activeStep.probabilities, data.total_qubits]);
+
+  const blochStates = useMemo(() => {
+    if (activeStep.bloch_states && activeStep.bloch_states.length > 0) {
+      return activeStep.bloch_states;
+    }
+    return null;
+  }, [activeStep.bloch_states]);
 
   const topY = laneYs[0] + 0.52;
   const bottomY = laneYs[laneYs.length - 1] - 0.52;
@@ -611,7 +776,7 @@ function StoryScene({
             startX={bandStart}
             endX={bandEnd}
             color={PHASE_COLOR[partition.phase] || '#94A3B8'}
-            label={PHASE_LABEL[partition.phase] || partition.label}
+            label={SCENE_PHASE_LABEL[partition.phase] || PHASE_LABEL[partition.phase] || partition.label}
             topY={topY}
             height={topY - bottomY + 0.58}
           />
@@ -642,7 +807,17 @@ function StoryScene({
       ))}
 
       {qubitStates.map((pOne, index) => (
-        <QubitOrbNode key={`orb-${index}`} y={laneYs[index]} pOne={pOne} targetX={columnXs[currentStep]} phaseColor={phaseColor} />
+        <BlochSphereNode
+          key={`orb-${index}`}
+          y={laneYs[index]}
+          targetX={columnXs[currentStep]}
+          phaseColor={phaseColor}
+          blochState={
+            blochStates && blochStates[index]
+              ? blochStates[index]
+              : { bx: 0, by: 0, bz: pOne < 0.15 ? 1 : pOne > 0.85 ? -1 : 0, label: pOne < 0.15 ? '|0⟩' : pOne > 0.85 ? '|1⟩' : '0|1' }
+          }
+        />
       ))}
 
       <ResultBoard x={resultX} classification={data.measurement.classification} visible={showResult} />
@@ -704,7 +879,7 @@ function PhaseStepper({
 }
 
 function ActiveMarkerStrip({ step, nQubits }: { step: DJAnimationStep; nQubits: number }) {
-  const labels = [...Array.from({ length: nQubits }, (_, index) => `q${index}`), 'anc'];
+  const labels = [...Array.from({ length: nQubits }, (_, index) => `q${index}`), 'ancilla'];
 
   return (
     <div className="mt-3 flex flex-wrap gap-2">
@@ -717,6 +892,25 @@ function ActiveMarkerStrip({ step, nQubits }: { step: DJAnimationStep; nQubits: 
           </span>
         );
       })}
+    </div>
+  );
+}
+
+function ReadingGuideCard({ step, nQubits }: { step: DJAnimationStep; nQubits: number }) {
+  const notes = getContextGlossary(step, nQubits);
+
+  return (
+    <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-4">
+      <p className="text-[12px] font-semibold uppercase tracking-[0.18em] text-slate-500">Cara Baca Animasi</p>
+      <p className="mt-2 text-[16px] font-semibold text-slate-900">{getStepHeadline(step)}</p>
+      <p className="mt-2 text-[14px] leading-7 text-slate-600">{getStepExplanation(step, step.step)}</p>
+      <div className="mt-3 flex flex-wrap gap-2">
+        {notes.map((note) => (
+          <span key={note} className="inline-flex rounded-full border border-slate-200 bg-white px-3 py-1.5 text-[12px] leading-5 text-slate-600">
+            {note}
+          </span>
+        ))}
+      </div>
     </div>
   );
 }
@@ -827,9 +1021,10 @@ function MeasurementPanel({ data }: { data: DJAnimationPayload }) {
 export function DJQuantumAnimation({ data, onExportingChange }: DJQuantumAnimationProps) {
   const [currentStep, setCurrentStep] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
-  const [speed, setSpeed] = useState(850);
+  const [speed, setSpeed] = useState(DEFAULT_STEP_MS);
   const [cameraMode, setCameraMode] = useState<'fixed' | 'orbit'>('fixed');
   const [isExporting, setIsExporting] = useState(false);
+  const [isConverting, setIsConverting] = useState(false);
   const [exportError, setExportError] = useState<string | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const currentStepRef = useRef(currentStep);
@@ -845,6 +1040,7 @@ export function DJQuantumAnimation({ data, onExportingChange }: DJQuantumAnimati
   const isLastStep = currentStep >= totalSteps - 1;
   const canvasHeight = data.n_qubits >= 4 || totalSteps > 18 ? 560 : 520;
   const supportedVideoMimeType = useMemo(() => getSupportedVideoMimeType(), []);
+  const ffmpegReady = useMemo(() => isFFmpegSupported(), []);
 
   const stopTimer = useCallback(() => {
     if (!timerRef.current) return;
@@ -1099,6 +1295,170 @@ export function DJQuantumAnimation({ data, onExportingChange }: DJQuantumAnimati
     }
   }, [data, isExporting, stopTimer, supportedVideoMimeType, totalSteps]);
 
+  const handleExportMp4 = useCallback(async () => {
+    if (isExporting) return;
+
+    if (!supportedVideoMimeType || typeof MediaRecorder === 'undefined') {
+      setExportError('Browser ini belum mendukung perekaman video. Gunakan Chrome, Edge, atau Firefox terbaru.');
+      return;
+    }
+
+    if (!ffmpegReady) {
+      setExportError('Browser ini tidak mendukung konversi MP4 (memerlukan SharedArrayBuffer). Gunakan Chrome atau Edge terbaru.');
+      return;
+    }
+
+    const previousStep = currentStepRef.current;
+    const previousSpeed = speedRef.current;
+    const previousPlaying = isPlayingRef.current;
+    const exportStepMs = Math.max(previousSpeed, EXPORT_STEP_MS_MIN);
+    const compositorCanvas = document.createElement('canvas');
+    const exportWidth = EXPORT_VIDEO_WIDTH;
+    const exportHeight = EXPORT_VIDEO_HEIGHT;
+    const compositorContext = compositorCanvas.getContext('2d', { alpha: false });
+
+    if (!compositorContext) {
+      setExportError('Gagal membuat canvas komposit untuk export video.');
+      return;
+    }
+
+    compositorCanvas.width = exportWidth;
+    compositorCanvas.height = exportHeight;
+
+    let overlayMode: ExportOverlayMode = 'intro';
+    let recorder: MediaRecorder | null = null;
+    let stream: MediaStream | null = null;
+    let sourceCanvas: HTMLCanvasElement | null = null;
+    const chunks: BlobPart[] = [];
+    let cancelled = false;
+
+    try {
+      stream = compositorCanvas.captureStream(EXPORT_FPS);
+      recorder = new MediaRecorder(stream, {
+        mimeType: supportedVideoMimeType,
+        videoBitsPerSecond: EXPORT_VIDEO_BITRATE,
+      });
+    } catch {
+      setExportError('Recorder browser gagal diinisialisasi.');
+      return;
+    }
+
+    const recorderPromise = new Promise<Blob>((resolve, reject) => {
+      recorder!.ondataavailable = (event) => {
+        if (event.data && event.data.size > 0) {
+          chunks.push(event.data);
+        }
+      };
+
+      recorder!.onerror = () => {
+        reject(new Error('Recorder browser gagal merekam video.'));
+      };
+
+      recorder!.onstop = () => {
+        resolve(new Blob(chunks, { type: supportedVideoMimeType }));
+      };
+    });
+
+    const drawCompositeFrame = () => {
+      if (cancelled) return;
+      if (!sourceCanvas) {
+        exportAnimationFrameRef.current = window.requestAnimationFrame(drawCompositeFrame);
+        return;
+      }
+      const exportStep = data.timeline[currentStepRef.current] ?? data.timeline[0];
+      const exportPhaseColor = PHASE_COLOR[exportStep.phase] || '#2563EB';
+
+      drawVideoFrame({
+        ctx: compositorContext,
+        sourceCanvas,
+        data,
+        mode: overlayMode,
+        step: exportStep,
+        phaseColor: exportPhaseColor,
+      });
+
+      exportAnimationFrameRef.current = window.requestAnimationFrame(drawCompositeFrame);
+    };
+
+    setExportError(null);
+    setIsExporting(true);
+    setIsConverting(false);
+
+    try {
+      stopTimer();
+      setIsPlaying(false);
+      setCurrentStep(0);
+      setSpeed(exportStepMs);
+      await waitForAnimationFrames(2);
+
+      sourceCanvas = await waitForCanvasReady(
+        exportRendererCanvasRef,
+        EXPORT_VIDEO_WIDTH,
+        EXPORT_VIDEO_HEIGHT,
+      );
+      await waitForAnimationFrames(3);
+
+      drawCompositeFrame();
+      recorder?.start(250);
+
+      await wait(EXPORT_INTRO_MS);
+
+      overlayMode = 'play';
+      setCurrentStep(0);
+      await waitForAnimationFrames(2);
+      setIsPlaying(true);
+
+      const playbackDurationMs = Math.max(totalSteps - 1, 0) * exportStepMs + Math.round(exportStepMs * 0.6);
+      await wait(playbackDurationMs);
+
+      setIsPlaying(false);
+      stopTimer();
+      setCurrentStep(totalSteps - 1);
+      await waitForAnimationFrames(3);
+
+      overlayMode = 'outro';
+      await wait(EXPORT_OUTRO_MS);
+
+      cancelled = true;
+      if (exportAnimationFrameRef.current !== null) {
+        window.cancelAnimationFrame(exportAnimationFrameRef.current);
+        exportAnimationFrameRef.current = null;
+      }
+
+      recorder?.stop();
+      const webmBlob = await recorderPromise;
+
+      setIsConverting(true);
+      const mp4Blob = await convertWebmToMp4(webmBlob);
+      downloadBlob(mp4Blob, `dj_${data.case_id}_video-quantum.mp4`);
+    } catch (error) {
+      setExportError(error instanceof Error ? error.message : 'Export MP4 gagal. Pastikan menggunakan Chrome atau Edge terbaru.');
+      if (recorder && recorder.state !== 'inactive') {
+        recorder.stop();
+      }
+    } finally {
+      cancelled = true;
+      if (exportAnimationFrameRef.current !== null) {
+        window.cancelAnimationFrame(exportAnimationFrameRef.current);
+        exportAnimationFrameRef.current = null;
+      }
+      stream?.getTracks().forEach((track) => track.stop());
+      exportRendererCanvasRef.current = null;
+
+      setSpeed(previousSpeed);
+      setCurrentStep(previousStep);
+      setIsPlaying(false);
+      setIsConverting(false);
+      await waitForAnimationFrames(2);
+
+      if (previousPlaying && previousStep < totalSteps - 1) {
+        setIsPlaying(true);
+      }
+
+      setIsExporting(false);
+    }
+  }, [data, isExporting, stopTimer, supportedVideoMimeType, totalSteps, ffmpegReady]);
+
   return (
     <div className="rounded-2xl border-2 border-slate-300 bg-white overflow-hidden">
       <header className="px-5 pt-5 pb-3">
@@ -1120,15 +1480,15 @@ export function DJQuantumAnimation({ data, onExportingChange }: DJQuantumAnimati
         </div>
       </header>
 
-      <PhaseStepper partitions={data.partitions} activePhase={activePhase} activeStep={activeStep} onJumpPhase={handleJumpPhase} disabled={isExporting} />
+      <PhaseStepper partitions={data.partitions} activePhase={activePhase} activeStep={activeStep} onJumpPhase={handleJumpPhase} disabled={isExporting || isConverting} />
 
       <div className="grid gap-4 px-4 pb-4 xl:grid-cols-[minmax(0,2fr)_minmax(320px,0.95fr)]">
         <div className="space-y-4">
           <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
             <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
               <div className="flex flex-wrap items-center gap-3 text-[12px] text-slate-600">
-                <span className="inline-flex items-center gap-1.5"><span className="h-3 w-3 rounded-full bg-blue-500" />State 0</span>
-                <span className="inline-flex items-center gap-1.5"><span className="h-3 w-3 rounded-full bg-orange-500" />State 1</span>
+                <span className="inline-flex items-center gap-1.5"><span className="h-3 w-3 rounded-full bg-blue-500" />|0⟩ (North)</span>
+                <span className="inline-flex items-center gap-1.5"><span className="h-3 w-3 rounded-full bg-orange-500" />|1⟩ (South)</span>
                 <span className="inline-flex items-center gap-1.5"><span className="h-3 w-3 rounded-full bg-violet-500" />Superposisi</span>
                 <span className="inline-flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-violet-600" />MCX control</span>
                 <span className="inline-flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-amber-500" />MCX target</span>
@@ -1211,8 +1571,17 @@ export function DJQuantumAnimation({ data, onExportingChange }: DJQuantumAnimati
                   disabled={isExporting || !supportedVideoMimeType}
                   className="ml-auto inline-flex items-center gap-2 rounded-lg border border-violet-300 bg-violet-50 px-3.5 py-2 text-[12px] font-semibold text-violet-700 hover:bg-violet-100 disabled:cursor-not-allowed disabled:opacity-45"
                 >
-                  {isExporting ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Video className="h-4 w-4" />}
-                  {isExporting ? 'Mengekspor Video Quantum 1080p...' : 'Export Video Quantum 1080p (.webm)'}
+                  {isExporting && !isConverting ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Video className="h-4 w-4" />}
+                  {isExporting && !isConverting ? 'Merekam...' : 'WebM 1080p'}
+                </button>
+
+                <button
+                  onClick={handleExportMp4}
+                  disabled={isExporting || !supportedVideoMimeType || !ffmpegReady}
+                  className="inline-flex items-center gap-2 rounded-lg border border-emerald-300 bg-emerald-50 px-3.5 py-2 text-[12px] font-semibold text-emerald-700 hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-45"
+                >
+                  {isConverting ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Video className="h-4 w-4" />}
+                  {isConverting ? 'Mengkonversi ke MP4...' : 'MP4 1080p'}
                 </button>
               </div>
 
@@ -1222,11 +1591,16 @@ export function DJQuantumAnimation({ data, onExportingChange }: DJQuantumAnimati
 
               <div className="mt-3 flex flex-wrap items-start justify-between gap-3 text-[12px] leading-6 text-slate-500">
                 <p>
-                  Export merekam canvas khusus `1920x1080` agar video quantum tetap tajam. Caption penjelasan otomatis ikut masuk, panel samping tidak direkam.
+                  WebM = instant. MP4 = rekam lalu konversi via FFmpeg.wasm (~5-15 detik). Keduanya merekam canvas 1920x1080.
                 </p>
                 {!supportedVideoMimeType && (
                   <p className="text-rose-600">
-                    Browser belum mendukung export video WebM. Gunakan Chrome, Edge, atau Firefox terbaru.
+                    Browser belum mendukung export video. Gunakan Chrome, Edge, atau Firefox terbaru.
+                  </p>
+                )}
+                {!ffmpegReady && (
+                  <p className="text-amber-600">
+                    MP4 tidak tersedia (memerlukan SharedArrayBuffer). Gunakan Chrome atau Edge terbaru.
                   </p>
                 )}
                 {exportError && (
@@ -1239,6 +1613,7 @@ export function DJQuantumAnimation({ data, onExportingChange }: DJQuantumAnimati
         </div>
 
         <div className="space-y-4">
+          <ReadingGuideCard step={activeStep} nQubits={data.n_qubits} />
           <TruthTablePanel data={data} activeBits={activeStep.focus_input_bits} />
           <FinalAmplitudePanel data={data} />
           <MeasurementPanel data={data} />
