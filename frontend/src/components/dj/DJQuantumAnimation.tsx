@@ -24,6 +24,7 @@ import {
   DetailCard,
   FinalAmplitudePanel,
   MeasurementPanel,
+  OracleConstructionPanel,
   PhaseStepper,
   ReadingGuideCard,
   StateSummaryPanel,
@@ -521,6 +522,7 @@ export function DJQuantumAnimation({ data, onExportingChange }: DJQuantumAnimati
           <ReadingGuideCard step={activeStep} nQubits={data.n_qubits} totalSteps={totalSteps} />
           <StateSummaryPanel step={activeStep} nQubits={data.n_qubits} />
           <TruthTablePanel data={data} activeBits={activeStep.focus_input_bits} />
+          <OracleConstructionPanel data={data} activeBits={activeStep.focus_input_bits} />
           <FinalAmplitudePanel data={data} />
           <MeasurementPanel data={data} />
         </div>

@@ -3,6 +3,7 @@ import type { DJAnimationPartition, DJAnimationPayload, DJAnimationStep } from '
 import { MARKER_STYLE, PHASE_LABEL, PROFILE_LABEL } from './constants';
 import { formatPercent } from './helpers';
 import { getContextGlossary, getStepExplanation, getStepHeadline } from './narration';
+import { buildOracleConstructionModel } from './oracle-construction';
 
 export function MarkerBadge({ marker }: { marker: string }) {
   const value = marker || '-';
@@ -199,6 +200,101 @@ export function TruthTablePanel({
           })}
         </div>
       </div>
+    </div>
+  );
+}
+
+export function OracleConstructionPanel({
+  data,
+  activeBits,
+}: {
+  data: DJAnimationPayload;
+  activeBits: string | null;
+}) {
+  const model = buildOracleConstructionModel(data);
+
+  return (
+    <div className="rounded-xl border border-slate-200 bg-white p-4">
+      <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Truth Table -&gt; Oracle</p>
+      <p className="mt-2 text-[16px] font-semibold text-slate-900">Bagaimana dataset diubah menjadi oracle nyata</p>
+      <p className="mt-2 text-[14px] leading-7 text-slate-600">{model.intro}</p>
+
+      <div className="mt-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-3">
+        <p className="text-[12px] font-semibold text-slate-900">Ringkasan hasil konstruksi</p>
+        <p className="mt-1 text-[13px] leading-6 text-slate-600">{model.gateSummary}</p>
+      </div>
+
+      <div className="mt-4 space-y-2">
+        {model.steps.map((step, index) => (
+          <div key={step} className="flex items-start gap-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-3">
+            <span className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-violet-600 text-[11px] font-semibold text-white">
+              {index + 1}
+            </span>
+            <p className="text-[13px] leading-6 text-slate-600">{step}</p>
+          </div>
+        ))}
+      </div>
+
+      {model.rows.length > 0 ? (
+        <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50">
+          <div className="grid grid-cols-[92px_1fr] gap-3 border-b border-slate-200 px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">
+            <span>Pola 1</span>
+            <span>Blok Oracle yang Dibentuk</span>
+          </div>
+          <div className="max-h-[320px] overflow-auto px-2 py-2">
+            {model.rows.map((row) => {
+              const isActive = activeBits === row.inputBits;
+              const flipSummary = row.temporaryFlipLabels.length > 0
+                ? `X sementara pada ${row.temporaryFlipLabels.join(', ')}`
+                : 'Tidak perlu X sementara karena semua bit sudah 1';
+              const restoreSummary = row.temporaryFlipLabels.length > 0
+                ? `Restore X pada ${row.temporaryFlipLabels.join(', ')}`
+                : 'Tidak perlu restore';
+
+              return (
+                <div
+                  key={row.inputBits}
+                  className={`grid grid-cols-[92px_1fr] gap-3 rounded-xl px-2 py-3 transition-colors ${
+                    isActive
+                      ? 'bg-violet-100 ring-1 ring-violet-300'
+                      : 'bg-white hover:bg-slate-50'
+                  }`}
+                >
+                  <div>
+                    <span className="inline-flex rounded-full bg-amber-100 px-2.5 py-1 font-mono text-[12px] font-semibold tracking-[0.2em] text-amber-700">
+                      {row.inputBits}
+                    </span>
+                    <p className="mt-2 text-[11px] text-slate-500">{isActive ? 'sedang dijalankan' : 'aktif jika f(x)=1'}</p>
+                  </div>
+
+                  <div className="space-y-2">
+                    <p className="text-[13px] leading-6 text-slate-600">{flipSummary}.</p>
+                    <p className="text-[13px] leading-6 text-slate-600">
+                      MCX dijalankan dengan kontrol {row.controlLabels.join(', ')} ke target {row.mcxTargetLabel}.
+                    </p>
+                    <p className="text-[13px] leading-6 text-slate-600">{restoreSummary}.</p>
+                    <div className="flex flex-wrap gap-2 pt-1">
+                      {row.zeroControlLabels.length > 0 ? row.zeroControlLabels.map((label) => (
+                        <span key={`${row.inputBits}-${label}`} className="inline-flex rounded-full border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-medium text-slate-600">
+                          zero-control: {label}
+                        </span>
+                      )) : (
+                        <span className="inline-flex rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[11px] font-medium text-emerald-700">
+                          semua kontrol sudah 1
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      ) : (
+        <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-[13px] leading-6 text-slate-600">
+          Tidak ada daftar pola khusus karena oracle untuk profil ini tidak dibangun dari blok MCX per-input.
+        </div>
+      )}
     </div>
   );
 }
