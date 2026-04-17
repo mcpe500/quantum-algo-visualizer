@@ -1,24 +1,16 @@
-import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import type { MutableRefObject } from 'react';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { Line, OrbitControls, Text } from '@react-three/drei';
 import * as THREE from 'three';
-import { ChevronRight, Eye, EyeOff, Gauge, Lock, Move3D, Pause, Play, RotateCcw, SkipForward } from 'lucide-react';
-import type { DJAnimationPayload, DJQuantumTrace, DJTraceStage } from '../../types/dj';
+import { ChevronRight, Gauge, LoaderCircle, Lock, Move3D, Pause, Play, RotateCcw, SkipForward, Video } from 'lucide-react';
+import type { DJAnimationPayload, DJAnimationPartition, DJAnimationStep } from '../../types/dj';
+import { downloadBlob } from '../../utils/download';
 
 interface DJQuantumAnimationProps {
   data: DJAnimationPayload;
-  trace: DJQuantumTrace;
+  onExportingChange?: (isExporting: boolean) => void;
 }
-
-const GATE_X = { xGate: -8, hRound1: -4, oracle: 0, hRound2: 4, measure: 8 };
-
-const PHASE_X_RANGE: Record<string, [number, number]> = {
-  init: [-10, -6],
-  prep: [-6, -2],
-  oracle: [-2, 2],
-  interference: [2, 6],
-  measure: [6, 10],
-};
 
 const PHASE_COLOR: Record<string, string> = {
   init: '#2563EB',
@@ -29,123 +21,345 @@ const PHASE_COLOR: Record<string, string> = {
 };
 
 const PHASE_LABEL: Record<string, string> = {
-  init: 'Inisialisasi',
-  prep: 'Superposisi',
-  oracle: 'Oracle',
+  init: 'Inisialisasi Register',
+  prep: 'Persiapan Ancilla',
+  oracle: 'Oracle Nyata',
   interference: 'Interferensi',
   measure: 'Measurement',
 };
 
-const MARKER_STYLE: Record<string, string> = {
-  H: 'bg-blue-100 text-blue-700 border-blue-300',
-  X: 'bg-red-100 text-red-700 border-red-300',
-  M: 'bg-slate-100 text-slate-700 border-slate-300',
-  P: 'bg-amber-100 text-amber-700 border-amber-300',
-  S: 'bg-violet-100 text-violet-700 border-violet-300',
-  '\u25CF': 'bg-violet-200 text-violet-800 border-violet-400',
-  '\u2295': 'bg-amber-200 text-amber-800 border-amber-400',
-  '-': 'bg-slate-50 text-slate-300 border-slate-200',
+const PROFILE_LABEL: Record<string, string> = {
+  'constant-zero': 'CONSTANT 0',
+  'constant-one': 'CONSTANT 1',
+  balanced: 'BALANCED',
 };
 
-function getLaneYs(nQubits: number): number[] {
-  const total = nQubits + 1;
-  return Array.from({ length: total }, (_, i) => ((total - 1) / 2 - i) * 1.45);
+const MARKER_STYLE: Record<string, string> = {
+  H: 'bg-blue-100 text-blue-700 border-blue-300',
+  X: 'bg-rose-100 text-rose-700 border-rose-300',
+  M: 'bg-slate-100 text-slate-700 border-slate-300',
+  '●': 'bg-violet-100 text-violet-700 border-violet-300',
+  '⊕': 'bg-amber-100 text-amber-700 border-amber-300',
+  '-': 'bg-slate-50 text-slate-400 border-slate-200',
+};
+
+const EXPORT_FPS = 30;
+const EXPORT_STEP_MS_MIN = 900;
+const EXPORT_INTRO_MS = 1600;
+const EXPORT_OUTRO_MS = 2200;
+const EXPORT_VIDEO_WIDTH = 1920;
+const EXPORT_VIDEO_HEIGHT = 1080;
+const EXPORT_VIDEO_BITRATE = 16_000_000;
+const VIDEO_MIME_TYPES = [
+  'video/webm;codecs=vp9',
+  'video/webm;codecs=vp8',
+  'video/webm',
+];
+
+type ExportOverlayMode = 'intro' | 'play' | 'outro';
+
+function clamp(value: number, min: number, max: number) {
+  return Math.min(Math.max(value, min), max);
 }
 
-function getQubitP1(probs: number[], labels: string[], qubitIdx: number, totalQubits: number): number {
+function wait(ms: number) {
+  return new Promise<void>((resolve) => {
+    window.setTimeout(resolve, ms);
+  });
+}
+
+function waitForAnimationFrame() {
+  return new Promise<void>((resolve) => {
+    window.requestAnimationFrame(() => resolve());
+  });
+}
+
+async function waitForAnimationFrames(count = 2) {
+  for (let index = 0; index < count; index += 1) {
+    await waitForAnimationFrame();
+  }
+}
+
+async function waitForCanvasReady(
+  canvasRef: MutableRefObject<HTMLCanvasElement | null>,
+  minWidth: number,
+  minHeight: number,
+  timeoutMs = 5000,
+) {
+  const start = performance.now();
+
+  while (performance.now() - start < timeoutMs) {
+    const canvas = canvasRef.current;
+    if (canvas && canvas.width >= minWidth && canvas.height >= minHeight) {
+      return canvas;
+    }
+    await waitForAnimationFrame();
+  }
+
+  throw new Error('Canvas export 1080p belum siap. Coba ulangi beberapa saat lagi.');
+}
+
+function getSupportedVideoMimeType() {
+  if (typeof MediaRecorder === 'undefined') {
+    return null;
+  }
+
+  if (typeof MediaRecorder.isTypeSupported !== 'function') {
+    return VIDEO_MIME_TYPES[VIDEO_MIME_TYPES.length - 1];
+  }
+
+  return VIDEO_MIME_TYPES.find((candidate) => MediaRecorder.isTypeSupported(candidate)) ?? null;
+}
+
+function getLaneYs(nQubits: number) {
+  const total = nQubits + 1;
+  const gap = total >= 5 ? 1.38 : 1.52;
+  return Array.from({ length: total }, (_, index) => ((total - 1) / 2 - index) * gap);
+}
+
+function getQubitP1(probs: number[], labels: string[], qubitIdx: number, totalQubits: number) {
   let p1 = 0;
-  for (let i = 0; i < probs.length; i++) {
-    const bits = labels[i];
+  for (let index = 0; index < probs.length; index += 1) {
+    const bits = labels[index];
     if (bits && bits[totalQubits - 1 - qubitIdx] === '1') {
-      p1 += probs[i];
+      p1 += probs[index];
     }
   }
   return p1;
 }
 
-function groupStagesByPhase(stages: DJTraceStage[]) {
-  const groups: Array<{ phase: string; items: DJTraceStage[] }> = [];
-  for (const stage of stages) {
-    const last = groups[groups.length - 1];
-    if (last && last.phase === stage.phase) {
-      last.items.push(stage);
+function getColumnLayout(stepCount: number) {
+  const span = stepCount <= 10 ? 14 : stepCount <= 18 ? 18 : stepCount <= 26 ? 21 : 24;
+  const startX = -span / 2;
+  const endX = span / 2;
+  const gap = stepCount > 1 ? span / (stepCount - 1) : 0;
+  const columnXs = Array.from({ length: stepCount }, (_, index) => (stepCount === 1 ? 0 : startX + index * gap));
+  return { startX, endX, gap, columnXs };
+}
+
+function formatPercent(value: number) {
+  const percent = value * 100;
+  if (percent >= 10) return `${percent.toFixed(1)}%`;
+  return `${percent.toFixed(2)}%`;
+}
+
+function roundedRect(ctx: CanvasRenderingContext2D, x: number, y: number, width: number, height: number, radius: number) {
+  const nextRadius = Math.min(radius, width / 2, height / 2);
+
+  ctx.beginPath();
+  ctx.moveTo(x + nextRadius, y);
+  ctx.lineTo(x + width - nextRadius, y);
+  ctx.quadraticCurveTo(x + width, y, x + width, y + nextRadius);
+  ctx.lineTo(x + width, y + height - nextRadius);
+  ctx.quadraticCurveTo(x + width, y + height, x + width - nextRadius, y + height);
+  ctx.lineTo(x + nextRadius, y + height);
+  ctx.quadraticCurveTo(x, y + height, x, y + height - nextRadius);
+  ctx.lineTo(x, y + nextRadius);
+  ctx.quadraticCurveTo(x, y, x + nextRadius, y);
+  ctx.closePath();
+}
+
+function wrapText(ctx: CanvasRenderingContext2D, text: string, maxWidth: number) {
+  const words = text.trim().split(/\s+/);
+  const lines: string[] = [];
+  let currentLine = '';
+
+  for (const word of words) {
+    const candidate = currentLine ? `${currentLine} ${word}` : word;
+    if (ctx.measureText(candidate).width <= maxWidth || !currentLine) {
+      currentLine = candidate;
       continue;
     }
-    groups.push({ phase: stage.phase, items: [stage] });
-  }
-  return groups;
-}
-
-function computeOrbX(currentStep: number, snapshots: { phase: string }[]): number {
-  if (currentStep >= snapshots.length - 1) return GATE_X.measure;
-  const snap = snapshots[currentStep];
-  const phase = snap.phase;
-  const range = PHASE_X_RANGE[phase];
-  if (!range) return GATE_X.measure;
-
-  let phaseStart = -1;
-  let phaseEnd = -1;
-  for (let i = 0; i < snapshots.length; i++) {
-    if (snapshots[i].phase === phase) {
-      if (phaseStart === -1) phaseStart = i;
-      phaseEnd = i;
-    }
+    lines.push(currentLine);
+    currentLine = word;
   }
 
-  const totalInPhase = phaseEnd - phaseStart + 1;
-  const stepInPhase = currentStep - phaseStart;
-  const frac = totalInPhase > 1 ? stepInPhase / (totalInPhase - 1) : 0.5;
-  return range[0] + frac * (range[1] - range[0]);
+  if (currentLine) {
+    lines.push(currentLine);
+  }
+
+  return lines;
 }
 
-function CameraRig({ mode }: { mode: 'fixed' | 'orbit' }) {
+function formatCountsSummary(counts: Record<string, number>) {
+  return Object.entries(counts)
+    .slice(0, 3)
+    .map(([state, count]) => `|${state}>:${count}`)
+    .join('   ');
+}
+
+function getExportNarration(mode: ExportOverlayMode, data: DJAnimationPayload, step: DJAnimationStep) {
+  if (mode === 'intro') {
+    return {
+      headline: 'Video Quantum Deutsch-Jozsa',
+      detail: 'Orb bergerak melintasi kolom gate nyata. Jika semua bit input kembali ke 0, fungsi CONSTANT. Jika ada bit non-zero, hasilnya BALANCED.',
+      accent: 'Mulai dari register awal, masuk ke superposisi, lalu oracle memberi pola fase yang akan dibaca saat measurement.',
+    };
+  }
+
+  if (mode === 'outro') {
+    return {
+      headline: `Hasil akhir: ${data.measurement.classification}`,
+      detail: data.measurement.classification === 'CONSTANT'
+        ? 'Semua qubit input kembali ke 0. Ini berarti oracle memperlakukan semua input secara seragam.'
+        : 'Muncul bit input non-zero. Ini berarti oracle memberi pola fase berbeda untuk sebagian input.',
+      accent: formatCountsSummary(data.measurement.counts),
+    };
+  }
+
+  return {
+    headline: `${PHASE_LABEL[step.phase] || step.phase} · ${step.operation}`,
+    detail: step.description,
+    accent: step.focus_input_bits
+      ? `Pola dataset aktif: ${step.focus_input_bits}`
+      : `Langkah ${step.step} dari ${data.timeline.length}`,
+  };
+}
+
+function drawVideoFrame({
+  ctx,
+  sourceCanvas,
+  data,
+  mode,
+  step,
+  phaseColor,
+}: {
+  ctx: CanvasRenderingContext2D;
+  sourceCanvas: HTMLCanvasElement;
+  data: DJAnimationPayload;
+  mode: ExportOverlayMode;
+  step: DJAnimationStep;
+  phaseColor: string;
+}) {
+  const width = ctx.canvas.width;
+  const height = ctx.canvas.height;
+  const narration = getExportNarration(mode, data, step);
+  const overlayPadding = Math.round(width * 0.038);
+  const bottomPanelHeight = Math.round(height * 0.23);
+  const topPanelHeight = Math.round(height * 0.125);
+  const topY = overlayPadding;
+  const bottomY = height - bottomPanelHeight - overlayPadding;
+  const bodyMaxWidth = width - overlayPadding * 2 - 32;
+
+  const baseGradient = ctx.createLinearGradient(0, 0, 0, height);
+  baseGradient.addColorStop(0, '#F8FAFC');
+  baseGradient.addColorStop(1, '#E2E8F0');
+
+  ctx.clearRect(0, 0, width, height);
+  ctx.fillStyle = baseGradient;
+  ctx.fillRect(0, 0, width, height);
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = 'high';
+  ctx.drawImage(sourceCanvas, 0, 0, width, height);
+
+  const topGradient = ctx.createLinearGradient(0, 0, 0, topPanelHeight + overlayPadding * 1.5);
+  topGradient.addColorStop(0, 'rgba(15, 23, 42, 0.92)');
+  topGradient.addColorStop(1, 'rgba(15, 23, 42, 0.18)');
+  ctx.fillStyle = topGradient;
+  ctx.fillRect(0, 0, width, topPanelHeight + overlayPadding * 1.5);
+
+  const bottomGradient = ctx.createLinearGradient(0, height, 0, height - bottomPanelHeight - overlayPadding * 2);
+  bottomGradient.addColorStop(0, 'rgba(15, 23, 42, 0.94)');
+  bottomGradient.addColorStop(1, 'rgba(15, 23, 42, 0.2)');
+  ctx.fillStyle = bottomGradient;
+  ctx.fillRect(0, bottomY - overlayPadding, width, bottomPanelHeight + overlayPadding * 2);
+
+  roundedRect(ctx, overlayPadding, topY, width - overlayPadding * 2, topPanelHeight, 20);
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.08)';
+  ctx.fill();
+
+  roundedRect(ctx, overlayPadding, bottomY, width - overlayPadding * 2, bottomPanelHeight, 24);
+  ctx.fillStyle = 'rgba(15, 23, 42, 0.72)';
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(255, 255, 255, 0.14)';
+  ctx.lineWidth = 1;
+  ctx.stroke();
+
+  ctx.fillStyle = '#E2E8F0';
+  ctx.font = '600 18px Inter, Segoe UI, Arial, sans-serif';
+  ctx.fillText('VIDEO QUANTUM', overlayPadding + 28, topY + 32);
+
+  ctx.fillStyle = '#FFFFFF';
+  ctx.font = '700 30px Inter, Segoe UI, Arial, sans-serif';
+  ctx.fillText(`Deutsch-Jozsa · ${data.case_id}`, overlayPadding + 28, topY + 68);
+
+  roundedRect(ctx, width - overlayPadding - 250, topY + 22, 222, 44, 999);
+  ctx.fillStyle = `${phaseColor}55`;
+  ctx.fill();
+  ctx.fillStyle = '#FFFFFF';
+  ctx.font = '600 17px Inter, Segoe UI, Arial, sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText(PHASE_LABEL[step.phase] || step.phase, width - overlayPadding - 139, topY + 50);
+  ctx.textAlign = 'left';
+
+  ctx.fillStyle = '#CBD5E1';
+  ctx.font = '600 16px Inter, Segoe UI, Arial, sans-serif';
+  ctx.fillText(`Step ${step.step}/${data.timeline.length}`, overlayPadding + 28, bottomY + 34);
+
+  ctx.fillStyle = '#FFFFFF';
+  ctx.font = '700 28px Inter, Segoe UI, Arial, sans-serif';
+  ctx.fillText(narration.headline, overlayPadding + 28, bottomY + 76);
+
+  ctx.fillStyle = '#E2E8F0';
+  ctx.font = '500 19px Inter, Segoe UI, Arial, sans-serif';
+  const bodyLines = wrapText(ctx, narration.detail, bodyMaxWidth).slice(0, 3);
+  bodyLines.forEach((line, index) => {
+    ctx.fillText(line, overlayPadding + 28, bottomY + 114 + index * 28);
+  });
+
+  ctx.fillStyle = phaseColor;
+  ctx.font = '600 17px Inter, Segoe UI, Arial, sans-serif';
+  ctx.fillText(narration.accent, overlayPadding + 28, bottomY + bottomPanelHeight - 20);
+}
+
+function CameraRig({ mode, distance }: { mode: 'fixed' | 'orbit'; distance: number }) {
   const { camera } = useThree();
 
   useEffect(() => {
     if (mode === 'fixed') {
-      camera.position.set(0, -0.5, 20);
-      camera.lookAt(0, -0.5, 0);
+      camera.position.set(0, -0.1, distance);
+      camera.lookAt(0, -0.1, 0);
     } else {
-      camera.position.set(2, 1.5, 17);
-      camera.lookAt(0, -0.5, 0);
+      camera.position.set(1.8, 1.2, distance - 1.5);
+      camera.lookAt(0, -0.1, 0);
     }
     camera.updateProjectionMatrix();
-  }, [camera, mode]);
+  }, [camera, distance, mode]);
 
   return null;
 }
 
-function GateBox({ position, label, color = '#3B82F6', highlight = false, width = 0.9, height = 0.9 }: {
-  position: [number, number, number];
+function PhaseBand({
+  startX,
+  endX,
+  color,
+  label,
+  topY,
+  height,
+}: {
+  startX: number;
+  endX: number;
+  color: string;
   label: string;
-  color?: string;
-  highlight?: boolean;
-  width?: number;
-  height?: number;
+  topY: number;
+  height: number;
 }) {
+  const width = Math.max(endX - startX, 0.6);
+  const centerX = (startX + endX) / 2;
+
   return (
-    <group position={position}>
+    <group position={[centerX, 0, -0.16]}>
       <mesh>
-        <boxGeometry args={[width, height, 0.5]} />
-        <meshPhysicalMaterial
-          color={color}
-          transparent
-          opacity={highlight ? 0.35 : 0.15}
-          roughness={0.1}
-          depth={0.3}
-        />
+        <planeGeometry args={[width, height]} />
+        <meshBasicMaterial color={color} transparent opacity={0.07} />
       </mesh>
-      <mesh>
-        <boxGeometry args={[width, height, 0.5]} />
-        <meshBasicMaterial color={color} wireframe transparent opacity={highlight ? 0.7 : 0.25} />
-      </mesh>
+      <Line points={[[(-width / 2), topY, 0], [width / 2, topY, 0]]} color={color} lineWidth={1} />
       <Text
-        position={[0, height / 2 + 0.25, 0.05]}
-        fontSize={0.28}
-        color={highlight ? color : '#64748B'}
+        position={[0, topY + 0.38, 0.02]}
+        fontSize={0.2}
+        color={color}
         anchorX="center"
         anchorY="middle"
-        font={undefined}
       >
         {label}
       </Text>
@@ -153,160 +367,130 @@ function GateBox({ position, label, color = '#3B82F6', highlight = false, width 
   );
 }
 
-function OracleGateBox({ laneHeight, highlight }: { laneHeight: number; highlight: boolean }) {
-  const coreRef = useRef<THREE.Mesh>(null);
-
-  useFrame((_, delta) => {
-    if (coreRef.current) {
-      coreRef.current.rotation.x += delta * 0.6;
-      coreRef.current.rotation.y += delta * 0.8;
-    }
-  });
-
-  return (
-    <group position={[GATE_X.oracle, 0, 0.1]}>
-      <mesh>
-        <boxGeometry args={[1.8, laneHeight + 1.2, 1.0]} />
-        <meshPhysicalMaterial
-          color="#1E293B"
-          transparent
-          opacity={highlight ? 0.7 : 0.5}
-          roughness={0.4}
-          metalness={0.6}
-        />
-      </mesh>
-      <mesh>
-        <boxGeometry args={[1.9, laneHeight + 1.3, 1.1]} />
-        <meshBasicMaterial color="#F59E0B" wireframe transparent opacity={highlight ? 0.5 : 0.2} />
-      </mesh>
-      <mesh ref={coreRef}>
-        <octahedronGeometry args={[0.3, 0]} />
-        <meshStandardMaterial color="#F59E0B" emissive="#F59E0B" emissiveIntensity={0.4} wireframe />
-      </mesh>
-      <Text
-        position={[0, laneHeight / 2 + 1.0, 0.6]}
-        fontSize={0.3}
-        color={highlight ? '#F59E0B' : '#94A3B8'}
-        anchorX="center"
-        anchorY="middle"
-      >
-        U_f
-      </Text>
-    </group>
-  );
-}
-
-function MeasureBox({ position, highlight }: { position: [number, number, number]; highlight: boolean }) {
-  return (
-    <group position={position}>
-      <mesh>
-        <boxGeometry args={[0.7, 0.9, 0.4]} />
-        <meshStandardMaterial color="#64748B" transparent opacity={highlight ? 0.6 : 0.2} metalness={0.5} roughness={0.3} />
-      </mesh>
-      <mesh>
-        <boxGeometry args={[0.7, 0.9, 0.4]} />
-        <meshBasicMaterial color="#64748B" wireframe transparent opacity={highlight ? 0.5 : 0.15} />
-      </mesh>
-      <Text
-        position={[0, 0.7, 0.05]}
-        fontSize={0.22}
-        color={highlight ? '#334155' : '#94A3B8'}
-        anchorX="center"
-        anchorY="middle"
-      >
-        M
-      </Text>
-    </group>
-  );
-}
-
-function CircuitLayout({ laneYs, labels, nQubits, orbX }: {
-  laneYs: number[];
-  labels: string[];
-  nQubits: number;
-  orbX: number;
+function GateTile({
+  x,
+  y,
+  label,
+  color,
+  size,
+  active,
+}: {
+  x: number;
+  y: number;
+  label: string;
+  color: string;
+  size: number;
+  active: boolean;
 }) {
-  const passedX = orbX >= GATE_X.xGate - 0.5;
-  const passedH1 = orbX >= GATE_X.hRound1 - 0.5;
-  const passedOracle = orbX >= GATE_X.oracle - 1;
-  const passedH2 = orbX >= GATE_X.hRound2 - 0.5;
-  const passedMeasure = orbX >= GATE_X.measure - 1;
-  const laneHeight = laneYs.length > 1 ? Math.abs(laneYs[0] - laneYs[laneYs.length - 1]) : 1.45;
+  return (
+    <group position={[x, y, 0.08]}>
+      <mesh>
+        <boxGeometry args={[size, size, 0.24]} />
+        <meshStandardMaterial color={color} transparent opacity={active ? 0.36 : 0.18} roughness={0.18} metalness={0.18} />
+      </mesh>
+      <mesh>
+        <boxGeometry args={[size, size, 0.24]} />
+        <meshBasicMaterial color={color} wireframe transparent opacity={active ? 0.8 : 0.4} />
+      </mesh>
+      <Text position={[0, 0, 0.13]} fontSize={size * 0.35} color={active ? '#0F172A' : '#475569'} anchorX="center" anchorY="middle">
+        {label}
+      </Text>
+    </group>
+  );
+}
+
+function ControlDot({ x, y, active }: { x: number; y: number; active: boolean }) {
+  return (
+    <mesh position={[x, y, 0.1]}>
+      <sphereGeometry args={[active ? 0.18 : 0.14, 18, 18]} />
+      <meshStandardMaterial color="#7C3AED" emissive="#7C3AED" emissiveIntensity={active ? 0.35 : 0.1} />
+    </mesh>
+  );
+}
+
+function TargetMarker({ x, y, active }: { x: number; y: number; active: boolean }) {
+  return (
+    <group position={[x, y, 0.1]}>
+      <mesh rotation={[Math.PI / 2, 0, 0]}>
+        <torusGeometry args={[0.22, 0.02, 12, 48]} />
+        <meshStandardMaterial color="#D97706" emissive="#D97706" emissiveIntensity={active ? 0.32 : 0.08} />
+      </mesh>
+      <Line points={[[0, -0.18, 0.04], [0, 0.18, 0.04]]} color="#D97706" lineWidth={1.2} />
+      <Line points={[[(-0.18), 0, 0.04], [0.18, 0, 0.04]]} color="#D97706" lineWidth={1.2} />
+    </group>
+  );
+}
+
+function StageColumn({
+  step,
+  x,
+  laneYs,
+  nQubits,
+  gap,
+  active,
+  isFinalMeasure,
+}: {
+  step: DJAnimationStep;
+  x: number;
+  laneYs: number[];
+  nQubits: number;
+  gap: number;
+  active: boolean;
+  isFinalMeasure: boolean;
+}) {
+  const columnWidth = clamp(gap * 0.72, 0.38, 0.78);
+  const plateSize = clamp(gap * 0.56, 0.26, 0.56);
+  const markers = [...Array.from({ length: nQubits }, (_, index) => step.wire_markers[String(index)] || '-'), step.ancilla_marker || '-'];
+  const controls = markers
+    .map((marker, index) => ({ marker, index }))
+    .filter((item) => item.marker === '●')
+    .map((item) => laneYs[item.index]);
+  const targetIndex = markers.findIndex((marker) => marker === '⊕');
+  const hasLink = controls.length > 0 && targetIndex >= 0;
+  const targetY = targetIndex >= 0 ? laneYs[targetIndex] : null;
 
   return (
     <group>
-      {laneYs.map((y, i) => (
+      {active && (
+        <mesh position={[x, 0, -0.08]}>
+          <planeGeometry args={[Math.max(columnWidth, 0.52), Math.abs(laneYs[0] - laneYs[laneYs.length - 1]) + 1.7]} />
+          <meshBasicMaterial color="#C4B5FD" transparent opacity={0.12} />
+        </mesh>
+      )}
+
+      {hasLink && targetY !== null && (
         <Line
-          key={`wire-${labels[i]}`}
-          points={[[-10.5, y, -0.05], [10.5, y, -0.05]]}
-          color="#CBD5E1"
-          lineWidth={1}
+          points={[[x, Math.min(...controls, targetY), 0.08], [x, Math.max(...controls, targetY), 0.08]]}
+          color={active ? '#8B5CF6' : '#B69CFF'}
+          lineWidth={1.3}
         />
-      ))}
+      )}
 
-      {laneYs.map((y, i) => (
-        <Text
-          key={`wl-${labels[i]}`}
-          position={[-11.2, y, 0.1]}
-          fontSize={0.24}
-          color="#475569"
-          anchorX="right"
-          anchorY="middle"
-        >
-          {labels[i]}
+      {markers.map((marker, index) => {
+        const y = laneYs[index];
+        if (marker === 'H') return <GateTile key={`${step.step}-${index}-H`} x={x} y={y} label="H" color="#2563EB" size={plateSize} active={active} />;
+        if (marker === 'X') return <GateTile key={`${step.step}-${index}-X`} x={x} y={y} label="X" color="#E11D48" size={plateSize} active={active} />;
+        if (marker === 'M') return <GateTile key={`${step.step}-${index}-M`} x={x} y={y} label="M" color="#475569" size={plateSize} active={active || isFinalMeasure} />;
+        if (marker === '●') return <ControlDot key={`${step.step}-${index}-dot`} x={x} y={y} active={active} />;
+        if (marker === '⊕') return <TargetMarker key={`${step.step}-${index}-target`} x={x} y={y} active={active} />;
+        return null;
+      })}
+
+      {active && (
+        <Text position={[x, laneYs[0] + 0.78, 0.14]} fontSize={0.22} color="#4C1D95" anchorX="center" anchorY="middle">
+          {`S${step.step}`}
         </Text>
-      ))}
-
-      <GateBox
-        position={[GATE_X.xGate, laneYs[laneYs.length - 1], 0]}
-        label="X"
-        color="#EF4444"
-        highlight={passedX}
-        width={0.7}
-        height={0.7}
-      />
-
-      {laneYs.map((y, i) => (
-        <GateBox
-          key={`h1-${i}`}
-          position={[GATE_X.hRound1, y, 0]}
-          label="H"
-          color="#3B82F6"
-          highlight={passedH1}
-        />
-      ))}
-
-      <OracleGateBox laneHeight={laneHeight} highlight={passedOracle} />
-
-      {laneYs.slice(0, nQubits).map((y, i) => (
-        <GateBox
-          key={`h2-${i}`}
-          position={[GATE_X.hRound2, y, 0]}
-          label="H"
-          color="#8B5CF6"
-          highlight={passedH2}
-        />
-      ))}
-
-      {laneYs.slice(0, nQubits).map((y, i) => (
-        <MeasureBox
-          key={`m-${i}`}
-          position={[GATE_X.measure, y, 0]}
-          highlight={passedMeasure}
-        />
-      ))}
+      )}
     </group>
   );
 }
 
 function QubitOrbNode({
-  label,
   y,
   pOne,
   targetX,
   phaseColor,
 }: {
-  label: string;
   y: number;
   pOne: number;
   targetX: number;
@@ -314,167 +498,68 @@ function QubitOrbNode({
 }) {
   const groupRef = useRef<THREE.Group>(null);
   const matRef = useRef<THREE.MeshStandardMaterial>(null);
-  const lightRef = useRef<THREE.PointLight>(null);
   const isZero = pOne < 0.15;
   const isOne = pOne > 0.85;
   const isSuper = !isZero && !isOne;
-  const color = isSuper ? '#8B5CF6' : isOne ? '#F97316' : '#3B82F6';
+  const color = isSuper ? '#8B5CF6' : isOne ? '#F97316' : '#2563EB';
   const stateText = isSuper ? '0|1' : isOne ? '1' : '0';
 
   useFrame((state, delta) => {
     if (!groupRef.current) return;
-    groupRef.current.position.x = THREE.MathUtils.lerp(groupRef.current.position.x, targetX, delta * 4.5);
-    const bobY = isSuper ? Math.sin(state.clock.elapsedTime * 2.2 + y) * 0.08 : 0;
-    groupRef.current.position.y = THREE.MathUtils.lerp(groupRef.current.position.y, y + bobY, delta * 6);
+    groupRef.current.position.x = THREE.MathUtils.lerp(groupRef.current.position.x, targetX, delta * 4.4);
+    const bob = isSuper ? Math.sin(state.clock.elapsedTime * 2.4 + y) * 0.07 : 0;
+    groupRef.current.position.y = THREE.MathUtils.lerp(groupRef.current.position.y, y + bob, delta * 5.5);
 
     if (matRef.current) {
       const target = new THREE.Color(color);
-      matRef.current.color.lerp(target, delta * 4);
-      const tgtOpacity = isSuper ? 0.65 : 1.0;
-      matRef.current.opacity += (tgtOpacity - matRef.current.opacity) * delta * 4;
+      matRef.current.color.lerp(target, delta * 4.6);
+      matRef.current.emissive.lerp(target, delta * 3.8);
+      matRef.current.emissiveIntensity += (((isSuper ? 0.48 : 0.15)) - matRef.current.emissiveIntensity) * delta * 4;
+      matRef.current.opacity += (((isSuper ? 0.68 : 0.96)) - matRef.current.opacity) * delta * 4;
       matRef.current.wireframe = isSuper;
-      const tgtEmissive = isSuper ? target : new THREE.Color(0x000000);
-      matRef.current.emissive.lerp(tgtEmissive, delta * 4);
-      matRef.current.emissiveIntensity += ((isSuper ? 0.5 : 0.15) - matRef.current.emissiveIntensity) * delta * 4;
-    }
-
-    if (lightRef.current) {
-      lightRef.current.intensity += ((isSuper ? 1.5 : 0) - lightRef.current.intensity) * delta * 4;
-      lightRef.current.color.lerp(new THREE.Color(color), delta * 4);
     }
   });
 
   return (
-    <group ref={groupRef} position={[targetX, y, 0.15]}>
+    <group ref={groupRef} position={[targetX, y, 0.32]}>
       <mesh>
-        <sphereGeometry args={[0.52, 36, 36]} />
-        <meshStandardMaterial
-          ref={matRef}
-          color={color}
-          emissive={color}
-          emissiveIntensity={isSuper ? 0.5 : 0.15}
-          transparent
-          opacity={isSuper ? 0.65 : 1.0}
-          wireframe={isSuper}
-          roughness={0.2}
-          metalness={0.3}
-        />
+        <sphereGeometry args={[0.38, 26, 26]} />
+        <meshStandardMaterial ref={matRef} color={color} emissive={color} emissiveIntensity={isSuper ? 0.48 : 0.15} transparent opacity={isSuper ? 0.68 : 0.96} wireframe={isSuper} roughness={0.24} metalness={0.18} />
       </mesh>
-      <pointLight ref={lightRef} distance={2.5} intensity={0} />
-
       <mesh rotation={[Math.PI / 2, 0, 0]}>
-        <torusGeometry args={[0.65, 0.025, 12, 64]} />
-        <meshStandardMaterial color={phaseColor} emissive={phaseColor} emissiveIntensity={0.2} />
+        <torusGeometry args={[0.5, 0.025, 12, 48]} />
+        <meshStandardMaterial color={phaseColor} emissive={phaseColor} emissiveIntensity={0.22} />
       </mesh>
-
-      <Text
-        position={[0, 0, 0.65]}
-        fontSize={0.24}
-        color="#FFFFFF"
-        anchorX="center"
-        anchorY="middle"
-      >
+      <Text position={[0, 0, 0.52]} fontSize={0.18} color="#FFFFFF" anchorX="center" anchorY="middle">
         {stateText}
       </Text>
-
-      <Text
-        position={[0, -0.78, 0.05]}
-        fontSize={0.17}
-        color="#334155"
-        anchorX="center"
-        anchorY="middle"
-      >
-        {label}
-      </Text>
     </group>
   );
 }
 
-type OracleToken = { input: string; output: number };
-
-function TokenCard3D({ token, index, orbX }: { token: OracleToken; index: number; orbX: number }) {
-  const groupRef = useRef<THREE.Group>(null);
-  const col = index % 4;
-  const row = Math.floor(index / 4);
-  const topY = 4.5 - row * 0.55;
-
-  useFrame((state, delta) => {
-    if (!groupRef.current) return;
-    const t = state.clock.elapsedTime;
-    const tx = orbX - 1.2 + col * 0.6;
-    const ty = topY + Math.sin(t * 1.8 + index) * 0.1;
-    groupRef.current.position.x = THREE.MathUtils.lerp(groupRef.current.position.x, tx, delta * 4);
-    groupRef.current.position.y = THREE.MathUtils.lerp(groupRef.current.position.y, ty, delta * 4);
-    groupRef.current.position.z = THREE.MathUtils.lerp(groupRef.current.position.z, 0.9, delta * 4);
-  });
-
-  return (
-    <group ref={groupRef} position={[orbX, topY, 0.9]}>
-      <mesh>
-        <boxGeometry args={[0.5, 0.28, 0.08]} />
-        <meshStandardMaterial
-          color={token.output === 1 ? '#FEE2E2' : '#DBEAFE'}
-          emissive={token.output === 1 ? '#FCA5A5' : '#93C5FD'}
-          emissiveIntensity={0.12}
-          roughness={0.3}
-        />
-      </mesh>
-      <Text position={[0, 0.02, 0.05]} fontSize={0.09} color={token.output === 1 ? '#B91C1C' : '#1D4ED8'} anchorX="center" anchorY="middle">
-        {token.input}
-      </Text>
-      <Text position={[0.18, -0.08, 0.05]} fontSize={0.06} color="#475569" anchorX="center" anchorY="middle">
-        {token.output}
-      </Text>
-    </group>
-  );
-}
-
-function OracleTokenRibbon({ truthTable, orbX, visible }: {
-  truthTable: OracleToken[];
-  orbX: number;
-  visible: boolean;
-}) {
-  const tokens = useMemo(() => truthTable.slice(0, 8), [truthTable]);
-  if (!visible) return null;
-  return (
-    <group>
-      {tokens.map((token, index) => (
-        <TokenCard3D key={`${token.input}-${index}`} token={token} index={index} orbX={orbX} />
-      ))}
-    </group>
-  );
-}
-
-function ResultBoard({ classification, visible }: {
-  classification: 'CONSTANT' | 'BALANCED';
-  visible: boolean;
-}) {
+function ResultBoard({ x, classification, visible }: { x: number; classification: 'CONSTANT' | 'BALANCED'; visible: boolean }) {
   const groupRef = useRef<THREE.Group>(null);
   const isConstant = classification === 'CONSTANT';
 
   useFrame((_, delta) => {
     if (!groupRef.current) return;
-    const target = visible ? 1 : 0.001;
-    groupRef.current.scale.x = THREE.MathUtils.lerp(groupRef.current.scale.x, target, delta * 5);
-    groupRef.current.scale.y = THREE.MathUtils.lerp(groupRef.current.scale.y, target, delta * 5);
-    groupRef.current.scale.z = THREE.MathUtils.lerp(groupRef.current.scale.z, target, delta * 5);
+    const scale = visible ? 1 : 0.001;
+    groupRef.current.scale.x = THREE.MathUtils.lerp(groupRef.current.scale.x, scale, delta * 5);
+    groupRef.current.scale.y = THREE.MathUtils.lerp(groupRef.current.scale.y, scale, delta * 5);
+    groupRef.current.scale.z = THREE.MathUtils.lerp(groupRef.current.scale.z, scale, delta * 5);
   });
 
   return (
-    <group ref={groupRef} position={[GATE_X.measure + 0.5, 0, 0.3]} scale={[0.001, 0.001, 0.001]}>
+    <group ref={groupRef} position={[x, 0, 0.18]} scale={[0.001, 0.001, 0.001]}>
       <mesh>
-        <planeGeometry args={[2.2, 1.8]} />
-        <meshStandardMaterial color={isConstant ? '#DBEAFE' : '#FFEDD5'} transparent opacity={0.95} />
+        <planeGeometry args={[2.6, 1.9]} />
+        <meshStandardMaterial color={isConstant ? '#DBEAFE' : '#FFEDD5'} transparent opacity={0.96} />
       </mesh>
-      <lineSegments>
-        <edgesGeometry args={[new THREE.PlaneGeometry(2.2, 1.8)]} />
-        <lineBasicMaterial color={isConstant ? '#2563EB' : '#EA580C'} />
-      </lineSegments>
-      <Text position={[0, 0.28, 0.06]} fontSize={0.28} color={isConstant ? '#1D4ED8' : '#C2410C'} anchorX="center" anchorY="middle">
+      <Text position={[0, 0.32, 0.04]} fontSize={0.28} color={isConstant ? '#1D4ED8' : '#C2410C'} anchorX="center" anchorY="middle">
         {classification}
       </Text>
-      <Text position={[0, -0.28, 0.06]} fontSize={0.12} color="#334155" maxWidth={1.8} textAlign="center" anchorX="center" anchorY="middle">
-        {isConstant ? 'Semua hasil ukur input = 0' : 'Ada hasil ukur input bukan 0'}
+      <Text position={[0, -0.18, 0.04]} fontSize={0.13} color="#334155" anchorX="center" anchorY="middle" maxWidth={2.1} textAlign="center">
+        {isConstant ? 'Semua bit input kembali ke 0.' : 'Ada bit input non-zero setelah interferensi.'}
       </Text>
     </group>
   );
@@ -484,81 +569,83 @@ function StoryScene({
   data,
   currentStep,
   cameraMode,
-  showTokens,
 }: {
   data: DJAnimationPayload;
   currentStep: number;
   cameraMode: 'fixed' | 'orbit';
-  showTokens: boolean;
 }) {
-  const { snapshots, n_qubits, measurement, truthTable } = {
-    snapshots: data.snapshots,
-    n_qubits: data.n_qubits,
-    measurement: data.measurement,
-    truthTable: data.truth_table,
-  };
-  const snapshot = snapshots[currentStep];
-  const storyPhase = snapshot?.phase || 'init';
-  const showResult = currentStep >= snapshots.length - 1;
-
-  const laneYs = useMemo(() => getLaneYs(n_qubits), [n_qubits]);
-  const laneLabels = useMemo(
-    () => [...Array.from({ length: n_qubits }, (_, i) => `q${i}`), 'anc'],
-    [n_qubits]
-  );
+  const activeStep = data.timeline[currentStep];
+  const laneYs = useMemo(() => getLaneYs(data.n_qubits), [data.n_qubits]);
+  const laneLabels = useMemo(() => [...Array.from({ length: data.n_qubits }, (_, index) => `q${index}`), 'anc'], [data.n_qubits]);
+  const { startX, endX, gap, columnXs } = useMemo(() => getColumnLayout(data.timeline.length), [data.timeline.length]);
+  const cameraDistance = data.timeline.length > 24 ? 23 : 21.5;
+  const phaseColor = PHASE_COLOR[activeStep.phase] || '#2563EB';
+  const showResult = activeStep.phase === 'measure';
+  const resultX = endX + 2.1;
 
   const qubitStates = useMemo(() => {
-    const probs = snapshot?.probabilities || [];
-    const labels = snapshot?.labels || [];
-    const totalQubits = n_qubits + 1;
-    return Array.from({ length: totalQubits }, (_, i) => getQubitP1(probs, labels, i, totalQubits));
-  }, [n_qubits, snapshot?.labels, snapshot?.probabilities]);
+    const totalQubits = data.total_qubits;
+    return Array.from({ length: totalQubits }, (_, index) => getQubitP1(activeStep.probabilities, activeStep.labels, index, totalQubits));
+  }, [activeStep.labels, activeStep.probabilities, data.total_qubits]);
 
-  const orbX = computeOrbX(currentStep, snapshots);
-  const phaseColor = showResult ? PHASE_COLOR.measure : PHASE_COLOR[storyPhase] || '#2563EB';
+  const topY = laneYs[0] + 0.52;
+  const bottomY = laneYs[laneYs.length - 1] - 0.52;
 
   return (
     <>
-      <CameraRig mode={cameraMode} />
-      <ambientLight intensity={0.7} />
-      <directionalLight position={[5, 8, 8]} intensity={0.8} />
-      <directionalLight position={[-6, 3, 5]} intensity={0.3} color="#BFDBFE" />
+      <CameraRig mode={cameraMode} distance={cameraDistance} />
+      <ambientLight intensity={0.82} />
+      <directionalLight position={[6, 8, 8]} intensity={0.88} />
+      <directionalLight position={[-6, 4, 5]} intensity={0.28} color="#BFDBFE" />
 
-      <OrbitControls
-        enabled={cameraMode === 'orbit'}
-        enablePan={false}
-        enableZoom
-        minDistance={10}
-        maxDistance={24}
-        minPolarAngle={Math.PI * 0.3}
-        maxPolarAngle={Math.PI * 0.7}
-      />
+      <OrbitControls enabled={cameraMode === 'orbit'} enablePan={false} enableZoom minDistance={15} maxDistance={28} minPolarAngle={Math.PI * 0.34} maxPolarAngle={Math.PI * 0.68} />
 
-      <CircuitLayout laneYs={laneYs} labels={laneLabels} nQubits={n_qubits} orbX={orbX} />
+      {data.partitions.map((partition) => {
+        const startIndex = Math.max(partition.start_col - 1, 0);
+        const endIndex = Math.min(partition.end_col - 1, columnXs.length - 1);
+        const bandStart = columnXs[startIndex] - Math.max(gap * 0.5, 0.35);
+        const bandEnd = columnXs[endIndex] + Math.max(gap * 0.5, 0.35);
+        return (
+          <PhaseBand
+            key={`${partition.phase}-${partition.start_col}`}
+            startX={bandStart}
+            endX={bandEnd}
+            color={PHASE_COLOR[partition.phase] || '#94A3B8'}
+            label={PHASE_LABEL[partition.phase] || partition.label}
+            topY={topY}
+            height={topY - bottomY + 0.58}
+          />
+        );
+      })}
 
-      {qubitStates.map((pOne, i) => (
-        <QubitOrbNode
-          key={`orb-${laneLabels[i]}`}
-          label={laneLabels[i]}
-          y={laneYs[i]}
-          pOne={pOne}
-          targetX={orbX}
-          phaseColor={phaseColor}
+      {laneYs.map((y, index) => (
+        <Line key={`wire-${laneLabels[index]}`} points={[[startX - 0.8, y, -0.04], [endX + 0.8, y, -0.04]]} color="#CBD5E1" lineWidth={1} />
+      ))}
+
+      {laneYs.map((y, index) => (
+        <Text key={`lane-${laneLabels[index]}`} position={[startX - 1.35, y, 0.06]} fontSize={0.24} color="#334155" anchorX="right" anchorY="middle">
+          {laneLabels[index]}
+        </Text>
+      ))}
+
+      {data.timeline.map((step, index) => (
+        <StageColumn
+          key={`column-${step.step}`}
+          step={step}
+          x={columnXs[index]}
+          laneYs={laneYs}
+          nQubits={data.n_qubits}
+          gap={gap}
+          active={index === currentStep}
+          isFinalMeasure={showResult}
         />
       ))}
 
-      <OracleTokenRibbon truthTable={truthTable} orbX={orbX} visible={showTokens && !showResult} />
-      <ResultBoard classification={measurement.classification} visible={showResult} />
+      {qubitStates.map((pOne, index) => (
+        <QubitOrbNode key={`orb-${index}`} y={laneYs[index]} pOne={pOne} targetX={columnXs[currentStep]} phaseColor={phaseColor} />
+      ))}
 
-      <Text
-        position={[0, Math.max(...laneYs) + 1.6, 0.2]}
-        fontSize={0.3}
-        color="#0F172A"
-        anchorX="center"
-        anchorY="middle"
-      >
-        {showResult ? 'Output & Measurement' : PHASE_LABEL[storyPhase] || storyPhase}
-      </Text>
+      <ResultBoard x={resultX} classification={data.measurement.classification} visible={showResult} />
     </>
   );
 }
@@ -566,90 +653,198 @@ function StoryScene({
 function MarkerBadge({ marker }: { marker: string }) {
   const value = marker || '-';
   const classes = MARKER_STYLE[value] || 'bg-slate-50 text-slate-400 border-slate-200';
-  return <span className={`inline-flex min-w-8 justify-center rounded border px-1.5 py-0.5 font-mono text-[10px] ${classes}`}>{value}</span>;
+  return <span className={`inline-flex min-w-8 justify-center rounded border px-1.5 py-0.5 font-mono text-[11px] ${classes}`}>{value}</span>;
 }
 
-function CompactGateTimeline({
-  trace,
+function PhaseStepper({
+  partitions,
   activePhase,
-  nQubits,
-  currentStep,
+  activeStep,
   onJumpPhase,
+  disabled,
 }: {
-  trace: DJQuantumTrace;
+  partitions: DJAnimationPartition[];
   activePhase: string;
-  nQubits: number;
-  currentStep: number;
+  activeStep: DJAnimationStep;
   onJumpPhase: (phase: string) => void;
+  disabled: boolean;
 }) {
-  const groups = useMemo(() => groupStagesByPhase(trace.stages), [trace.stages]);
-  const activeStage = trace.stages[currentStep];
-  const labels = useMemo(
-    () => [...Array.from({ length: nQubits }, (_, i) => `q${i}`), 'anc'],
-    [nQubits]
-  );
-
   return (
-    <div className="px-4 py-2 space-y-1.5">
-      <div className="flex items-center gap-1 overflow-x-auto">
-        {groups.map((group, i) => {
-          const isActive = group.phase === activePhase;
+    <div className="px-4 pb-4 pt-2 space-y-2">
+      <div className="flex items-center gap-1.5 overflow-x-auto">
+        {partitions.map((partition, index) => {
+          const isActive = partition.phase === activePhase;
           return (
-            <Fragment key={group.phase}>
-              {i > 0 && <ChevronRight className="h-3 w-3 shrink-0 text-slate-300" />}
+            <div key={`${partition.phase}-${partition.start_col}`} className="flex items-center gap-1.5 shrink-0">
+              {index > 0 && <ChevronRight className="h-3.5 w-3.5 text-slate-300" />}
               <button
-                onClick={() => onJumpPhase(group.phase)}
-                className={`shrink-0 rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.12em] transition-colors ${
+                onClick={() => onJumpPhase(partition.phase)}
+                disabled={disabled}
+                className={`rounded-full border px-3 py-1.5 text-[11px] font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-55 ${
                   isActive
-                    ? 'bg-violet-600 text-white'
-                    : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
+                    ? 'border-violet-400 bg-violet-600 text-white'
+                    : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'
                 }`}
               >
-                {PHASE_LABEL[group.phase] || group.phase}
-                <span className="ml-1 font-normal opacity-70">({group.items.length})</span>
+                {PHASE_LABEL[partition.phase] || partition.label}
+                <span className="ml-1 opacity-80">({partition.count})</span>
               </button>
-            </Fragment>
+            </div>
           );
         })}
       </div>
 
-      {activeStage && (
-        <div className="flex items-center gap-1.5 overflow-x-auto text-[11px] text-slate-600">
-          <span className="shrink-0 font-semibold text-slate-800">
-            Step {activeStage.step}: {activeStage.operation}
-          </span>
-          <span className="text-slate-300">&middot;</span>
-          <div className="flex items-center gap-1">
-            {labels.map((label, idx) => {
-              const marker = idx === nQubits ? activeStage.ancilla_marker : activeStage.wire_markers[String(idx)] || '-';
-              return (
-                <span key={`mk-${label}`} className="flex items-center gap-0.5 shrink-0">
-                  <span className="text-[10px] text-slate-400">{label}</span>
-                  <MarkerBadge marker={marker} />
-                </span>
-              );
-            })}
-          </div>
-        </div>
-      )}
+      <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
+        <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Active Column</p>
+        <p className="mt-1 text-[15px] font-semibold text-slate-900">Step {activeStep.step} · {activeStep.operation}</p>
+        <p className="mt-1 text-[13px] leading-6 text-slate-600">{activeStep.description}</p>
+      </div>
     </div>
   );
 }
 
-export function DJQuantumAnimation({ data, trace }: DJQuantumAnimationProps) {
+function ActiveMarkerStrip({ step, nQubits }: { step: DJAnimationStep; nQubits: number }) {
+  const labels = [...Array.from({ length: nQubits }, (_, index) => `q${index}`), 'anc'];
+
+  return (
+    <div className="mt-3 flex flex-wrap gap-2">
+      {labels.map((label, index) => {
+        const marker = index === nQubits ? step.ancilla_marker : step.wire_markers[String(index)] || '-';
+        return (
+          <span key={`${label}-${marker}`} className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2 py-1">
+            <span className="text-[11px] font-medium text-slate-500">{label}</span>
+            <MarkerBadge marker={marker} />
+          </span>
+        );
+      })}
+    </div>
+  );
+}
+
+function DetailCard({ label, value, hint }: { label: string; value: string; hint: string }) {
+  return (
+    <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-3">
+      <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">{label}</p>
+      <p className="mt-1 text-[16px] font-semibold text-slate-900">{value}</p>
+      <p className="mt-1 text-[12px] leading-5 text-slate-600">{hint}</p>
+    </div>
+  );
+}
+
+function TruthTablePanel({
+  data,
+  activeBits,
+}: {
+  data: DJAnimationPayload;
+  activeBits: string | null;
+}) {
+  return (
+    <div className="rounded-xl border border-slate-200 bg-white p-4">
+      <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Dataset JSON Render</p>
+      <div className="mt-3 grid grid-cols-2 gap-2">
+        <DetailCard label="Profil" value={PROFILE_LABEL[data.oracle_summary.profile]} hint="Diambil langsung dari sebaran 0 dan 1 pada truth table." />
+        <DetailCard label="Truth Table" value={`${data.oracle_summary.total_inputs} input`} hint={`1 sebanyak ${data.oracle_summary.ones_count}, 0 sebanyak ${data.oracle_summary.zeros_count}.`} />
+      </div>
+
+      <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50">
+        <div className="grid grid-cols-[1fr_72px_88px] gap-2 border-b border-slate-200 px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">
+          <span>Input</span>
+          <span>f(x)</span>
+          <span>Status</span>
+        </div>
+        <div className="max-h-[340px] overflow-auto px-2 py-2">
+          {data.truth_table.map((entry) => {
+            const isActive = activeBits === entry.input;
+            return (
+              <div
+                key={entry.input}
+                className={`grid grid-cols-[1fr_72px_88px] items-center gap-2 rounded-lg px-2 py-2 text-[13px] transition-colors ${
+                  isActive
+                    ? 'bg-violet-100 ring-1 ring-violet-300'
+                    : 'bg-white hover:bg-slate-50'
+                }`}
+              >
+                <span className="font-mono font-semibold tracking-[0.2em] text-slate-800">{entry.input}</span>
+                <span className={`inline-flex w-fit rounded-full px-2 py-1 text-[12px] font-semibold ${entry.output === 1 ? 'bg-amber-100 text-amber-700' : 'bg-blue-100 text-blue-700'}`}>
+                  {entry.output}
+                </span>
+                <span className="text-[12px] text-slate-500">{isActive ? 'sedang dipakai' : 'dataset'}</span>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function FinalAmplitudePanel({ data }: { data: DJAnimationPayload }) {
+  const topStates = [...data.input_probabilities]
+    .sort((a, b) => b.probability - a.probability)
+    .slice(0, 6);
+
+  return (
+    <div className="rounded-xl border border-slate-200 bg-white p-4">
+      <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Distribusi Input Setelah Interferensi</p>
+      <div className="mt-3 space-y-2">
+        {topStates.map((entry) => (
+          <div key={entry.input_bits}>
+            <div className="flex items-center justify-between text-[13px] text-slate-700">
+              <span className="font-mono font-semibold tracking-[0.18em]">{entry.input_bits}</span>
+              <span>{formatPercent(entry.probability)}</span>
+            </div>
+            <div className="mt-1 h-2 rounded-full bg-slate-100">
+              <div className="h-full rounded-full bg-violet-500" style={{ width: `${Math.max(entry.probability * 100, 2)}%` }} />
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function MeasurementPanel({ data }: { data: DJAnimationPayload }) {
+  return (
+    <div className="rounded-xl border border-slate-200 bg-white p-4">
+      <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Measurement Nyata</p>
+      <div className="mt-3 flex flex-wrap items-center gap-2">
+        <span className={`rounded-full px-3 py-1.5 text-[13px] font-semibold text-white ${data.measurement.classification === 'CONSTANT' ? 'bg-blue-600' : 'bg-orange-600'}`}>
+          {data.measurement.classification}
+        </span>
+        <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 text-[12px] text-slate-600">{data.measurement.shots} shots</span>
+      </div>
+      <div className="mt-3 flex flex-wrap gap-2">
+        {Object.entries(data.measurement.counts).map(([state, count]) => (
+          <span key={state} className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 font-mono text-[12px] text-slate-700">
+            |{state}⟩ : {count}
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+export function DJQuantumAnimation({ data, onExportingChange }: DJQuantumAnimationProps) {
   const [currentStep, setCurrentStep] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
-  const [speed, setSpeed] = useState(900);
+  const [speed, setSpeed] = useState(850);
   const [cameraMode, setCameraMode] = useState<'fixed' | 'orbit'>('fixed');
-  const [showTokens, setShowTokens] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
+  const [exportError, setExportError] = useState<string | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const currentStepRef = useRef(currentStep);
+  const isPlayingRef = useRef(isPlaying);
+  const speedRef = useRef(speed);
+  const exportRendererCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const exportAnimationFrameRef = useRef<number | null>(null);
 
-  const totalSteps = data.snapshots.length;
-  const snapshot = data.snapshots[currentStep];
-  const storyPhase = snapshot?.phase || 'init';
-  const activeGatePhase = currentStep >= totalSteps - 1 ? 'measure' : storyPhase;
-  const phaseColor = PHASE_COLOR[activeGatePhase] || '#2563EB';
+  const totalSteps = data.timeline.length;
+  const activeStep = data.timeline[currentStep];
+  const activePhase = activeStep.phase;
+  const phaseColor = PHASE_COLOR[activePhase] || '#2563EB';
   const isLastStep = currentStep >= totalSteps - 1;
+  const canvasHeight = data.n_qubits >= 4 || totalSteps > 18 ? 560 : 520;
+  const supportedVideoMimeType = useMemo(() => getSupportedVideoMimeType(), []);
 
   const stopTimer = useCallback(() => {
     if (!timerRef.current) return;
@@ -658,14 +853,36 @@ export function DJQuantumAnimation({ data, trace }: DJQuantumAnimationProps) {
   }, []);
 
   useEffect(() => {
+    currentStepRef.current = currentStep;
+  }, [currentStep]);
+
+  useEffect(() => {
+    isPlayingRef.current = isPlaying;
+  }, [isPlaying]);
+
+  useEffect(() => {
+    speedRef.current = speed;
+  }, [speed]);
+
+  useEffect(() => {
+    onExportingChange?.(isExporting);
+  }, [isExporting, onExportingChange]);
+
+  useEffect(() => {
+    return () => {
+      onExportingChange?.(false);
+    };
+  }, [onExportingChange]);
+
+  useEffect(() => {
     if (isPlaying && currentStep < totalSteps - 1) {
       timerRef.current = setInterval(() => {
-        setCurrentStep((prev) => {
-          if (prev >= totalSteps - 1) {
+        setCurrentStep((previous) => {
+          if (previous >= totalSteps - 1) {
             setIsPlaying(false);
-            return prev;
+            return previous;
           }
-          return prev + 1;
+          return previous + 1;
         });
       }, speed);
     } else {
@@ -676,170 +893,386 @@ export function DJQuantumAnimation({ data, trace }: DJQuantumAnimationProps) {
     return stopTimer;
   }, [currentStep, isPlaying, speed, stopTimer, totalSteps]);
 
+  useEffect(() => {
+    setCurrentStep(0);
+    setIsPlaying(false);
+    setExportError(null);
+    stopTimer();
+  }, [data.case_id, stopTimer]);
+
+  useEffect(() => {
+    return () => {
+      stopTimer();
+      if (exportAnimationFrameRef.current !== null) {
+        window.cancelAnimationFrame(exportAnimationFrameRef.current);
+      }
+    };
+  }, [stopTimer]);
+
   const handlePlay = () => {
+    if (isExporting) return;
     if (isLastStep) setCurrentStep(0);
     setIsPlaying(true);
   };
 
   const handlePause = () => {
+    if (isExporting) return;
     setIsPlaying(false);
     stopTimer();
   };
 
   const handleStep = () => {
+    if (isExporting) return;
     setIsPlaying(false);
     stopTimer();
-    setCurrentStep((prev) => Math.min(prev + 1, totalSteps - 1));
+    setCurrentStep((previous) => Math.min(previous + 1, totalSteps - 1));
   };
 
   const handleReset = () => {
+    if (isExporting) return;
     setIsPlaying(false);
     stopTimer();
     setCurrentStep(0);
   };
 
   const handleJumpPhase = useCallback((phase: string) => {
-    const idx = trace.stages.findIndex((s) => s.phase === phase);
-    if (idx >= 0 && idx < totalSteps) {
-      setCurrentStep(idx);
+    if (isExporting) return;
+    const index = data.timeline.findIndex((step) => step.phase === phase);
+    if (index >= 0) {
+      setCurrentStep(index);
       setIsPlaying(false);
       stopTimer();
     }
-  }, [trace.stages, totalSteps, stopTimer]);
+  }, [data.timeline, isExporting, stopTimer]);
 
-  const footerTitle = isLastStep ? 'Measurement & Result' : snapshot?.operation;
-  const footerDescription = isLastStep
-    ? data.measurement.classification === 'CONSTANT'
-      ? 'Semua qubit input terukur 0, maka fungsi diklasifikasikan CONSTANT.'
-      : 'Ada qubit input terukur bukan 0, maka fungsi diklasifikasikan BALANCED.'
-    : snapshot?.description;
+  const handleExportVideo = useCallback(async () => {
+    if (isExporting) return;
+
+    if (!supportedVideoMimeType || typeof MediaRecorder === 'undefined') {
+      setExportError('Browser ini belum mendukung export video WebM dari canvas. Gunakan Chrome, Edge, atau Firefox terbaru.');
+      return;
+    }
+
+    const previousStep = currentStepRef.current;
+    const previousSpeed = speedRef.current;
+    const previousPlaying = isPlayingRef.current;
+    const exportStepMs = Math.max(previousSpeed, EXPORT_STEP_MS_MIN);
+    const compositorCanvas = document.createElement('canvas');
+    const exportWidth = EXPORT_VIDEO_WIDTH;
+    const exportHeight = EXPORT_VIDEO_HEIGHT;
+    const compositorContext = compositorCanvas.getContext('2d', { alpha: false });
+
+    if (!compositorContext) {
+      setExportError('Gagal membuat canvas komposit untuk export video.');
+      return;
+    }
+
+    compositorCanvas.width = exportWidth;
+    compositorCanvas.height = exportHeight;
+
+    let overlayMode: ExportOverlayMode = 'intro';
+    let recorder: MediaRecorder | null = null;
+    let stream: MediaStream | null = null;
+    let sourceCanvas: HTMLCanvasElement | null = null;
+    const chunks: BlobPart[] = [];
+    let cancelled = false;
+
+    try {
+      stream = compositorCanvas.captureStream(EXPORT_FPS);
+      recorder = new MediaRecorder(stream, {
+        mimeType: supportedVideoMimeType,
+        videoBitsPerSecond: EXPORT_VIDEO_BITRATE,
+      });
+    } catch {
+      setExportError('Recorder browser gagal diinisialisasi untuk export video WebM.');
+      return;
+    }
+
+    const recorderPromise = new Promise<Blob>((resolve, reject) => {
+      recorder!.ondataavailable = (event) => {
+        if (event.data && event.data.size > 0) {
+          chunks.push(event.data);
+        }
+      };
+
+      recorder!.onerror = () => {
+        reject(new Error('Recorder browser gagal membuat video WebM.'));
+      };
+
+      recorder!.onstop = () => {
+        resolve(new Blob(chunks, { type: supportedVideoMimeType }));
+      };
+    });
+
+    const drawCompositeFrame = () => {
+      if (cancelled) return;
+      if (!sourceCanvas) {
+        exportAnimationFrameRef.current = window.requestAnimationFrame(drawCompositeFrame);
+        return;
+      }
+      const exportStep = data.timeline[currentStepRef.current] ?? data.timeline[0];
+      const exportPhaseColor = PHASE_COLOR[exportStep.phase] || '#2563EB';
+
+      drawVideoFrame({
+        ctx: compositorContext,
+        sourceCanvas,
+        data,
+        mode: overlayMode,
+        step: exportStep,
+        phaseColor: exportPhaseColor,
+      });
+
+      exportAnimationFrameRef.current = window.requestAnimationFrame(drawCompositeFrame);
+    };
+
+    setExportError(null);
+    setIsExporting(true);
+
+    try {
+      stopTimer();
+      setIsPlaying(false);
+      setCurrentStep(0);
+      setSpeed(exportStepMs);
+      await waitForAnimationFrames(2);
+
+      sourceCanvas = await waitForCanvasReady(
+        exportRendererCanvasRef,
+        EXPORT_VIDEO_WIDTH,
+        EXPORT_VIDEO_HEIGHT,
+      );
+      await waitForAnimationFrames(3);
+
+      drawCompositeFrame();
+      recorder?.start(250);
+
+      await wait(EXPORT_INTRO_MS);
+
+      overlayMode = 'play';
+      setCurrentStep(0);
+      await waitForAnimationFrames(2);
+      setIsPlaying(true);
+
+      const playbackDurationMs = Math.max(totalSteps - 1, 0) * exportStepMs + Math.round(exportStepMs * 0.6);
+      await wait(playbackDurationMs);
+
+      setIsPlaying(false);
+      stopTimer();
+      setCurrentStep(totalSteps - 1);
+      await waitForAnimationFrames(3);
+
+      overlayMode = 'outro';
+      await wait(EXPORT_OUTRO_MS);
+
+      cancelled = true;
+      if (exportAnimationFrameRef.current !== null) {
+        window.cancelAnimationFrame(exportAnimationFrameRef.current);
+        exportAnimationFrameRef.current = null;
+      }
+
+      recorder?.stop();
+      const videoBlob = await recorderPromise;
+      downloadBlob(videoBlob, `dj_${data.case_id}_video-quantum.webm`);
+    } catch (error) {
+      setExportError(error instanceof Error ? error.message : 'Export video gagal dijalankan.');
+      if (recorder && recorder.state !== 'inactive') {
+        recorder.stop();
+      }
+    } finally {
+      cancelled = true;
+      if (exportAnimationFrameRef.current !== null) {
+        window.cancelAnimationFrame(exportAnimationFrameRef.current);
+        exportAnimationFrameRef.current = null;
+      }
+      stream?.getTracks().forEach((track) => track.stop());
+      exportRendererCanvasRef.current = null;
+
+      setSpeed(previousSpeed);
+      setCurrentStep(previousStep);
+      setIsPlaying(false);
+      await waitForAnimationFrames(2);
+
+      if (previousPlaying && previousStep < totalSteps - 1) {
+        setIsPlaying(true);
+      }
+
+      setIsExporting(false);
+    }
+  }, [data, isExporting, stopTimer, supportedVideoMimeType, totalSteps]);
 
   return (
-    <div className="rounded-xl border-2 border-slate-300 bg-white overflow-hidden">
-      <header className="px-4 pt-4 pb-3 text-center">
-        <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500">Animasi DJ 3D + Gate Python</p>
-        <h2 className="mt-1 text-xl font-semibold text-slate-900">{data.case_id} - input, gate, oracle, output</h2>
+    <div className="rounded-2xl border-2 border-slate-300 bg-white overflow-hidden">
+      <header className="px-5 pt-5 pb-3">
+        <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-500">Animasi Deutsch-Jozsa Three.js</p>
+        <div className="mt-2 flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
+          <div className="max-w-3xl">
+            <h2 className="text-[26px] font-semibold tracking-tight text-slate-900">{data.case_id} · circuit timeline dari dataset asli</h2>
+            <p className="mt-2 text-[14px] leading-7 text-slate-600">
+              Susunan kolom sirkuit dibangkitkan dari truth table JSON, trace kolom aktual, dan statevector tiap langkah. Tidak lagi memakai scaffold oracle tetap.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+            <DetailCard label="Qubit" value={`${data.total_qubits}`} hint={`${data.n_qubits} input + 1 ancilla`} />
+            <DetailCard label="Kolom" value={`${totalSteps}`} hint="Setiap kolom = 1 langkah visual aktual." />
+            <DetailCard label="Oracle 1" value={`${data.oracle_summary.ones_count}`} hint="Jumlah input yang memicu f(x)=1." />
+            <DetailCard label="Shots" value={`${data.measurement.shots}`} hint="Hasil measurement backend nyata." />
+          </div>
+        </div>
       </header>
 
-      <CompactGateTimeline trace={trace} activePhase={activeGatePhase} nQubits={data.n_qubits} currentStep={currentStep} onJumpPhase={handleJumpPhase} />
+      <PhaseStepper partitions={data.partitions} activePhase={activePhase} activeStep={activeStep} onJumpPhase={handleJumpPhase} disabled={isExporting} />
 
-      <div className="px-4 pb-2 flex flex-wrap items-center justify-between gap-3 text-[11px] text-slate-600">
-        <div className="flex flex-wrap items-center gap-3">
-          <span className="inline-flex items-center gap-1"><span className="h-3 w-3 rounded-full bg-blue-500" />Orb 0</span>
-          <span className="inline-flex items-center gap-1"><span className="h-3 w-3 rounded-full bg-orange-500" />Orb 1</span>
-          <span className="inline-flex items-center gap-1"><span className="h-3 w-3 rounded-full bg-violet-500" />Orb 0|1</span>
+      <div className="grid gap-4 px-4 pb-4 xl:grid-cols-[minmax(0,2fr)_minmax(320px,0.95fr)]">
+        <div className="space-y-4">
+          <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
+            <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
+              <div className="flex flex-wrap items-center gap-3 text-[12px] text-slate-600">
+                <span className="inline-flex items-center gap-1.5"><span className="h-3 w-3 rounded-full bg-blue-500" />State 0</span>
+                <span className="inline-flex items-center gap-1.5"><span className="h-3 w-3 rounded-full bg-orange-500" />State 1</span>
+                <span className="inline-flex items-center gap-1.5"><span className="h-3 w-3 rounded-full bg-violet-500" />Superposisi</span>
+                <span className="inline-flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-violet-600" />MCX control</span>
+                <span className="inline-flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-amber-500" />MCX target</span>
+              </div>
+
+              <button
+                onClick={() => setCameraMode((previous) => (previous === 'fixed' ? 'orbit' : 'fixed'))}
+                disabled={isExporting}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-[12px] font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-45"
+              >
+                {cameraMode === 'fixed' ? <Lock className="h-3.5 w-3.5" /> : <Move3D className="h-3.5 w-3.5" />}
+                {cameraMode === 'fixed' ? 'Fixed Camera' : 'Orbit Camera'}
+              </button>
+            </div>
+
+            <div className="relative border-t border-slate-200">
+              <div className="absolute left-4 top-4 z-10">
+                <div
+                  className="inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-[12px] font-semibold shadow-sm"
+                  style={{
+                    backgroundColor: `${phaseColor}18`,
+                    borderColor: `${phaseColor}55`,
+                    color: phaseColor,
+                  }}
+                >
+                  <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: phaseColor }} />
+                  {PHASE_LABEL[activePhase] || activePhase}
+                </div>
+              </div>
+
+              <div style={{ height: `${canvasHeight}px` }}>
+                <Canvas
+                  camera={{ position: [0, 0, 21.5], fov: 38, near: 0.1, far: 100 }}
+                  style={{ background: 'linear-gradient(180deg, #f8fafc 0%, #e2e8f0 100%)' }}
+                  gl={{ antialias: true }}
+                >
+                  <StoryScene data={data} currentStep={currentStep} cameraMode={cameraMode} />
+                </Canvas>
+              </div>
+            </div>
+
+            <div className="border-t border-slate-200 px-4 py-4">
+              <p className="text-[12px] font-semibold uppercase tracking-[0.18em] text-slate-500">Gate Aktif</p>
+              <p className="mt-1 text-[18px] font-semibold text-slate-900">Step {activeStep.step} · {activeStep.operation}</p>
+              <p className="mt-2 text-[14px] leading-7 text-slate-600">{activeStep.description}</p>
+              {activeStep.focus_input_bits && (
+                <div className="mt-3 inline-flex items-center gap-2 rounded-lg border border-violet-200 bg-violet-50 px-3 py-2 text-[13px] text-violet-700">
+                  <span className="font-semibold">Fokus dataset:</span>
+                  <span className="font-mono tracking-[0.2em]">{activeStep.focus_input_bits}</span>
+                </div>
+              )}
+              <ActiveMarkerStrip step={activeStep} nQubits={data.n_qubits} />
+            </div>
+          </div>
+
+            <div className="rounded-xl border border-slate-200 bg-white px-4 py-4">
+              <div className="flex flex-wrap items-center gap-3">
+                <button onClick={isPlaying ? handlePause : handlePlay} disabled={isExporting} className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-900 text-white hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-35">
+                  {isPlaying ? <Pause className="h-4 w-4" /> : <Play className="ml-0.5 h-4 w-4" />}
+                </button>
+
+                <button onClick={handleStep} disabled={isLastStep || isExporting} className="flex h-10 w-10 items-center justify-center rounded-full border border-slate-300 text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-35">
+                  <SkipForward className="h-4 w-4" />
+                </button>
+
+                <button onClick={handleReset} disabled={isExporting} className="flex h-10 w-10 items-center justify-center rounded-full border border-slate-300 text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-35">
+                  <RotateCcw className="h-4 w-4" />
+                </button>
+
+                <div className="ml-1 flex min-w-[220px] flex-1 items-center gap-2">
+                  <Gauge className="h-4 w-4 text-slate-500" />
+                  <input type="range" min={250} max={2000} step={100} value={speed} disabled={isExporting} onChange={(event) => setSpeed(Number(event.target.value))} className="h-1.5 flex-1 accent-violet-600 disabled:cursor-not-allowed disabled:opacity-40" />
+                  <span className="w-[62px] text-[11px] text-slate-600">{speed}ms</span>
+                </div>
+
+                <span className="font-mono text-[12px] text-slate-500">{currentStep + 1}/{totalSteps}</span>
+
+                <button
+                  onClick={handleExportVideo}
+                  disabled={isExporting || !supportedVideoMimeType}
+                  className="ml-auto inline-flex items-center gap-2 rounded-lg border border-violet-300 bg-violet-50 px-3.5 py-2 text-[12px] font-semibold text-violet-700 hover:bg-violet-100 disabled:cursor-not-allowed disabled:opacity-45"
+                >
+                  {isExporting ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Video className="h-4 w-4" />}
+                  {isExporting ? 'Mengekspor Video Quantum 1080p...' : 'Export Video Quantum 1080p (.webm)'}
+                </button>
+              </div>
+
+              <div className="mt-3 h-2 w-full overflow-hidden rounded-full bg-slate-100">
+                <div className="h-full rounded-full transition-all duration-300" style={{ width: `${((currentStep + 1) / totalSteps) * 100}%`, backgroundColor: phaseColor }} />
+              </div>
+
+              <div className="mt-3 flex flex-wrap items-start justify-between gap-3 text-[12px] leading-6 text-slate-500">
+                <p>
+                  Export merekam canvas khusus `1920x1080` agar video quantum tetap tajam. Caption penjelasan otomatis ikut masuk, panel samping tidak direkam.
+                </p>
+                {!supportedVideoMimeType && (
+                  <p className="text-rose-600">
+                    Browser belum mendukung export video WebM. Gunakan Chrome, Edge, atau Firefox terbaru.
+                  </p>
+                )}
+                {exportError && (
+                  <p className="text-rose-600">
+                    {exportError}
+                  </p>
+                )}
+              </div>
+            </div>
         </div>
 
-        <button
-          onClick={() => setShowTokens((prev) => !prev)}
-          className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 px-3 py-1.5 text-[11px] text-slate-700 hover:bg-slate-50"
-        >
-          {showTokens ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
-          {showTokens ? 'Sembunyikan token data oracle' : 'Tampilkan token data oracle'}
-        </button>
-      </div>
-
-      <div className="px-4 pb-4">
-        <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-[11px] text-slate-600">
-          <strong className="text-slate-800">Catatan:</strong> Orb menunjukkan state qubit. Token data oracle hanya contoh data input/output oracle dari dataset, bukan state qubit.
+        <div className="space-y-4">
+          <TruthTablePanel data={data} activeBits={activeStep.focus_input_bits} />
+          <FinalAmplitudePanel data={data} />
+          <MeasurementPanel data={data} />
         </div>
       </div>
 
-      <div className="relative mx-4 rounded-xl border border-slate-300 overflow-hidden" style={{ height: '480px' }}>
-        <Canvas
-          camera={{ position: [0, -0.5, 20], fov: 36, near: 0.1, far: 100 }}
-          style={{ background: 'linear-gradient(180deg, #f8fafc 0%, #e2e8f0 100%)' }}
-          gl={{ antialias: true }}
+      {isExporting && (
+        <div
+          aria-hidden="true"
+          style={{
+            position: 'fixed',
+            left: '-10000px',
+            top: '0',
+            width: `${EXPORT_VIDEO_WIDTH}px`,
+            height: `${EXPORT_VIDEO_HEIGHT}px`,
+            opacity: 0,
+            pointerEvents: 'none',
+          }}
         >
-          <StoryScene data={data} currentStep={currentStep} cameraMode={cameraMode} showTokens={showTokens} />
-        </Canvas>
-
-        <div className="absolute left-3 top-3">
-          <div
-            className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[11px] font-semibold shadow-sm"
-            style={{
-              backgroundColor: `${phaseColor}22`,
-              color: phaseColor,
-              border: `1px solid ${phaseColor}66`,
+          <Canvas
+            dpr={1}
+            camera={{ position: [0, 0, 21.5], fov: 38, near: 0.1, far: 100 }}
+            style={{ width: `${EXPORT_VIDEO_WIDTH}px`, height: `${EXPORT_VIDEO_HEIGHT}px` }}
+            gl={{ antialias: true, preserveDrawingBuffer: true, powerPreference: 'high-performance' }}
+            onCreated={({ gl }) => {
+              gl.setPixelRatio(1);
+              gl.setSize(EXPORT_VIDEO_WIDTH, EXPORT_VIDEO_HEIGHT, false);
+              exportRendererCanvasRef.current = gl.domElement;
             }}
           >
-            <span className="h-2 w-2 rounded-full" style={{ backgroundColor: phaseColor }} />
-            {PHASE_LABEL[activeGatePhase] || activeGatePhase}
-          </div>
+            <StoryScene data={data} currentStep={currentStep} cameraMode={cameraMode} />
+          </Canvas>
         </div>
-
-        <div className="absolute right-3 top-3">
-          <button
-            onClick={() => setCameraMode((prev) => (prev === 'fixed' ? 'orbit' : 'fixed'))}
-            className="inline-flex items-center gap-1 rounded-lg border border-slate-300 bg-white/95 px-2.5 py-1 text-[11px] text-slate-700 hover:bg-white"
-          >
-            {cameraMode === 'fixed' ? <Lock className="h-3.5 w-3.5" /> : <Move3D className="h-3.5 w-3.5" />}
-            {cameraMode === 'fixed' ? 'Fixed Camera' : 'Orbit Camera'}
-          </button>
-        </div>
-
-        <div className="absolute bottom-3 left-3 right-3">
-          <div className="rounded-lg border border-slate-300 bg-white/95 px-3 py-2 shadow-sm">
-            <p className="text-[12px] font-semibold text-slate-800">{footerTitle}</p>
-            <p className="mt-0.5 text-[11px] text-slate-600">{footerDescription}</p>
-          </div>
-        </div>
-      </div>
-
-      <div className="px-4 pb-4 pt-4">
-        <div className="flex items-center gap-3">
-          <button onClick={isPlaying ? handlePause : handlePlay} className="flex h-9 w-9 items-center justify-center rounded-full bg-slate-900 text-white hover:bg-slate-700">
-            {isPlaying ? <Pause className="h-4 w-4" /> : <Play className="ml-0.5 h-4 w-4" />}
-          </button>
-
-          <button onClick={handleStep} disabled={isLastStep} className="flex h-9 w-9 items-center justify-center rounded-full border border-slate-300 text-slate-700 hover:bg-slate-100 disabled:opacity-35">
-            <SkipForward className="h-4 w-4" />
-          </button>
-
-          <button onClick={handleReset} className="flex h-9 w-9 items-center justify-center rounded-full border border-slate-300 text-slate-700 hover:bg-slate-100">
-            <RotateCcw className="h-4 w-4" />
-          </button>
-
-          <div className="ml-2 flex flex-1 items-center gap-2">
-            <Gauge className="h-3.5 w-3.5 text-slate-500" />
-            <input
-              type="range"
-              min={200}
-              max={2200}
-              step={100}
-              value={speed}
-              onChange={(event) => setSpeed(Number(event.target.value))}
-              className="h-1 flex-1 accent-violet-600"
-            />
-            <span className="w-[56px] text-[10px] text-slate-600">{speed}ms</span>
-          </div>
-
-          <span className="font-mono text-[11px] text-slate-500">{currentStep + 1}/{totalSteps}</span>
-        </div>
-
-        <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-slate-200">
-          <div
-            className="h-full rounded-full transition-all duration-300"
-            style={{ width: `${((currentStep + 1) / totalSteps) * 100}%`, backgroundColor: phaseColor }}
-          />
-        </div>
-
-        {isLastStep && (
-          <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
-            <div className={`rounded-lg px-5 py-2 text-sm font-bold text-white ${data.measurement.classification === 'CONSTANT' ? 'bg-blue-600' : 'bg-orange-600'}`}>
-              {data.measurement.classification}
-            </div>
-
-            <div className="flex flex-wrap gap-1">
-              {Object.entries(data.measurement.counts).map(([state, count]) => (
-                <span key={state} className="rounded border border-slate-200 bg-slate-100 px-2 py-0.5 font-mono text-[10px]">
-                  |{state}{'>'}:{count}
-                </span>
-              ))}
-            </div>
-          </div>
-        )}
-      </div>
+      )}
     </div>
   );
 }

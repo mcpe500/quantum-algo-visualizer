@@ -24,6 +24,7 @@ export default function DJCombinedPage() {
   const [quantumTrace, setQuantumTrace] = useState<DJQuantumTrace | null>(null);
   const [animationData, setAnimationData] = useState<DJAnimationPayload | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [isVideoExporting, setIsVideoExporting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'classic' | 'quantum'>('classic');
 
@@ -160,7 +161,7 @@ export default function DJCombinedPage() {
     <div className="min-h-screen bg-[#FAFAFA] p-4 md:p-8">
       <Link
         to="/"
-        className="inline-flex items-center gap-2 text-gray-600 hover:text-gray-900 mb-6 transition-colors"
+        className={`inline-flex items-center gap-2 text-gray-600 hover:text-gray-900 mb-6 transition-colors ${isVideoExporting ? 'pointer-events-none opacity-45' : ''}`}
       >
         <ArrowLeft className="w-4 h-4" />
         Back to Algorithms
@@ -168,7 +169,7 @@ export default function DJCombinedPage() {
 
       <Link
         to="/dj/dataset"
-        className="inline-flex items-center gap-2 text-blue-600 hover:text-blue-800 mb-6 ml-6 transition-colors"
+        className={`inline-flex items-center gap-2 text-blue-600 hover:text-blue-800 mb-6 ml-6 transition-colors ${isVideoExporting ? 'pointer-events-none opacity-45' : ''}`}
       >
         <Grid className="w-4 h-4" />
         Dataset
@@ -179,6 +180,7 @@ export default function DJCombinedPage() {
           <select
             value={selectedCaseId}
             onChange={(e) => setSelectedCaseId(e.target.value)}
+            disabled={isVideoExporting}
             className="px-4 py-2 border-2 border-dashed border-gray-300 rounded-lg text-sm text-gray-700 bg-white hover:border-gray-400 transition-all cursor-pointer font-mono"
           >
             {availableCases.map((caseId) => (
@@ -188,7 +190,7 @@ export default function DJCombinedPage() {
 
           <button
             onClick={handleRun}
-            disabled={isLoading}
+            disabled={isLoading || isVideoExporting}
             className="px-4 py-2 bg-gray-900 text-white text-sm font-medium rounded-lg hover:bg-gray-800 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
           >
             <Play className="w-4 h-4" />
@@ -198,6 +200,7 @@ export default function DJCombinedPage() {
           {(classicalResult || benchmarkResult) && (
             <button
               onClick={handleDownload}
+              disabled={isVideoExporting}
               className="px-4 py-2 border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-100 transition-all flex items-center gap-2"
             >
               <Download className="w-4 h-4" />
@@ -219,6 +222,7 @@ export default function DJCombinedPage() {
               <div className="inline-flex bg-gray-100 p-1 rounded-lg">
                 <button
                   onClick={() => setActiveTab('classic')}
+                  disabled={isVideoExporting}
                   className={`px-4 py-2 rounded-md text-sm font-medium flex items-center gap-2 transition-all ${
                     activeTab === 'classic'
                       ? 'bg-white text-gray-900 shadow-sm'
@@ -230,6 +234,7 @@ export default function DJCombinedPage() {
                 </button>
                 <button
                   onClick={() => setActiveTab('quantum')}
+                  disabled={isVideoExporting}
                   className={`px-4 py-2 rounded-md text-sm font-medium flex items-center gap-2 transition-all ${
                     activeTab === 'quantum'
                       ? 'bg-white text-gray-900 shadow-sm'
@@ -267,8 +272,8 @@ export default function DJCombinedPage() {
             {/* Quantum Tab Content */}
             {activeTab === 'quantum' && benchmarkResult && (
               <>
-                {animationData && quantumTrace && (
-                  <DJQuantumAnimation data={animationData} trace={quantumTrace} />
+                {animationData && (
+                  <DJQuantumAnimation data={animationData} onExportingChange={setIsVideoExporting} />
                 )}
                 <QuantumVisualization 
                   quantum={benchmarkResult.quantum}
