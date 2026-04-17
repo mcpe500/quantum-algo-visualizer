@@ -22,12 +22,10 @@ import { wait, waitForAnimationFrames, waitForCanvasReady } from './animation/he
 import {
   ActiveMarkerStrip,
   DetailCard,
-  FinalAmplitudePanel,
   MeasurementPanel,
   OracleConstructionPanel,
   PhaseStepper,
   ReadingGuideCard,
-  StateSummaryPanel,
   TruthTablePanel,
 } from './animation/panels';
 import { StoryScene } from './animation/scene-primitives';
@@ -376,7 +374,7 @@ export function DJQuantumAnimation({ data, onExportingChange }: DJQuantumAnimati
 
       <PhaseStepper partitions={data.partitions} activePhase={activePhase} activeStep={activeStep} onJumpPhase={handleJumpPhase} disabled={isExporting || isConverting} />
 
-      <div className="grid gap-4 px-4 pb-4 xl:grid-cols-[minmax(0,2fr)_minmax(320px,0.95fr)]">
+      <div className="grid gap-4 px-4 pb-4 xl:grid-cols-[1fr_380px]">
         <div className="space-y-4">
           <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
             <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
@@ -519,12 +517,18 @@ export function DJQuantumAnimation({ data, onExportingChange }: DJQuantumAnimati
         </div>
 
         <div className="space-y-4">
-          <ReadingGuideCard step={activeStep} nQubits={data.n_qubits} totalSteps={totalSteps} />
-          <StateSummaryPanel step={activeStep} nQubits={data.n_qubits} />
-          <TruthTablePanel data={data} activeBits={activeStep.focus_input_bits} />
-          <OracleConstructionPanel data={data} activeBits={activeStep.focus_input_bits} />
-          <FinalAmplitudePanel data={data} />
-          <MeasurementPanel data={data} />
+          <div className="px-0">
+            <ReadingGuideCard step={activeStep} nQubits={data.n_qubits} totalSteps={totalSteps} />
+          </div>
+          <div className="px-0">
+            <TruthTablePanel data={data} activeBits={activeStep.focus_input_bits} />
+          </div>
+          <div className="px-0">
+            <OracleConstructionPanel data={data} activeBits={activeStep.focus_input_bits} />
+          </div>
+          <div className="px-0">
+            <MeasurementPanel data={data} />
+          </div>
         </div>
       </div>
 
