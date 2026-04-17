@@ -208,91 +208,103 @@ function hasMarker(step: DJAnimationStep, marker: string, nQubits: number) {
 }
 
 function getStepHeadline(step: DJAnimationStep) {
-  if (step.phase === 'init') return 'Set register awal';
+  if (step.phase === 'pre-init') return 'Semua qubit mulai dari |0\u27E9';
+  if (step.phase === 'init') return 'Siapkan register qubit';
   if (step.phase === 'prep') {
-    if (step.ancilla_marker === 'H') return 'Bentuk |−⟩ pada ancilla';
+    if (step.ancilla_marker === 'H') return 'Ancilla \u2192 |\u2212\u27E9';
     return 'Masuk ke superposisi';
   }
   if (step.phase === 'oracle') {
     if (step.operation.toLowerCase().includes('flip') && step.focus_input_bits) {
-      return `Siapkan kontrol untuk input ${step.focus_input_bits}`;
+      return `Balik kontrol untuk input ${step.focus_input_bits}`;
     }
-    if (step.focus_input_bits) return `Terapkan oracle untuk input ${step.focus_input_bits}`;
+    if (step.focus_input_bits) return `Evaluasi oracle: input ${step.focus_input_bits}`;
     return 'Terapkan oracle';
   }
-  if (step.phase === 'interference') return 'Gabungkan fase menjadi amplitudo';
-  if (step.phase === 'measure') return 'Ukur qubit input';
+  if (step.phase === 'interference') return 'Pisahkan fase \u2192 amplitudo';
+  if (step.phase === 'measure') return 'Ukur semua input';
   return step.operation;
 }
 
 function getStepExplanation(step: DJAnimationStep, totalSteps: number) {
+  if (step.phase === 'pre-init') {
+    return 'Setiap qubit dimulai dari keadaan |0\u27E9. Pada Bloch sphere, panah menunjuk lurus ke atas (kutub utara).';
+  }
   if (step.phase === 'init') {
-    return 'Semua qubit mulai dari |0⟩ (vector menunjuk ke North Pole). Gerbang X merotasi ancilla 180° ke |1⟩. Gerbang H merotasi input qubits 90° ke bidang equator (superposisi).';
+    return 'Ancilla diputar ke |1\u27E9, lalu semua input diberi gerbang H sehingga masuk superposisi \u2014 pertengahan antara |0\u27E9 dan |1\u27E9.';
   }
   if (step.phase === 'prep') {
     if (step.ancilla_marker === 'H') {
-      return 'Gerbang H pada ancilla merotasi 90° dari sumbu Z ke sumbu X negatif, membentuk |−⟩ = (|0⟩ − |1⟩)/√2. Vector ancilla sekarang menunjuk ke −X, siap untuk phase kickback.';
+      return 'Gerbang H pada ancilla membentuk |\u2212\u27E9. Ini membuat salinan \u201cnegatif\u201d dari superposisi, yang memungkinkan oracle menulis jawabannya di fase.';
     }
-    return 'Gerbang Hadamard (H) merotasi vector input 90° ke bidang equator, membentuk superposisi. Semua input diuji sekaligus dalam satu sirkuit.';
+    return 'Gerbang H membuat superposisi. Semua input diuji sekaligus dalam satu sirkuit.';
   }
   if (step.phase === 'oracle') {
     if (step.operation.toLowerCase().includes('flip') && step.focus_input_bits) {
-      return `Gerbang X membalik qubit kontrol dari |0⟩ ke |1⟩ (rotasi 180°). Ini agar pola ${step.focus_input_bits} cocok dengan kondisi MCX yang membutuhkan semua kontrol = 1.`;
+      return `Qubit yang bernilai 0 dibalik jadi 1 agar pola input ${step.focus_input_bits} bisa diuji oleh gerbang MCX.`;
     }
     if ((step.operation.toLowerCase().includes('mcx') || step.operation.toLowerCase().includes('cnot')) && step.focus_input_bits) {
-      return `MCX gate: semua qubit input = 1abelle menyebabkan phase kickback pada ancilla. Vector ancilla berputar 180° dalam φ. Ini adalah informasi quantum yang dikodekan dalam fase.`;
+      return `Gerbang multi-controlled X mengevaluasi f(${step.focus_input_bits}). Jika hasilnya 1, fase ancilla berubah \u2014 ini cara quantum menyimpan jawaban.`;
     }
     if (step.operation.toLowerCase().includes('restore') && step.focus_input_bits) {
-      return `Gerbang X merestore qubit kontrol kembali ke |0⟩. Ini membalikkan rotasi 180° sebelumnya, mengembalikan vector ke posisi semula.`;
+      return `Qubit kontrol dikembalikan ke keadaan semula agar siap untuk pola input berikutnya.`;
+    }
+    if (step.operation === 'Oracle I') {
+      return 'Oracle constant-zero tidak melakukan apa-apa. Semua input mendapat perlakuan sama.';
+    }
+    if (step.operation === 'Oracle X(anc)') {
+      return 'Oracle constant-one cukup membalik ancilla. Semua input menghasilkan output 1.';
     }
     return step.description;
   }
   if (step.phase === 'interference') {
-    return 'Hadamard akhir merotasi vector input qubits 90° kembali ke sumbu Z. Phase dari oracle menentukan apakah vector menunjuk ke |0⟩ atau |1⟩. Ini mengubah informasi fase menjadi amplitude terukur.';
+    return 'Gerbang H terakhir mengubah fase yang sudah disimpan menjadi amplitudo yang bisa diukur. Jika oracle constant, semua input kembali ke |0\u27E9.';
   }
   if (step.phase === 'measure') {
-    return 'Qubit input diukur. Jika semua vector menunjuk ke |0⟩ → CONSTANT. Jika ada vector menunjuk ke |1⟩ → BALANCED. Ini adalah pembacaan hasil akhir algoritma.';
+    return 'Setiap input diukur. Hasilnya: semua 0 \u2192 CONSTANT, ada yang 1 \u2192 BALANCED.';
   }
   return step.description || `Langkah ${step.step} dari ${totalSteps}.`;
 }
 
 function getStepAccent(step: DJAnimationStep, totalSteps: number) {
-  if (step.phase === 'init') return 'Setiap qubit direpresentasikan sebagai Bloch sphere dengan vector yang menunjuk ke состояние quantum.';
-  if (step.phase === 'prep') return 'Gerakan fokus pembacaan berpindah ke kolom aktif, bukan qubit berjalan secara fisik.';
-  if (step.focus_input_bits) return `Pola dataset aktif: ${step.focus_input_bits}`;
+  if (step.phase === 'pre-init') return 'Keadaan awal sebelum operasi';
+  if (step.phase === 'init') return 'X = flip, H = superposisi';
+  if (step.phase === 'prep') return 'Phase kickback butuh |\u2212\u27E9';
+  if (step.focus_input_bits) return `Pola dataset: ${step.focus_input_bits}`;
+  if (step.phase === 'interference') return 'Fase \u2192 amplitudo \u2192 terukur';
+  if (step.phase === 'measure') return 'Baca hasil akhir';
   return `Langkah ${step.step} dari ${totalSteps}`;
 }
 
 function getContextGlossary(step: DJAnimationStep, nQubits: number) {
   const notes = [
-    'Qubit = Bloch sphere dengan vector state.',
-    'Gate menyala = operasi pada kolom itu sedang diterapkan.',
-    'Ancilla = qubit bantu untuk phase kickback.',
-    'Vector menunjuk ke состояние qubit pada sphere.',
+    'Panah pada sphere = keadaan qubit saat ini',
+    'Kolom menyala = operasi sedang diterapkan',
+    'Ancilla = qubit bantu untuk menyimpan jawaban oracle',
   ];
 
   if (hasMarker(step, 'H', nQubits)) {
-    notes.push('H = Hadamard, merotasi vector 90° untuk membentuk superposisi.');
+    notes.push('H = Hadamard, membuat superposisi');
   }
 
   if (step.phase === 'prep' && step.ancilla_marker === 'H') {
-    notes.push('|−⟩ = (|0⟩ − |1⟩)/√2, vector menunjuk ke −X.');
+    notes.push('|\u2212\u27E9 = salinan negatif superposisi');
   }
 
-  if (hasMarker(step, '●', nQubits)) {
-    notes.push('● = qubit control yang harus aktif.');
+  if (hasMarker(step, '\u25CF', nQubits)) {
+    notes.push('\u25CF = kontrol, harus aktif (=1)');
   }
 
-  if (hasMarker(step, '⊕', nQubits)) {
-    notes.push('⊕ = target X, biasanya di ancilla.');
+  if (hasMarker(step, '\u2295', nQubits)) {
+    notes.push('\u2295 = target X (ancilla)');
   }
 
-  if (step.operation.toLowerCase().includes('mcx') || (hasMarker(step, '●', nQubits) && hasMarker(step, '⊕', nQubits))) {
-    notes.push('MCX = multi-controlled X gate.');
+  if (step.operation.toLowerCase().includes('mcx') || (hasMarker(step, '\u25CF', nQubits) && hasMarker(step, '\u2295', nQubits))) {
+    notes.push('MCX = multi-controlled X');
   }
 
   if (step.phase === 'interference') {
-    notes.push('H akhir merotasi vector input 90° untuk memisahkan fase.');
+    notes.push('H akhir memisahkan fase jadi amplitudo');
   }
 
   return Array.from(new Set(notes)).slice(0, 6);
@@ -302,8 +314,8 @@ function getExportNarration(mode: ExportOverlayMode, data: DJAnimationPayload, s
   if (mode === 'intro') {
     return {
       headline: 'Cara baca animasi Deutsch-Jozsa',
-      detail: 'Setiap qubit direpresentasikan sebagai Bloch sphere. Vector panah menunjuk ke состояние quantum aktual. 1 kolom = 1 operasi sirkuit.',
-      accent: 'Gate atau kolom yang menyala berarti operasi sedang diterapkan pada vector qubit.',
+      detail: 'Setiap qubit = Bloch sphere. Panah menunjuk ke keadaan quantum aktual. 1 kolom = 1 operasi sirkuit.',
+      accent: 'Kolom yang menyala berarti operasi sedang diterapkan pada qubit.',
     };
   }
 
@@ -311,14 +323,14 @@ function getExportNarration(mode: ExportOverlayMode, data: DJAnimationPayload, s
     return {
       headline: `Hasil akhir: ${data.measurement.classification}`,
       detail: data.measurement.classification === 'CONSTANT'
-        ? 'Semua qubit input kembali ke 0. Ini berarti oracle memperlakukan semua input secara seragam.'
-        : 'Muncul bit input non-zero. Ini berarti oracle memberi pola fase berbeda untuk sebagian input.',
+        ? 'Semua qubit input kembali ke 0. Oracle memperlakukan semua input secara seragam.'
+        : 'Muncul bit input non-zero. Oracle memberi pola fase berbeda untuk sebagian input.',
       accent: formatCountsSummary(data.measurement.counts),
     };
   }
 
   return {
-    headline: `${PHASE_LABEL[step.phase] || step.phase} · ${getStepHeadline(step)}`,
+    headline: `${PHASE_LABEL[step.phase] || step.phase} \u00B7 ${step.comment || getStepHeadline(step)}`,
     detail: getStepExplanation(step, data.timeline.length),
     accent: getStepAccent(step, data.timeline.length),
   };
@@ -619,11 +631,13 @@ function BlochSphereNode({
   targetX,
   phaseColor,
   blochState,
+  p0,
 }: {
   y: number;
   targetX: number;
   phaseColor: string;
   blochState: { bx: number; by: number; bz: number; label: string };
+  p0: number;
 }) {
   const groupRef = useRef<THREE.Group>(null);
   const matRef = useRef<THREE.MeshStandardMaterial>(null);
@@ -693,6 +707,10 @@ function BlochSphereNode({
 
       <Text position={[0, -0.52, 0]} fontSize={0.16} color={color} anchorX="center" anchorY="middle">
         {label}
+      </Text>
+
+      <Text position={[0, -0.74, 0]} fontSize={0.11} color="#94A3B8" anchorX="center" anchorY="middle">
+        {`P(|0\u27E9)=${Math.round(p0 * 100)}%`}
       </Text>
     </group>
   );
@@ -810,19 +828,21 @@ function StoryScene({
       ))}
 
       {qubitStates.map((pOne, index) => {
-        // const sphereOffset = currentStep === 0 ? 0 : Math.min(gap * 0.35, 0.6);
         const sphereOffset = 0;
+        const blochForQubit = blochStates && blochStates[index]
+          ? blochStates[index]
+          : { bx: 0, by: 0, bz: pOne < 0.15 ? 1 : pOne > 0.85 ? -1 : 0, label: pOne < 0.15 ? '|0\u27E9' : pOne > 0.85 ? '|1\u27E9' : '0|1' };
+        const computedP0 = blochStates && blochStates[index]
+          ? (1 + blochStates[index].bz) / 2
+          : (1 - pOne);
         return (
           <BlochSphereNode
             key={`orb-${index}`}
             y={laneYs[index]}
             targetX={columnXs[currentStep] + sphereOffset}
             phaseColor={phaseColor}
-            blochState={
-              blochStates && blochStates[index]
-                ? blochStates[index]
-                : { bx: 0, by: 0, bz: pOne < 0.15 ? 1 : pOne > 0.85 ? -1 : 0, label: pOne < 0.15 ? '|0⟩' : pOne > 0.85 ? '|1⟩' : '0|1' }
-            }
+            blochState={blochForQubit}
+            p0={computedP0}
           />
         );
       })}
@@ -878,7 +898,10 @@ function PhaseStepper({
 
       <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
         <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Active Column</p>
-        <p className="mt-1 text-[15px] font-semibold text-slate-900">Step {activeStep.step} · {activeStep.operation}</p>
+        <p className="mt-1 text-[15px] font-semibold text-slate-900">Step {activeStep.step} \u00B7 {activeStep.operation}</p>
+        {activeStep.comment && (
+          <p className="mt-1 text-[13px] font-medium text-violet-600">{activeStep.comment}</p>
+        )}
         <p className="mt-1 text-[13px] leading-6 text-slate-600">{activeStep.description}</p>
       </div>
     </div>
@@ -903,20 +926,69 @@ function ActiveMarkerStrip({ step, nQubits }: { step: DJAnimationStep; nQubits: 
   );
 }
 
-function ReadingGuideCard({ step, nQubits }: { step: DJAnimationStep; nQubits: number }) {
+function ReadingGuideCard({ step, nQubits, totalSteps }: { step: DJAnimationStep; nQubits: number; totalSteps: number }) {
   const notes = getContextGlossary(step, nQubits);
 
   return (
     <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-4">
       <p className="text-[12px] font-semibold uppercase tracking-[0.18em] text-slate-500">Cara Baca Animasi</p>
       <p className="mt-2 text-[16px] font-semibold text-slate-900">{getStepHeadline(step)}</p>
-      <p className="mt-2 text-[14px] leading-7 text-slate-600">{getStepExplanation(step, step.step)}</p>
+      {step.comment && (
+        <p className="mt-1 text-[13px] font-medium text-violet-600">{step.comment}</p>
+      )}
+      <p className="mt-2 text-[14px] leading-7 text-slate-600">{getStepExplanation(step, totalSteps)}</p>
       <div className="mt-3 flex flex-wrap gap-2">
         {notes.map((note) => (
           <span key={note} className="inline-flex rounded-full border border-slate-200 bg-white px-3 py-1.5 text-[12px] leading-5 text-slate-600">
             {note}
           </span>
         ))}
+      </div>
+    </div>
+  );
+}
+
+function StateSummaryPanel({ step, nQubits }: { step: DJAnimationStep; nQubits: number }) {
+  if (!step.bloch_states || step.bloch_states.length === 0) return null;
+
+  return (
+    <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-4">
+      <p className="text-[12px] font-semibold uppercase tracking-[0.18em] text-slate-500">Ringkasan State</p>
+      <div className="mt-2 overflow-x-auto">
+        <table className="w-full text-[12px]">
+          <thead>
+            <tr className="border-b border-slate-200 text-left">
+              <th className="pb-1.5 pr-3 font-semibold text-slate-500">Qubit</th>
+              <th className="pb-1.5 pr-3 font-semibold text-slate-500">State</th>
+              <th className="pb-1.5 pr-3 font-semibold text-slate-500">\u03B8</th>
+              <th className="pb-1.5 pr-3 font-semibold text-slate-500">\u03C6</th>
+              <th className="pb-1.5 pr-3 font-semibold text-slate-500">P(|0\u27E9)</th>
+              <th className="pb-1.5 font-semibold text-slate-500">P(|1\u27E9)</th>
+            </tr>
+          </thead>
+          <tbody>
+            {step.bloch_states.map((bs, i) => {
+              const p0 = (1 + bs.bz) / 2;
+              const p1 = 1 - p0;
+              const label = i < nQubits ? `q${i}` : 'anc';
+              const stateColor = Math.abs(bs.bz - 1) < 0.05
+                ? 'text-blue-600'
+                : Math.abs(bs.bz + 1) < 0.05
+                  ? 'text-orange-600'
+                  : 'text-violet-600';
+              return (
+                <tr key={`state-${i}`} className="border-b border-slate-100 last:border-0">
+                  <td className="py-1.5 pr-3 font-mono text-slate-700">{label}</td>
+                  <td className={`py-1.5 pr-3 font-semibold ${stateColor}`}>{bs.label}</td>
+                  <td className="py-1.5 pr-3 text-slate-600">{(bs.theta * 180 / Math.PI).toFixed(0)}\u00B0</td>
+                  <td className="py-1.5 pr-3 text-slate-600">{(bs.phi * 180 / Math.PI).toFixed(0)}\u00B0</td>
+                  <td className="py-1.5 pr-3 text-slate-600">{formatPercent(p0)}</td>
+                  <td className="py-1.5 text-slate-600">{formatPercent(p1)}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
       </div>
     </div>
   );
@@ -1539,7 +1611,10 @@ export function DJQuantumAnimation({ data, onExportingChange }: DJQuantumAnimati
 
             <div className="border-t border-slate-200 px-4 py-4">
               <p className="text-[12px] font-semibold uppercase tracking-[0.18em] text-slate-500">Gate Aktif</p>
-              <p className="mt-1 text-[18px] font-semibold text-slate-900">Step {activeStep.step} · {activeStep.operation}</p>
+              <p className="mt-1 text-[18px] font-semibold text-slate-900">Step {activeStep.step} \u00B7 {activeStep.operation}</p>
+              {activeStep.comment && (
+                <p className="mt-1 text-[14px] font-medium text-violet-600">{activeStep.comment}</p>
+              )}
               <p className="mt-2 text-[14px] leading-7 text-slate-600">{activeStep.description}</p>
               {activeStep.focus_input_bits && (
                 <div className="mt-3 inline-flex items-center gap-2 rounded-lg border border-violet-200 bg-violet-50 px-3 py-2 text-[13px] text-violet-700">
@@ -1620,7 +1695,8 @@ export function DJQuantumAnimation({ data, onExportingChange }: DJQuantumAnimati
         </div>
 
         <div className="space-y-4">
-          <ReadingGuideCard step={activeStep} nQubits={data.n_qubits} />
+          <ReadingGuideCard step={activeStep} nQubits={data.n_qubits} totalSteps={totalSteps} />
+          <StateSummaryPanel step={activeStep} nQubits={data.n_qubits} />
           <TruthTablePanel data={data} activeBits={activeStep.focus_input_bits} />
           <FinalAmplitudePanel data={data} />
           <MeasurementPanel data={data} />
