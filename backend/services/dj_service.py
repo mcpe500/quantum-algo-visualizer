@@ -108,6 +108,81 @@ def _statevector_probabilities(statevector):
     return [float(abs(value) ** 2) for value in statevector.data]
 
 
+def _compute_bloch_from_statevector(statevector_data, total_qubits, qubit_idx):
+    """Compute Bloch vector for a single qubit from full multi-qubit statevector.
+
+    Args:
+        statevector_data: list of complex amplitudes from Statevector.data
+        total_qubits: total number of qubits (input + ancilla)
+        qubit_idx: index of qubit to compute (0..total_qubits-1)
+
+    Returns:
+        dict with theta, phi, bx, by, bz, and human-readable label
+    """
+    N = total_qubits
+    dim = 2 ** N
+    statevec = np.array(statevector_data, dtype=complex)
+    statevec = statevec.reshape([2] * N)
+
+    rho_i = np.zeros((2, 2), dtype=complex)
+    for a in range(2):
+        for b in range(2):
+            idx_a = [slice(0, 2)] * N
+            idx_b = [slice(0, 2)] * N
+            idx_a[qubit_idx] = a
+            idx_b[qubit_idx] = b
+            rho_i[a, b] = np.sum(statevec[tuple(idx_a)] * np.conj(statevec[tuple(idx_b)]))
+
+    rho00 = float(np.real(rho_i[0, 0]))
+    rho11 = float(np.real(rho_i[1, 1]))
+    rho01 = rho_i[0, 1]
+    rho10 = rho_i[1, 0]
+
+    bz = rho00 - rho11
+    bx = 2.0 * float(np.real(rho01))
+    by = 2.0 * float(np.imag(rho01))
+
+    norm = math.sqrt(bx * bx + by * by + bz * bz)
+    if norm > 1e-8:
+        bx = bx / norm
+        by = by / norm
+        bz = bz / norm
+
+    theta = 2.0 * math.acos(max(-1.0, min(1.0, bz)))
+    phi = math.atan2(by, bx)
+
+    bx_val = float(np.clip(bx, -1.0, 1.0))
+    by_val = float(np.clip(by, -1.0, 1.0))
+    bz_val = float(np.clip(bz, -1.0, 1.0))
+
+    if abs(bz_val - 1.0) < 0.05:
+        label = '|0⟩'
+    elif abs(bz_val + 1.0) < 0.05:
+        label = '|1⟩'
+    elif abs(bx_val - 1.0) < 0.05:
+        label = '|+⟩'
+    elif abs(bx_val + 1.0) < 0.05:
+        label = '|−⟩'
+    elif abs(by_val - 1.0) < 0.05:
+        label = '|+i⟩'
+    elif abs(by_val + 1.0) < 0.05:
+        label = '|−i⟩'
+    elif abs(theta - math.pi / 2) < 0.2:
+        label = '0|1'
+    else:
+        label = 'ψ'
+
+    return {
+        'qubit': qubit_idx,
+        'theta': float(theta),
+        'phi': float(phi),
+        'bx': bx_val,
+        'by': by_val,
+        'bz': bz_val,
+        'label': label,
+    }
+
+
 def _extract_input_bits(operation):
     suffix = operation.split()[-1] if operation else ''
     return suffix if suffix and set(suffix).issubset({'0', '1'}) else None
@@ -188,6 +263,13 @@ def _build_animation_timeline(n_qubits, truth_table, stages):
             kind = 'measure'
 
         statevector = Statevector.from_instruction(qc)
+        sv_data = statevector.data
+
+        bloch_states = []
+        for qubit_idx in range(total_qubits):
+            bs = _compute_bloch_from_statevector(sv_data, total_qubits, qubit_idx)
+            bloch_states.append(bs)
+
         timeline.append({
             'step': stage['step'],
             'phase': phase,
@@ -199,6 +281,7 @@ def _build_animation_timeline(n_qubits, truth_table, stages):
             'focus_input_bits': focus_bits,
             'probabilities': _statevector_probabilities(statevector),
             'labels': labels,
+            'bloch_states': bloch_states,
         })
 
     final_probs = timeline[-1]['probabilities'] if timeline else _statevector_probabilities(Statevector.from_label('0' * total_qubits))

@@ -106,12 +106,23 @@ export interface DJAnimationOracleSummary {
   zeros_count: number;
 }
 
+export interface DJBlochState {
+  qubit: number;
+  theta: number;
+  phi: number;
+  bx: number;
+  by: number;
+  bz: number;
+  label: string;
+}
+
 export interface DJAnimationStep extends DJAnimationSnapshot {
   step: number;
   kind: string;
   wire_markers: Record<string, string>;
   ancilla_marker: string;
   focus_input_bits: string | null;
+  bloch_states?: DJBlochState[];
 }
 
 export interface DJAnimationTruthEntry {
