@@ -229,6 +229,22 @@ def _describe_animation_stage(stage, n_qubits):
     return 'Tahap sirkuit Deutsch-Jozsa yang dihitung dari dataset dan trace aktual.'
 
 
+def _get_step_comment(kind, focus_bits=None):
+    table = {
+        'pre-init': 'Keadaan awal |0\u27E9',
+        'init-register': 'Ancilla \u2192 |1\u27E9, input \u2192 superposisi',
+        'prep-ancilla': 'Ancilla \u2192 |\u2212\u27E9 untuk phase kickback',
+        'oracle-identity': 'Oracle constant: tidak ada operasi',
+        'oracle-constant-one': 'Oracle constant: flip ancilla',
+        'oracle-flip': 'Balik kontrol agar cocok',
+        'oracle-mcx': f'MCX: evaluasi f({focus_bits})' if focus_bits else 'MCX: evaluasi oracle',
+        'oracle-restore': 'Pulihkan kontrol ke semula',
+        'interference': 'H akhir: fase \u2192 amplitudo',
+        'measure': 'Ukur input \u2192 baca klasifikasi',
+    }
+    return table.get(kind, f'Tahap {kind}')
+
+
 def _build_animation_timeline(n_qubits, truth_table, stages):
     qr_in = QuantumRegister(n_qubits, 'q')
     qr_anc = QuantumRegister(1, 'anc')
@@ -290,6 +306,7 @@ def _build_animation_timeline(n_qubits, truth_table, stages):
             'kind': kind,
             'operation': operation,
             'description': _describe_animation_stage(stage, n_qubits),
+            'comment': _get_step_comment(kind, focus_bits),
             'wire_markers': stage['wire_markers'],
             'ancilla_marker': stage['ancilla_marker'],
             'focus_input_bits': focus_bits,

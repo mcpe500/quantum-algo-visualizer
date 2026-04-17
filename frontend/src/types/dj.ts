@@ -119,6 +119,7 @@ export interface DJBlochState {
 export interface DJAnimationStep extends DJAnimationSnapshot {
   step: number;
   kind: string;
+  comment: string;
   wire_markers: Record<string, string>;
   ancilla_marker: string;
   focus_input_bits: string | null;
