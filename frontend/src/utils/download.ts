@@ -20,3 +20,16 @@ export async function downloadElementAsPNG(
   link.href = canvas.toDataURL('image/png');
   link.click();
 }
+
+export function downloadBlob(blob: Blob, filename: string): void {
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+
+  link.download = filename;
+  link.href = url;
+  link.click();
+
+  window.setTimeout(() => {
+    URL.revokeObjectURL(url);
+  }, 1000);
+}

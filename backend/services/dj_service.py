@@ -70,7 +70,15 @@ def build_trace_by_layer(n_qubits, truth_table):
     col1_markers = {i: '-' for i in range(n_qubits)}
     col1_markers[anc_idx] = 'H'
     append_stage('H (anc)', col1_markers, 'prep')
-    if profile['is_balanced']:
+    if profile['is_constant_zero']:
+        oracle_markers = {i: '-' for i in range(n_qubits)}
+        oracle_markers[anc_idx] = '-'
+        append_stage('Oracle I', oracle_markers, 'oracle')
+    elif profile['is_constant_one']:
+        oracle_markers = {i: '-' for i in range(n_qubits)}
+        oracle_markers[anc_idx] = 'X'
+        append_stage('Oracle X(anc)', oracle_markers, 'oracle')
+    elif profile['is_balanced']:
         for input_bits in sorted(truth_table):
             if truth_table[input_bits] != 1:
                 continue
@@ -94,6 +102,113 @@ def build_trace_by_layer(n_qubits, truth_table):
 
 def build_trace_from_truth_table(n_qubits, truth_table):
     return build_trace_by_layer(n_qubits, truth_table)
+
+
+def _statevector_probabilities(statevector):
+    return [float(abs(value) ** 2) for value in statevector.data]
+
+
+def _extract_input_bits(operation):
+    suffix = operation.split()[-1] if operation else ''
+    return suffix if suffix and set(suffix).issubset({'0', '1'}) else None
+
+
+def _describe_animation_stage(stage, n_qubits):
+    phase = stage['phase']
+    operation = stage['operation']
+    focus_bits = _extract_input_bits(operation)
+
+    if phase == 'init':
+        return 'Ancilla diubah ke |1⟩ dan semua qubit input diberi Hadamard agar register awal siap membentuk superposisi.'
+    if phase == 'prep':
+        return 'Hadamard pada ancilla membentuk |−⟩ sehingga oracle dapat menuliskan jawaban sebagai phase kickback.'
+    if phase == 'oracle' and operation == 'Oracle I':
+        return 'Kasus constant-zero. Oracle tidak memberi transformasi tambahan sehingga semua input tetap diperlakukan sama.'
+    if phase == 'oracle' and operation == 'Oracle X(anc)':
+        return 'Kasus constant-one. Oracle nyata cukup berupa X pada ancilla karena semua input menghasilkan keluaran 1.'
+    if phase == 'oracle' and operation.startswith('Flip') and focus_bits:
+        zeros = [f'q{idx}' for idx, bit in enumerate(focus_bits) if bit == '0']
+        if zeros:
+            return 'Qubit kontrol bernilai 0 dibalik sementara pada {} agar pola {} dapat dipetakan ke kondisi semua kontrol = 1.'.format(', '.join(zeros), focus_bits)
+        return 'Tidak ada pembalikan kontrol tambahan karena pola {} sudah semua 1.'.format(focus_bits)
+    if phase == 'oracle' and operation.startswith('CNOT') and focus_bits:
+        return 'MCX aktif untuk pola {}. Inilah evaluasi oracle nyata yang berasal langsung dari truth table dataset.'.format(focus_bits)
+    if phase == 'oracle' and operation.startswith('Restore') and focus_bits:
+        return 'Qubit kontrol dipulihkan setelah evaluasi pola {} agar sirkuit kembali ke basis semula sebelum kolom berikutnya.'.format(focus_bits)
+    if phase == 'interference':
+        return 'Hadamard akhir pada {} qubit input mengubah perbedaan fase menjadi pola amplitudo yang bisa dibaca saat pengukuran.'.format(n_qubits)
+    if phase == 'measure':
+        return 'Register input diukur. Jika semua hasil 0 maka fungsi CONSTANT, jika ada bit non-zero maka fungsi BALANCED.'
+    return 'Tahap sirkuit Deutsch-Jozsa yang dihitung dari dataset dan trace aktual.'
+
+
+def _build_animation_timeline(n_qubits, truth_table, stages):
+    qr_in = QuantumRegister(n_qubits, 'q')
+    qr_anc = QuantumRegister(1, 'anc')
+    qc = QuantumCircuit(qr_in, qr_anc)
+    total_qubits = n_qubits + 1
+    labels = [format(i, f'0{total_qubits}b') for i in range(2 ** total_qubits)]
+    timeline = []
+
+    for stage in stages:
+        phase = stage['phase']
+        operation = stage['operation']
+        focus_bits = _extract_input_bits(operation)
+        kind = phase
+
+        if phase == 'init' and operation == 'X H H':
+            qc.x(qr_anc[0])
+            qc.h(qr_in[:])
+            kind = 'init-register'
+        elif phase == 'prep' and operation == 'H (anc)':
+            qc.h(qr_anc[0])
+            kind = 'prep-ancilla'
+        elif phase == 'oracle' and operation == 'Oracle I':
+            kind = 'oracle-identity'
+        elif phase == 'oracle' and operation == 'Oracle X(anc)':
+            qc.x(qr_anc[0])
+            kind = 'oracle-constant-one'
+        elif phase == 'oracle' and operation.startswith('Flip') and focus_bits:
+            for idx, bit in enumerate(focus_bits):
+                if bit == '0':
+                    qc.x(qr_in[idx])
+            kind = 'oracle-flip'
+        elif phase == 'oracle' and operation.startswith('CNOT') and focus_bits:
+            qc.mcx(list(qr_in), qr_anc[0])
+            kind = 'oracle-mcx'
+        elif phase == 'oracle' and operation.startswith('Restore') and focus_bits:
+            for idx, bit in enumerate(focus_bits):
+                if bit == '0':
+                    qc.x(qr_in[idx])
+            kind = 'oracle-restore'
+        elif phase == 'interference' and operation == 'H (final)':
+            qc.h(qr_in[:])
+            kind = 'interference'
+        elif phase == 'measure':
+            kind = 'measure'
+
+        statevector = Statevector.from_instruction(qc)
+        timeline.append({
+            'step': stage['step'],
+            'phase': phase,
+            'kind': kind,
+            'operation': operation,
+            'description': _describe_animation_stage(stage, n_qubits),
+            'wire_markers': stage['wire_markers'],
+            'ancilla_marker': stage['ancilla_marker'],
+            'focus_input_bits': focus_bits,
+            'probabilities': _statevector_probabilities(statevector),
+            'labels': labels,
+        })
+
+    final_probs = timeline[-1]['probabilities'] if timeline else _statevector_probabilities(Statevector.from_label('0' * total_qubits))
+    input_probabilities = {}
+    for index, probability in enumerate(final_probs):
+        bits = format(index, f'0{total_qubits}b')
+        input_bits = bits[:n_qubits]
+        input_probabilities[input_bits] = input_probabilities.get(input_bits, 0.0) + probability
+
+    return timeline, input_probabilities
 
 def run_quantum_dj(n_qubits, truth_table, shots=1024):
     start = time.perf_counter()
@@ -165,7 +280,11 @@ def generate_quantum_pseudocode(case_id, n_qubits, stages):
         elif phase == 'prep' and step == 2:
             lines.append('05: H(anc)')
         elif phase == 'oracle':
-            if op.startswith('Flip'):
+            if op == 'Oracle I':
+                lines.append(f'{step + 2:02d}: ORACLE identitas [semua f(x)=0]')
+            elif op == 'Oracle X(anc)':
+                lines.append(f'{step + 2:02d}: X(anc) [semua f(x)=1]')
+            elif op.startswith('Flip'):
                 bits = op.split()[-1]
                 zero_idxs = [i for i, b in enumerate(bits) if b == '0']
                 if zero_idxs:
@@ -274,140 +393,18 @@ def get_dj_quantum_trace_grouped_payload(case_id):
     return {'case_id': case_id, 'n_qubits': n_qubits, 'classification': case['expected_classification'], 'partitions': partitions, 'stages': stages, 'pseudocode': pseudocode}
 
 
-def _build_anim_circuit_no_measure(n_qubits, truth_table):
-    qr_in = QuantumRegister(n_qubits, 'q')
-    qr_anc = QuantumRegister(1, 'anc')
-    total = n_qubits + 1
-    labels = [format(i, f'0{total}b') for i in range(2 ** total)]
-    snapshots = []
-
-    init_sv = Statevector.from_label('0' * total)
-    snapshots.append({
-        'phase': 'init',
-        'operation': 'Initial state |0...0⟩',
-        'description': '{} input qubits + 1 ancilla, semua |0⟩'.format(n_qubits),
-        'probabilities': [float(abs(v) ** 2) for v in init_sv.data],
-        'labels': labels,
-    })
-
-    qc = QuantumCircuit(qr_in, qr_anc)
-    snapshots.append({
-        'phase': 'init',
-        'operation': 'X on ancilla',
-        'description': 'Set ancilla ke |1⟩ untuk phase kickback',
-        'probabilities': [float(abs(v) ** 2) for v in init_sv.data],
-        'labels': labels,
-    })
-
-    qc.x(qr_anc[0])
-    sv = Statevector.from_instruction(qc)
-    snapshots.append({
-        'phase': 'init',
-        'operation': 'After X(anc)',
-        'description': 'Ancilla sekarang |1⟩, input masih |0⟩',
-        'probabilities': [float(abs(v) ** 2) for v in sv.data],
-        'labels': labels,
-    })
-
-    qc.h(qr_in[:])
-    qc.h(qr_anc[0])
-    sv = Statevector.from_instruction(qc)
-    snapshots.append({
-        'phase': 'prep',
-        'operation': 'H on all qubits',
-        'description': 'Superposisi: H pada semua input + ancilla → |+⟩...|+⟩|−⟩',
-        'probabilities': [float(abs(v) ** 2) for v in sv.data],
-        'labels': labels,
-    })
-
-    profile = truth_table_profile(truth_table)
-    if profile['is_constant_zero']:
-        snapshots.append({
-            'phase': 'oracle',
-            'operation': 'Oracle: Identity (f(x)=0)',
-            'description': 'Oracle constant-0: tidak ada operasi, state tidak berubah',
-            'probabilities': [float(abs(v) ** 2) for v in sv.data],
-            'labels': labels,
-        })
-    elif profile['is_constant_one']:
-        qc.x(qr_anc[0])
-        sv = Statevector.from_instruction(qc)
-        snapshots.append({
-            'phase': 'oracle',
-            'operation': 'Oracle: X on ancilla (f(x)=1)',
-            'description': 'Oracle constant-1: X pada ancilla, semua output sama',
-            'probabilities': [float(abs(v) ** 2) for v in sv.data],
-            'labels': labels,
-        })
-    else:
-        for input_bits in sorted(truth_table):
-            if truth_table[input_bits] != 1:
-                continue
-            zero_indices = [idx for idx, bit in enumerate(input_bits) if bit == '0']
-
-            for idx in zero_indices:
-                qc.x(qr_in[idx])
-            sv = Statevector.from_instruction(qc)
-            snapshots.append({
-                'phase': 'oracle',
-                'operation': 'Oracle: X flip for {}'.format(input_bits),
-                'description': 'Flip qubit {} agar kontrol semuanya |1⟩'.format(
-                    ' '.join('q{}'.format(i) for i in zero_indices)) if zero_indices else 'Tidak perlu flip',
-                'probabilities': [float(abs(v) ** 2) for v in sv.data],
-                'labels': labels,
-            })
-
-            qc.mcx(list(qr_in), qr_anc[0])
-            sv = Statevector.from_instruction(qc)
-            snapshots.append({
-                'phase': 'oracle',
-                'operation': 'Oracle: MCX for {} → anc'.format(input_bits),
-                'description': 'Multi-control-X: evaluasi f({})=1 via phase kickback'.format(input_bits),
-                'probabilities': [float(abs(v) ** 2) for v in sv.data],
-                'labels': labels,
-            })
-
-            for idx in zero_indices:
-                qc.x(qr_in[idx])
-            sv = Statevector.from_instruction(qc)
-            snapshots.append({
-                'phase': 'oracle',
-                'operation': 'Oracle: X restore for {}'.format(input_bits),
-                'description': 'Pulihkan qubit kontrol ke state semula',
-                'probabilities': [float(abs(v) ** 2) for v in sv.data],
-                'labels': labels,
-            })
-
-    qc.h(qr_in[:])
-    sv = Statevector.from_instruction(qc)
-    snapshots.append({
-        'phase': 'interference',
-        'operation': 'H on input qubits (interference)',
-        'description': 'Hadamard akhir: interferensi konstruktif (CONSTANT) atau destruktif (BALANCED)',
-        'probabilities': [float(abs(v) ** 2) for v in sv.data],
-        'labels': labels,
-    })
-
-    input_probs = {}
-    for i in range(2 ** total):
-        bits = format(i, f'0{total}b')
-        input_bits = bits[:n_qubits]
-        prob = abs(sv.data[i]) ** 2
-        input_probs[input_bits] = input_probs.get(input_bits, 0.0) + prob
-
-    return snapshots, input_probs
-
-
 def get_dj_animation_payload(case_id, shots=1024):
     case = get_dj_case_or_none(case_id)
     if not case:
         return None
     n_qubits = case['n_qubits']
     truth_table = case['oracle_definition']['truth_table']
-
-    snapshots, input_probs = _build_anim_circuit_no_measure(n_qubits, truth_table)
+    stages = build_trace_from_truth_table(n_qubits, truth_table)
+    partitions = partition_stage_groups(stages)
+    timeline, input_probs = _build_animation_timeline(n_qubits, truth_table, stages)
 
     quantum_result = run_quantum_dj(n_qubits, truth_table, shots)
+    profile = truth_table_profile(truth_table)
 
     truth_table_entries = []
     for bits in sorted(truth_table):
@@ -416,12 +413,31 @@ def get_dj_animation_payload(case_id, shots=1024):
             'output': truth_table[bits],
         })
 
+    snapshots = [
+        {
+            'phase': step['phase'],
+            'operation': step['operation'],
+            'description': step['description'],
+            'probabilities': step['probabilities'],
+            'labels': step['labels'],
+        }
+        for step in timeline
+    ]
+
     return {
         'case_id': case_id,
         'n_qubits': n_qubits,
         'total_qubits': n_qubits + 1,
         'expected_classification': case['expected_classification'],
         'truth_table': truth_table_entries,
+        'oracle_summary': {
+            'profile': 'constant-zero' if profile['is_constant_zero'] else 'constant-one' if profile['is_constant_one'] else 'balanced',
+            'total_inputs': profile['total'],
+            'ones_count': profile['num_ones'],
+            'zeros_count': profile['total'] - profile['num_ones'],
+        },
+        'partitions': partitions,
+        'timeline': timeline,
         'snapshots': snapshots,
         'measurement': {
             'counts': quantum_result['counts'],

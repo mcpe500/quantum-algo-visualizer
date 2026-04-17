@@ -123,7 +123,7 @@ function DatasetCard({ data, index, mounted }: DatasetCardProps) {
                         <th className="p-2 bg-slate-100 border border-slate-200 rounded-lg text-sm font-bold text-slate-600">
                           {rowNode}
                         </th>
-                        {data.graph.nodes.map((colNode, j) => {
+                        {data.graph.nodes.map((_, j) => {
                           const val = adjacencyMatrix[i][j];
                           return (
                             <td

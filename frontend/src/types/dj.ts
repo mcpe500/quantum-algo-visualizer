@@ -91,6 +91,29 @@ export interface DJAnimationSnapshot {
   labels: string[];
 }
 
+export interface DJAnimationPartition {
+  phase: string;
+  label: string;
+  count: number;
+  start_col: number;
+  end_col: number;
+}
+
+export interface DJAnimationOracleSummary {
+  profile: 'constant-zero' | 'constant-one' | 'balanced';
+  total_inputs: number;
+  ones_count: number;
+  zeros_count: number;
+}
+
+export interface DJAnimationStep extends DJAnimationSnapshot {
+  step: number;
+  kind: string;
+  wire_markers: Record<string, string>;
+  ancilla_marker: string;
+  focus_input_bits: string | null;
+}
+
 export interface DJAnimationTruthEntry {
   input: string;
   output: number;
@@ -113,6 +136,9 @@ export interface DJAnimationPayload {
   total_qubits: number;
   expected_classification: 'CONSTANT' | 'BALANCED';
   truth_table: DJAnimationTruthEntry[];
+  oracle_summary: DJAnimationOracleSummary;
+  partitions: DJAnimationPartition[];
+  timeline: DJAnimationStep[];
   snapshots: DJAnimationSnapshot[];
   measurement: DJAnimationMeasurement;
   input_probabilities: DJAnimationInputProb[];
