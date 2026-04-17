@@ -4,8 +4,12 @@ import {
   AlgorithmPageLayout,
   AlgorithmHeader,
   ClassicQuantumTabs,
+  PageEmptyState,
+  PageErrorBanner,
+  PageLoadingBanner,
 } from '../components/layout';
 import { VQEClassicTab, VQEQuantumTab } from '../components/vqe';
+import { CAPTURE_IDS } from '../constants/app';
 
 export default function VQECombinedPage() {
   const {
@@ -39,24 +43,14 @@ export default function VQECombinedPage() {
         hasResult={!!benchmarkResult}
       />
 
-      {/* Error */}
-      {error && (
-        <div className="mb-6 px-4 py-2 bg-red-100 border border-red-300 text-red-700 text-sm rounded-lg">
-          {error}
-        </div>
-      )}
+      {error && <PageErrorBanner message={error} />}
 
-      {/* Loading */}
       {isLoading && (
-        <div className="mb-6 px-4 py-3 bg-purple-50 border border-purple-200 text-purple-700 text-sm rounded-lg flex items-center gap-2">
-          <div className="w-4 h-4 border-2 border-purple-400 border-t-transparent rounded-full animate-spin" />
-          Menjalankan VQE... proses optimisasi mungkin memerlukan beberapa detik.
-        </div>
+        <PageLoadingBanner message="Menjalankan VQE... proses optimisasi mungkin memerlukan beberapa detik." />
       )}
 
-      {/* Results */}
       {benchmarkResult && (
-        <div id="vqe-capture" className="space-y-6">
+        <div id={CAPTURE_IDS.vqe} className="space-y-6">
           <ClassicQuantumTabs activeTab={activeTab} onChange={setActiveTab} />
 
           {activeTab === 'classic' && <VQEClassicTab result={benchmarkResult} />}
@@ -68,9 +62,7 @@ export default function VQECombinedPage() {
       )}
 
       {!benchmarkResult && !isLoading && (
-        <div className="text-center py-20">
-          <p className="text-gray-500">Pilih kasus dan klik "Jalankan" untuk memulai benchmarking VQE.</p>
-        </div>
+        <PageEmptyState message={'Pilih kasus dan klik "Jalankan" untuk memulai benchmarking VQE.'} />
       )}
     </AlgorithmPageLayout>
   );

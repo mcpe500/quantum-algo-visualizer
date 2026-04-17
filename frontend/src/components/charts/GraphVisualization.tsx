@@ -1,3 +1,9 @@
+const GRAPH_SIZE = 220;
+const SMALL_GRAPH_RADIUS = 70;
+const MEDIUM_GRAPH_RADIUS = 65;
+const LARGE_GRAPH_RADIUS = 55;
+const NODE_RADIUS = 18;
+
 interface GraphVisualizationProps {
   nodes: number[];
   edges: [number, number][];
@@ -11,11 +17,11 @@ export function GraphVisualization({
   partition,
   title,
 }: GraphVisualizationProps) {
-  const size = 220;
+  const size = GRAPH_SIZE;
   const cx = size / 2;
   const cy = size / 2;
-  const r = nodes.length <= 3 ? 70 : nodes.length <= 4 ? 65 : 55;
-  const nodeR = 18;
+  const r = nodes.length <= 3 ? SMALL_GRAPH_RADIUS : nodes.length <= 4 ? MEDIUM_GRAPH_RADIUS : LARGE_GRAPH_RADIUS;
+  const nodeR = NODE_RADIUS;
 
   const pos = nodes.map((_, i) => ({
     x: cx + r * Math.cos((2 * Math.PI * i) / nodes.length - Math.PI / 2),

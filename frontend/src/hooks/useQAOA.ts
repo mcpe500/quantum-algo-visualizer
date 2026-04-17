@@ -8,6 +8,7 @@ import type {
 import type { QAOACircuitImage } from '../services/api';
 import { sortCaseIds } from '../utils/sorting';
 import { downloadElementAsPNG } from '../utils/download';
+import { CAPTURE_IDS, DEFAULT_SHOTS } from '../constants/app';
 
 export interface UseQAOAReturn {
   selectedCaseId: string;
@@ -85,7 +86,7 @@ export function useQAOA(): UseQAOAReturn {
     setIsLoading(true);
     setError(null);
     try {
-      const params: QAOABenchmarkParams = { case_id: selectedCaseId, shots: 1024 };
+      const params: QAOABenchmarkParams = { case_id: selectedCaseId, shots: DEFAULT_SHOTS };
       const data = await qaoaApi.runBenchmark(params);
       setBenchmarkResult(data);
       await loadCircuitImage(selectedCaseId);
@@ -98,7 +99,7 @@ export function useQAOA(): UseQAOAReturn {
   }, [selectedCaseId, loadCircuitImage, loadTrace]);
 
   const handleDownload = useCallback(async () => {
-    await downloadElementAsPNG('qaoa-capture', `qaoa_${selectedCaseId}.png`);
+    await downloadElementAsPNG(CAPTURE_IDS.qaoa, `qaoa_${selectedCaseId}.png`);
   }, [selectedCaseId]);
 
   return {

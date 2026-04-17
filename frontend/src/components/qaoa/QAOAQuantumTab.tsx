@@ -6,7 +6,9 @@ import { ConvergenceChart } from '../charts/ConvergenceChart';
 import { CutDistributionChart } from '../charts/CutDistributionChart';
 import { CircuitDisplay } from '../layout/CircuitDisplay';
 import { TraceTable } from '../layout/TraceTable';
+import { InlineEmptyState, SectionCard } from '../layout';
 import { Cpu } from 'lucide-react';
+import { SURFACE_CLASSES, UI_MESSAGES } from '../../constants/ui';
 
 interface QAOAQuantumTabProps {
   result: QAOABenchmarkResult | null;
@@ -16,22 +18,12 @@ interface QAOAQuantumTabProps {
 
 export function QAOAQuantumTab({ result, circuitImage, trace }: QAOAQuantumTabProps) {
   if (!result) {
-    return (
-      <div className="text-center py-12">
-        <p className="text-gray-400">Belum ada data kuantum. Klik "Jalankan" dulu.</p>
-      </div>
-    );
+    return <InlineEmptyState message={UI_MESSAGES.emptyQuantum} />;
   }
 
   return (
     <div className="space-y-6">
-      {/* QAOA Metrics */}
-      <div className="bg-white border-2 border-gray-200 rounded-xl p-6">
-        <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
-          <Cpu className="w-5 h-5" />
-          Quantum Approximate Optimization Algorithm (QAOA)
-        </h2>
-
+      <SectionCard title="Quantum Approximate Optimization Algorithm (QAOA)" icon={<Cpu className="w-5 h-5" />}>
         <MetricsGrid>
           <MetricCard label="Qubits" value={result.quantum.n_qubits} />
           <MetricCard label="p Layers" value={result.quantum.p_layers} />
@@ -39,7 +31,6 @@ export function QAOAQuantumTab({ result, circuitImage, trace }: QAOAQuantumTabPr
           <MetricCard label="Gate Count" value={result.quantum.gate_count} />
         </MetricsGrid>
 
-        {/* QAOA Result cards */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
           <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
             <div className="text-xs text-purple-600 uppercase tracking-wide mb-1">QAOA Best Cut</div>
@@ -56,7 +47,6 @@ export function QAOAQuantumTab({ result, circuitImage, trace }: QAOAQuantumTabPr
           </div>
         </div>
 
-        {/* Optimal parameters */}
         <div className="flex flex-wrap gap-3 mb-6">
           {result.quantum.optimal_gamma.map((g, i) => (
             <span key={`g${i}`} className="px-3 py-1 bg-orange-100 text-orange-800 text-xs font-mono rounded-full">
@@ -73,7 +63,6 @@ export function QAOAQuantumTab({ result, circuitImage, trace }: QAOAQuantumTabPr
           </span>
         </div>
 
-        {/* Convergence chart */}
         {result.quantum.expected_cut_history.length > 0 && (
           <div className="mb-6">
             <ConvergenceChart
@@ -87,7 +76,6 @@ export function QAOAQuantumTab({ result, circuitImage, trace }: QAOAQuantumTabPr
           </div>
         )}
 
-        {/* Cut distribution */}
         {result.quantum.cut_distribution.length > 0 && (
           <div className="mb-6">
             <CutDistributionChart
@@ -97,15 +85,13 @@ export function QAOAQuantumTab({ result, circuitImage, trace }: QAOAQuantumTabPr
           </div>
         )}
 
-        {/* Circuit image */}
         <CircuitDisplay
           imageBase64={circuitImage?.image ?? null}
           title="QAOA Circuit"
           alt="QAOA Circuit"
         />
-      </div>
+      </SectionCard>
 
-      {/* Trace Table */}
       {trace && (
         <TraceTable
           stages={trace.stages}
@@ -114,9 +100,7 @@ export function QAOAQuantumTab({ result, circuitImage, trace }: QAOAQuantumTabPr
         />
       )}
 
-      {/* Comparison */}
-      <div className="bg-white border-2 border-gray-200 rounded-xl p-6">
-        <h2 className="text-lg font-semibold text-gray-900 mb-4">Comparison: Exact vs SA vs QAOA</h2>
+      <SectionCard title="Comparison: Exact vs SA vs QAOA">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
           <div className="bg-green-50 p-4 rounded-lg">
             <div className="text-xs text-green-600 uppercase tracking-wide mb-1">Exact (Brute Force)</div>
@@ -134,12 +118,12 @@ export function QAOAQuantumTab({ result, circuitImage, trace }: QAOAQuantumTabPr
             <div className="text-sm text-purple-700 mt-1">ratio: {result.comparison.qaoa_approx_ratio.toFixed(3)}</div>
           </div>
         </div>
-        <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
+        <div className={SURFACE_CLASSES.subtleCard}>
           <p className="text-sm text-amber-800">
             <strong>Note:</strong> {result.comparison.note}
           </p>
         </div>
-      </div>
+      </SectionCard>
     </div>
   );
 }

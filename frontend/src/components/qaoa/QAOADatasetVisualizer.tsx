@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { qaoaApi } from '../../services/api';
 import type { QAOACase } from '../../types/qaoa';
 import { GraphVisualization } from '../charts/GraphVisualization';
+import { sortCaseIds } from '../../utils/sorting';
 
 function inferGraphType(nodes: number[], edges: [number, number][]): string {
   const n = nodes.length;
@@ -188,9 +189,10 @@ export function QAOADatasetVisualizer() {
         setLoading(true);
         setError(null);
         const data = await qaoaApi.getCases();
-        const sorted = [...data].sort((a, b) =>
-          a.case_id.localeCompare(b.case_id, undefined, { numeric: true, sensitivity: 'base' })
-        );
+        const sortedIds = sortCaseIds(data.map((item) => item.case_id));
+        const sorted = sortedIds
+          .map((caseId) => data.find((item) => item.case_id === caseId))
+          .filter((item): item is QAOACase => Boolean(item));
         setCases(sorted);
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Gagal memuat dataset QAOA');

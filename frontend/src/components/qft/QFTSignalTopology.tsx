@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Activity, Waves, Zap, GitCommitHorizontal } from 'lucide-react';
 import { qftApi } from '../../services/api';
 import type { QFTCase } from '../../types/qft';
+import { sortCaseIds } from '../../utils/sorting';
 
 interface SignalWaveformProps {
   data: number[];
@@ -10,9 +11,9 @@ interface SignalWaveformProps {
 
 function SignalWaveform({ data, gradientId }: SignalWaveformProps) {
   const isEmpty = data.length === 0;
-  const chartData = isEmpty ? [0] : data;
 
   const { pathLine, pathArea, zeroYPercent, chartPoints } = useMemo(() => {
+    const chartData = data.length === 0 ? [0] : data;
     const maxVal = Math.max(...chartData);
     const minVal = Math.min(...chartData);
     const range = maxVal - minVal || 1;
@@ -43,7 +44,7 @@ function SignalWaveform({ data, gradientId }: SignalWaveformProps) {
       zeroYPercent: (zeroY / height) * 100,
       chartPoints: chartPointsLocal,
     };
-  }, [chartData]);
+  }, [data]);
 
   if (isEmpty) {
     return (
@@ -184,9 +185,10 @@ export function QFTSignalTopology() {
         setLoading(true);
         setError(null);
         const data = await qftApi.getCases();
-        const sorted = [...data].sort((a, b) =>
-          a.case_id.localeCompare(b.case_id, undefined, { numeric: true, sensitivity: 'base' })
-        );
+        const sortedIds = sortCaseIds(data.map((item) => item.case_id));
+        const sorted = sortedIds
+          .map((caseId) => data.find((item) => item.case_id === caseId))
+          .filter((item): item is QFTCase => Boolean(item));
         setCases(sorted);
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Gagal memuat dataset QFT');

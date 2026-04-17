@@ -8,6 +8,7 @@ import type {
 import type { VQECircuitImage } from '../services/api';
 import { sortCaseIds } from '../utils/sorting';
 import { downloadElementAsPNG } from '../utils/download';
+import { CAPTURE_IDS, DEFAULT_SHOTS } from '../constants/app';
 
 export interface UseVQEReturn {
   selectedCaseId: string;
@@ -85,7 +86,7 @@ export function useVQE(): UseVQEReturn {
     setIsLoading(true);
     setError(null);
     try {
-      const params: VQEBenchmarkParams = { case_id: selectedCaseId, shots: 1024 };
+      const params: VQEBenchmarkParams = { case_id: selectedCaseId, shots: DEFAULT_SHOTS };
       const data = await vqeApi.runBenchmark(params);
       setBenchmarkResult(data);
       await loadCircuitImage(selectedCaseId);
@@ -98,7 +99,7 @@ export function useVQE(): UseVQEReturn {
   }, [selectedCaseId, loadCircuitImage, loadTrace]);
 
   const handleDownload = useCallback(async () => {
-    await downloadElementAsPNG('vqe-capture', `vqe_${selectedCaseId}.png`);
+    await downloadElementAsPNG(CAPTURE_IDS.vqe, `vqe_${selectedCaseId}.png`);
   }, [selectedCaseId]);
 
   return {

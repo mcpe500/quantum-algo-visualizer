@@ -4,13 +4,19 @@ import { InputsPanel } from './InputsPanel';
 import { OraclePanel } from './OraclePanel';
 import { ResultPanel } from './ResultPanel';
 import { PseudocodeBlock } from './PseudocodeBlock';
+import { CAPTURE_IDS } from '../../constants/app';
 
 interface ClassicalVisualizationProps {
   result: ClassicalResult | null;
   onDownload: () => void;
+  captureId?: string;
 }
 
-export function ClassicalVisualization({ result, onDownload }: ClassicalVisualizationProps) {
+export function ClassicalVisualization({
+  result,
+  onDownload,
+  captureId = CAPTURE_IDS.djClassic,
+}: ClassicalVisualizationProps) {
   const captureRef = useRef<HTMLDivElement>(null);
 
   if (!result) {
@@ -29,7 +35,7 @@ export function ClassicalVisualization({ result, onDownload }: ClassicalVisualiz
 
   return (
     <div className="max-w-4xl mx-auto px-4 pb-12 w-full pt-4">
-      <div id="capture-area" ref={captureRef} className="bg-[#FAFAFA]">
+      <div id={captureId} ref={captureRef} className="bg-[#FAFAFA]">
         {/* HEADER */}
         <header className="text-center pt-4 pb-2">
           <p className="text-[10px] tracking-[0.2em] text-gray-600 font-bold uppercase">Solusi Klasik - Brute Force</p>

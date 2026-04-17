@@ -1,12 +1,16 @@
-import { Link } from 'react-router-dom';
-import { GitBranch, Grid } from 'lucide-react';
+import { GitBranch } from 'lucide-react';
 import { useQAOA } from '../hooks/useQAOA';
 import {
   AlgorithmPageLayout,
   AlgorithmHeader,
   ClassicQuantumTabs,
+  DatasetLink,
+  PageEmptyState,
+  PageErrorBanner,
+  PageLoadingBanner,
 } from '../components/layout';
 import { QAOAClassicTab, QAOAQuantumTab } from '../components/qaoa';
+import { CAPTURE_IDS } from '../constants/app';
 
 export default function QAOACombinedPage() {
   const {
@@ -40,32 +44,16 @@ export default function QAOACombinedPage() {
         hasResult={!!benchmarkResult}
       />
 
-      <Link
-        to="/qaoa/dataset"
-        className="inline-flex items-center gap-2 text-blue-600 hover:text-blue-800 mb-6 transition-colors"
-      >
-        <Grid className="w-4 h-4" />
-        Dataset
-      </Link>
+      <DatasetLink to="/qaoa/dataset" />
 
-      {/* Error */}
-      {error && (
-        <div className="mb-6 px-4 py-2 bg-red-100 border border-red-300 text-red-700 text-sm rounded-lg">
-          {error}
-        </div>
-      )}
+      {error && <PageErrorBanner message={error} />}
 
-      {/* Loading */}
       {isLoading && (
-        <div className="mb-6 px-4 py-3 bg-purple-50 border border-purple-200 text-purple-700 text-sm rounded-lg flex items-center gap-2">
-          <div className="w-4 h-4 border-2 border-purple-400 border-t-transparent rounded-full animate-spin" />
-          Menjalankan QAOA... SA dan optimisasi parameter mungkin memerlukan beberapa detik.
-        </div>
+        <PageLoadingBanner message="Menjalankan QAOA... SA dan optimisasi parameter mungkin memerlukan beberapa detik." />
       )}
 
-      {/* Results */}
       {benchmarkResult && (
-        <div id="qaoa-capture" className="space-y-6">
+        <div id={CAPTURE_IDS.qaoa} className="space-y-6">
           <ClassicQuantumTabs activeTab={activeTab} onChange={setActiveTab} />
 
           {activeTab === 'classic' && <QAOAClassicTab result={benchmarkResult} />}
@@ -77,9 +65,7 @@ export default function QAOACombinedPage() {
       )}
 
       {!benchmarkResult && !isLoading && (
-        <div className="text-center py-20">
-          <p className="text-gray-500">Pilih kasus dan klik "Jalankan" untuk memulai benchmarking QAOA.</p>
-        </div>
+        <PageEmptyState message={'Pilih kasus dan klik "Jalankan" untuk memulai benchmarking QAOA.'} />
       )}
     </AlgorithmPageLayout>
   );

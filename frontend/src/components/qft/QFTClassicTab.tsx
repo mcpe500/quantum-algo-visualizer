@@ -2,7 +2,9 @@ import type { QFTBenchmarkResult } from '../../types/qft';
 import { MetricsGrid, MetricCard } from '../layout/MetricsGrid';
 import { SignalChart } from '../charts/SignalChart';
 import { SpectrumChart } from '../charts/SpectrumChart';
+import { InlineEmptyState, SectionCard } from '../layout';
 import { BookOpen } from 'lucide-react';
+import { UI_MESSAGES } from '../../constants/ui';
 
 interface QFTClassicTabProps {
   result: QFTBenchmarkResult | null;
@@ -10,21 +12,12 @@ interface QFTClassicTabProps {
 
 export function QFTClassicTab({ result }: QFTClassicTabProps) {
   if (!result) {
-    return (
-      <div className="text-center py-12">
-        <p className="text-gray-400">Belum ada data klasik. Klik "Jalankan" dulu.</p>
-      </div>
-    );
+    return <InlineEmptyState message={UI_MESSAGES.emptyClassic} />;
   }
 
   return (
     <div className="space-y-6">
-      <div className="bg-white border-2 border-gray-200 rounded-xl p-6">
-        <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
-          <BookOpen className="w-5 h-5" />
-          Fast Fourier Transform (FFT)
-        </h2>
-
+      <SectionCard title="Fast Fourier Transform (FFT)" icon={<BookOpen className="w-5 h-5" />}>
         <MetricsGrid columns={3}>
           <MetricCard label="Data Points" value={result.n_points_original} />
           <MetricCard label="Time Complexity" value={result.fft.time_complexity} />
@@ -41,7 +34,6 @@ export function QFTClassicTab({ result }: QFTClassicTabProps) {
           </div>
         )}
 
-        {/* Charts for Classic FFT */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
           <div>
             <SignalChart data={result.input_signal} color="#2563EB" title="Input Signal (Original)" />
@@ -72,7 +64,7 @@ export function QFTClassicTab({ result }: QFTClassicTabProps) {
             <strong>Signal Type:</strong> {result.signal_type}
           </p>
         </div>
-      </div>
+      </SectionCard>
     </div>
   );
 }

@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Compass, Scale, Binary } from 'lucide-react';
 import { djApi } from '../../services/api';
 import type { DJCase } from '../../types/dj';
+import { sortCaseIds } from '../../utils/sorting';
 
 interface TruthTableCellProps {
   input: string;
@@ -180,9 +181,9 @@ export function OracleTopography({ cases: initialCases }: OracleTopographyProps)
   const sortedGroups = Object.entries(groupedCases)
     .map(([nQubits, groupCases]) => ({
       nQubits: Number(nQubits),
-      groupCases: [...groupCases].sort((a, b) =>
-        a.case_id.localeCompare(b.case_id, undefined, { numeric: true, sensitivity: 'base' })
-      ),
+      groupCases: sortCaseIds(groupCases.map((item) => item.case_id))
+        .map((caseId) => groupCases.find((item) => item.case_id === caseId))
+        .filter((item): item is DJCase => Boolean(item)),
     }))
     .sort((a, b) => a.nQubits - b.nQubits);
 

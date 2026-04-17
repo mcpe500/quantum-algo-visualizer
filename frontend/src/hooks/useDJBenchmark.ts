@@ -29,7 +29,7 @@ export function useDJBenchmark(): UseDJBenchmarkReturn {
     try {
       const data = await djApi.getCases();
       setCases(data);
-    } catch (err) {
+    } catch {
       setError('Gagal memuatkan data kes');
     }
   }, []);
@@ -38,7 +38,7 @@ export function useDJBenchmark(): UseDJBenchmarkReturn {
     try {
       const data = await djApi.getCircuit(n);
       setCircuit(data);
-    } catch (err) {
+    } catch {
       setError('Gagal memuatkan litar');
     }
   }, []);
@@ -55,7 +55,7 @@ export function useDJBenchmark(): UseDJBenchmarkReturn {
       if (data.n_qubits) {
         fetchCircuit(data.n_qubits);
       }
-    } catch (err) {
+    } catch {
       setError('Ralat penanda aras');
     } finally {
       setLoading(false);

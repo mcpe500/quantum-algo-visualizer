@@ -5,8 +5,9 @@ import { MetricsGrid, MetricCard } from '../layout/MetricsGrid';
 import { SignalChart } from '../charts/SignalChart';
 import { ProbabilityChart } from '../charts/ProbabilityChart';
 import { CircuitDisplay } from '../layout/CircuitDisplay';
+import { InlineEmptyState, SectionCard, TraceTable } from '../layout';
 import { Cpu } from 'lucide-react';
-import { PHASE_COLORS } from '../../constants/phases';
+import { UI_MESSAGES } from '../../constants/ui';
 
 interface QFTQuantumTabProps {
   result: QFTBenchmarkResult | null;
@@ -16,21 +17,12 @@ interface QFTQuantumTabProps {
 
 export function QFTQuantumTab({ result, circuitImage, trace }: QFTQuantumTabProps) {
   if (!result) {
-    return (
-      <div className="text-center py-12">
-        <p className="text-gray-400">Belum ada data kuantum. Klik "Jalankan" dulu.</p>
-      </div>
-    );
+    return <InlineEmptyState message={UI_MESSAGES.emptyQuantum} />;
   }
 
   return (
     <div className="space-y-6">
-      <div className="bg-white border-2 border-gray-200 rounded-xl p-6">
-        <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
-          <Cpu className="w-5 h-5" />
-          Quantum Fourier Transform (QFT)
-        </h2>
-
+      <SectionCard title="Quantum Fourier Transform (QFT)" icon={<Cpu className="w-5 h-5" />}>
         <MetricsGrid>
           <MetricCard label="Qubits" value={result.qft.num_qubits} />
           <MetricCard label="Circuit Depth" value={result.qft.circuit_depth} />
@@ -38,7 +30,6 @@ export function QFTQuantumTab({ result, circuitImage, trace }: QFTQuantumTabProp
           <MetricCard label="Shots" value={result.shots} />
         </MetricsGrid>
 
-        {/* Charts for Quantum QFT */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
           <div>
             <SignalChart
@@ -72,55 +63,17 @@ export function QFTQuantumTab({ result, circuitImage, trace }: QFTQuantumTabProp
             <strong>Note:</strong> {result.comparison.note}
           </p>
         </div>
-      </div>
+      </SectionCard>
 
       {trace && (
-        <div className="bg-white border-2 border-gray-200 rounded-xl p-6">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">Circuit Trace</h2>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-gray-200">
-                  <th className="text-left py-2 px-3 font-medium text-gray-700">Step</th>
-                  <th className="text-left py-2 px-3 font-medium text-gray-700">Operation</th>
-                  {Array.from({ length: trace.n_qubits }, (_, i) => (
-                    <th key={i} className="text-center py-2 px-2 font-medium text-gray-700">
-                      q{i}
-                    </th>
-                  ))}
-                  <th className="text-left py-2 px-3 font-medium text-gray-700">Phase</th>
-                </tr>
-              </thead>
-              <tbody>
-                {trace.stages.map((stage) => (
-                  <tr key={stage.step} className="border-b border-gray-100 hover:bg-gray-50">
-                    <td className="py-2 px-3 font-mono text-gray-900">{stage.step}</td>
-                    <td className="py-2 px-3">{stage.operation}</td>
-                    {Array.from({ length: trace.n_qubits }, (_, i) => (
-                      <td key={i} className="text-center py-2 px-2 font-mono">
-                        {stage.wire_markers[i] || '-'}
-                      </td>
-                    ))}
-                    <td className="py-2 px-3">
-                      <span
-                        className={`inline-flex px-2 py-0.5 text-xs rounded ${
-                          PHASE_COLORS[stage.phase] ?? 'bg-gray-100 text-gray-700'
-                        }`}
-                      >
-                        {stage.phase}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
+        <TraceTable
+          stages={trace.stages}
+          nQubits={trace.n_qubits}
+          title="QFT Circuit Trace"
+        />
       )}
 
-      <div className="bg-white border-2 border-gray-200 rounded-xl p-6">
-        <h2 className="text-lg font-semibold text-gray-900 mb-4">Comparison: FFT vs QFT</h2>
-
+      <SectionCard title="Comparison: FFT vs QFT">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
           <div className="bg-gray-50 p-4 rounded-lg">
             <div className="text-xs text-gray-500 uppercase tracking-wide mb-1">FFT (Classical)</div>
@@ -139,7 +92,7 @@ export function QFTQuantumTab({ result, circuitImage, trace }: QFTQuantumTabProp
             <strong>Note:</strong> {result.comparison.speedup_factor}
           </p>
         </div>
-      </div>
+      </SectionCard>
     </div>
   );
 }

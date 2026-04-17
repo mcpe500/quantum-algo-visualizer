@@ -8,6 +8,7 @@ import type {
 import type { QFTCircuitImage } from '../services/api';
 import { sortCaseIds } from '../utils/sorting';
 import { downloadElementAsPNG } from '../utils/download';
+import { CAPTURE_IDS, DEFAULT_SHOTS } from '../constants/app';
 
 export interface UseQFTReturn {
   selectedCaseId: string;
@@ -85,7 +86,7 @@ export function useQFT(): UseQFTReturn {
     setIsLoading(true);
     setError(null);
     try {
-      const params: QFTBenchmarkParams = { case_id: selectedCaseId, shots: 1024 };
+      const params: QFTBenchmarkParams = { case_id: selectedCaseId, shots: DEFAULT_SHOTS };
       const data = await qftApi.runBenchmark(params);
       setBenchmarkResult(data);
       await loadCircuitImage(selectedCaseId);
@@ -97,7 +98,7 @@ export function useQFT(): UseQFTReturn {
   }, [selectedCaseId, loadCircuitImage]);
 
   const handleDownload = useCallback(async () => {
-    await downloadElementAsPNG('capture-area', `qft_combined_${selectedCaseId}.png`);
+    await downloadElementAsPNG(CAPTURE_IDS.qft, `qft_combined_${selectedCaseId}.png`);
   }, [selectedCaseId]);
 
   return {
