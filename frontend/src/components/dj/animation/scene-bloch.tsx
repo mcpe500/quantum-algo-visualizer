@@ -48,6 +48,7 @@ function BlochSphereNode({
   const matRef = useRef<THREE.MeshStandardMaterial>(null);
   const arrowRef = useRef<THREE.Group>(null);
   const currentDirRef = useRef(new THREE.Vector3(0, 1, 0));
+  const startTimeRef = useRef(performance.now());
 
   const { bx, by, bz, label } = blochState;
 
@@ -58,10 +59,11 @@ function BlochSphereNode({
 
   const targetDir = new THREE.Vector3(bx, bz, by);
 
-  useFrame((state, delta) => {
+  useFrame((_, delta) => {
     if (!groupRef.current) return;
     groupRef.current.position.x = THREE.MathUtils.lerp(groupRef.current.position.x, targetX, delta * 4.4);
-    const bob = isSuper ? Math.sin(state.clock.elapsedTime * 2.4 + y) * 0.07 : 0;
+    const elapsedTime = (performance.now() - startTimeRef.current) / 1000;
+    const bob = isSuper ? Math.sin(elapsedTime * 2.4 + y) * 0.07 : 0;
     groupRef.current.position.y = THREE.MathUtils.lerp(groupRef.current.position.y, y + bob, delta * 5.5);
 
     if (matRef.current) {

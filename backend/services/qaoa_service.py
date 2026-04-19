@@ -2,10 +2,11 @@ import matplotlib
 matplotlib.use('Agg')
 
 import time
+import math
 import numpy as np
 from scipy.optimize import minimize
 from qiskit import QuantumCircuit, QuantumRegister, ClassicalRegister
-from qiskit.quantum_info import SparsePauliOp, Statevector
+from qiskit.quantum_info import SparsePauliOp, Statevector, DensityMatrix, partial_trace
 from qiskit_aer import AerSimulator
 from qiskit.visualization import circuit_drawer
 
@@ -307,6 +308,7 @@ def run_qaoa_internal(problem, shots=1024, max_iter=100):
 
     hamiltonian = build_cost_hamiltonian_op(n_nodes, problem['edges_weighted'])
     expectation_history = []
+    evaluation_history = []
 
     def neg_expectation(params):
         gamma = params[:p_layers]
@@ -315,6 +317,12 @@ def run_qaoa_internal(problem, shots=1024, max_iter=100):
         state = Statevector(circuit)
         expected_cut = float(state.expectation_value(hamiltonian).real)
         expectation_history.append(expected_cut)
+        evaluation_history.append({
+            'eval_index': len(evaluation_history) + 1,
+            'gamma': [float(v) for v in gamma],
+            'beta': [float(v) for v in beta],
+            'expected_cut': expected_cut,
+        })
         return -expected_cut
 
     np.random.seed(42)
@@ -367,6 +375,7 @@ def run_qaoa_internal(problem, shots=1024, max_iter=100):
         'optimal_beta': optimal_beta,
         'cut_distribution': cut_distribution,
         'expected_cut_history': [float(v) for v in expectation_history[:200]],
+        'evaluation_history': evaluation_history,
         'iterations': int(result.nfev),
     }
 
@@ -485,6 +494,313 @@ def _cast_distribution(distribution):
     return result
 
 
+def _sv_to_dict_list(sv):
+    return [{'re': round(float(c.real), 6), 'im': round(float(c.imag), 6)} for c in sv.data]
+
+
+def _extract_qubit_summaries(sv, n_nodes):
+    density = DensityMatrix(sv)
+    qubit_summaries = []
+    all_qubits = set(range(n_nodes))
+
+    for qubit in range(n_nodes):
+        traced = list(sorted(all_qubits - {qubit}))
+        reduced = partial_trace(density, traced).data if traced else density.data
+        p_zero = float(np.real_if_close(reduced[0, 0]))
+        p_one = float(np.real_if_close(reduced[1, 1]))
+        off_diag = reduced[0, 1]
+        x = float(2.0 * np.real(off_diag))
+        y = float(2.0 * np.imag(off_diag))
+        z = float(np.clip(p_zero - p_one, -1.0, 1.0))
+        theta = float(math.acos(np.clip(z, -1.0, 1.0)))
+        phi = float(math.atan2(y, x)) if abs(x) > 1e-9 or abs(y) > 1e-9 else 0.0
+        qubit_summaries.append({
+            'qubit': int(qubit),
+            'p_zero': round(max(0.0, min(1.0, p_zero)), 6),
+            'p_one': round(max(0.0, min(1.0, p_one)), 6),
+            'theta': round(theta, 6),
+            'phi': round(phi, 6),
+        })
+
+    return qubit_summaries
+
+
+def _counts_to_cut_distribution(problem, counts, limit=10):
+    total = max(1, sum(int(count) for count in counts.values()))
+    distribution = []
+    for bitstring, count in counts.items():
+        cut_value = bitstring_objective(problem, bitstring)
+        distribution.append({
+            'bitstring': str(bitstring),
+            'count': int(count),
+            'probability': float(count / total),
+            'cut': _cast_cut(cut_value),
+        })
+    distribution.sort(key=lambda item: (-item['probability'], -float(item['cut'])))
+    return distribution[:limit]
+
+
+def _bitstring_to_partition(problem, bitstring):
+    n_nodes = problem['n_nodes']
+    return [int(bitstring[n_nodes - 1 - i]) for i in range(n_nodes)]
+
+
+def _evaluate_qaoa_checkpoint(problem, gamma, beta, shots):
+    final_qc = create_qaoa_circuit(problem, gamma, beta)
+    simulator = AerSimulator()
+    sim_result = simulator.run(final_qc, shots=int(shots)).result()
+    counts = sim_result.get_counts(final_qc)
+    distribution = _counts_to_cut_distribution(problem, counts, limit=10)
+
+    dominant = distribution[0] if distribution else None
+    best = None
+    for item in distribution:
+        if best is None or float(item['cut']) > float(best['cut']) or (
+            float(item['cut']) == float(best['cut']) and item['probability'] > best['probability']
+        ):
+            best = item
+
+    dominant_partition = _bitstring_to_partition(problem, dominant['bitstring']) if dominant else [0] * problem['n_nodes']
+    best_partition = _bitstring_to_partition(problem, best['bitstring']) if best else [0] * problem['n_nodes']
+
+    return {
+        'counts': counts,
+        'distribution': distribution,
+        'dominant_bitstring': dominant['bitstring'] if dominant else '0' * problem['n_nodes'],
+        'dominant_probability': float(dominant['probability']) if dominant else 0.0,
+        'dominant_cut': _cast_cut(dominant['cut']) if dominant else 0,
+        'dominant_partition': dominant_partition,
+        'best_bitstring': best['bitstring'] if best else '0' * problem['n_nodes'],
+        'best_cut': _cast_cut(best['cut']) if best else 0,
+        'best_partition': best_partition,
+    }
+
+
+def _build_qaoa_animation_checkpoints(evaluation_history):
+    if not evaluation_history:
+        return []
+
+    selected = []
+    by_kind = [
+        ('initial', 0),
+        ('middle', len(evaluation_history) // 2),
+        ('best', max(range(len(evaluation_history)), key=lambda idx: evaluation_history[idx]['expected_cut'])),
+    ]
+
+    seen = set()
+    for kind, index in by_kind:
+        entry = evaluation_history[index]
+        eval_index = int(entry['eval_index'])
+        if eval_index in seen:
+            continue
+        seen.add(eval_index)
+        selected.append({
+            'key': f'{kind}-{eval_index}',
+            'kind': kind,
+            'label': {
+                'initial': 'Awal',
+                'middle': 'Tengah',
+                'best': 'Terbaik',
+            }[kind],
+            'eval_index': eval_index,
+            'gamma': [float(v) for v in entry['gamma']],
+            'beta': [float(v) for v in entry['beta']],
+            'expected_cut': float(entry['expected_cut']),
+            'best_so_far': float(max(item['expected_cut'] for item in evaluation_history[:index + 1])),
+        })
+
+    return selected
+
+
+def _build_qaoa_animation_partitions(timeline):
+    partitions = []
+    current_key = None
+    start_idx = 0
+
+    for idx, step in enumerate(timeline):
+        key = (step['checkpoint_key'], step['phase'])
+        if key != current_key:
+            if current_key is not None:
+                checkpoint_key, phase = current_key
+                partitions.append({
+                    'key': f'{checkpoint_key}-{phase}',
+                    'checkpoint_key': checkpoint_key,
+                    'checkpoint_label': timeline[start_idx]['checkpoint_label'],
+                    'phase': phase,
+                    'label': {
+                        'optimizer': 'Optimizer',
+                        'superposition': 'Superposition',
+                        'cost': 'Cost',
+                        'mixer': 'Mixer',
+                        'measurement': 'Measurement',
+                        'update': 'Update',
+                    }.get(phase, phase.capitalize()),
+                    'start': start_idx,
+                    'end': idx,
+                    'count': idx - start_idx,
+                })
+            current_key = key
+            start_idx = idx
+
+    if current_key is not None:
+        checkpoint_key, phase = current_key
+        partitions.append({
+            'key': f'{checkpoint_key}-{phase}',
+            'checkpoint_key': checkpoint_key,
+            'checkpoint_label': timeline[start_idx]['checkpoint_label'],
+            'phase': phase,
+            'label': {
+                'optimizer': 'Optimizer',
+                'superposition': 'Superposition',
+                'cost': 'Cost',
+                'mixer': 'Mixer',
+                'measurement': 'Measurement',
+                'update': 'Update',
+            }.get(phase, phase.capitalize()),
+            'start': start_idx,
+            'end': len(timeline),
+            'count': len(timeline) - start_idx,
+        })
+
+    return partitions
+
+
+def _snapshot_step(step, checkpoint, sv, measurement_distribution, operation, description, **extra):
+    n_nodes = checkpoint['n_nodes']
+    payload = {
+        'step': int(step),
+        'iteration': int(checkpoint['eval_index']),
+        'checkpoint_key': checkpoint['key'],
+        'checkpoint_label': checkpoint['label'],
+        'checkpoint_kind': checkpoint['kind'],
+        'phase': extra.pop('phase'),
+        'operation': operation,
+        'description': description,
+        'gamma': [float(v) for v in checkpoint['gamma']],
+        'beta': [float(v) for v in checkpoint['beta']],
+        'expected_cut': float(checkpoint['expected_cut']),
+        'best_so_far': float(checkpoint['best_so_far']),
+        'statevector': _sv_to_dict_list(sv),
+        'qubit_summaries': _extract_qubit_summaries(sv, n_nodes),
+        'measurement_distribution': measurement_distribution,
+    }
+    payload.update(extra)
+    return payload
+
+
+def _build_qaoa_checkpoint_timeline(problem, checkpoint, shots, start_step):
+    n_nodes = problem['n_nodes']
+    measurement = _evaluate_qaoa_checkpoint(problem, checkpoint['gamma'], checkpoint['beta'], shots)
+    distribution = measurement['distribution']
+    timeline = []
+    step = start_step
+
+    checkpoint = {
+        **checkpoint,
+        'n_nodes': n_nodes,
+    }
+
+    sv = Statevector.from_label('0' * n_nodes)
+    timeline.append(_snapshot_step(
+        step,
+        checkpoint,
+        sv,
+        distribution,
+        'Optimizer proposes parameters',
+        f"Optimizer klasik memilih parameter awal untuk evaluasi iterasi ke-{checkpoint['eval_index']}: γ={', '.join(f'{g:.3f}' for g in checkpoint['gamma'])} dan β={', '.join(f'{b:.3f}' for b in checkpoint['beta'])}.",
+        phase='optimizer',
+        candidate_bitstring=measurement['dominant_bitstring'],
+        cut_value=measurement['dominant_cut'],
+        dominant_probability=measurement['dominant_probability'],
+      ))
+    step += 1
+
+    superposition_qc = QuantumCircuit(n_nodes)
+    for qubit in range(n_nodes):
+        superposition_qc.h(qubit)
+    sv = sv.evolve(superposition_qc)
+    timeline.append(_snapshot_step(
+        step,
+        checkpoint,
+        sv,
+        distribution,
+        'Hadamard layer on all qubits',
+        'Semua qubit dibuka ke superposisi sebagai state awal ansatz QAOA. Ini membuat seluruh ruang partisi dapat dijelajahi secara paralel.',
+        phase='superposition',
+      ))
+    step += 1
+
+    for layer in range(problem['p_layers']):
+        gamma = checkpoint['gamma'][layer]
+        beta = checkpoint['beta'][layer]
+
+        for edge in problem['edges_weighted']:
+            q0, q1, weight = edge
+            edge_qc = QuantumCircuit(n_nodes)
+            edge_qc.cx(q0, q1)
+            edge_qc.rz(2.0 * gamma * weight, q1)
+            edge_qc.cx(q0, q1)
+            sv = sv.evolve(edge_qc)
+            timeline.append(_snapshot_step(
+                step,
+                checkpoint,
+                sv,
+                distribution,
+                f'Cost unitary ZZ on edge ({q0}, {q1})',
+                f'Term Hamiltonian Ising untuk edge ({q0}, {q1}) diterapkan melalui CX-Rz-CX dengan sudut 2γw = {(2.0 * gamma * weight):.3f} rad.',
+                phase='cost',
+                layer=int(layer + 1),
+                edge=[int(q0), int(q1)],
+              ))
+            step += 1
+
+        for qubit in range(n_nodes):
+            mixer_qc = QuantumCircuit(n_nodes)
+            mixer_qc.rx(2.0 * beta, qubit)
+            sv = sv.evolve(mixer_qc)
+            timeline.append(_snapshot_step(
+                step,
+                checkpoint,
+                sv,
+                distribution,
+                f'Mixer Rx on q{qubit}',
+                f'Operator mixer Rx(2β) pada q{qubit} menjaga eksplorasi ruang solusi dengan sudut {(2.0 * beta):.3f} rad.',
+                phase='mixer',
+                layer=int(layer + 1),
+                target_qubit=int(qubit),
+              ))
+            step += 1
+
+    timeline.append(_snapshot_step(
+        step,
+        checkpoint,
+        sv,
+        distribution,
+        'Measure and sample bitstrings',
+        f"State diukur sebanyak {shots} shots. Bitstring dominan saat checkpoint ini adalah {measurement['dominant_bitstring']} dengan probabilitas {measurement['dominant_probability'] * 100:.1f}%.",
+        phase='measurement',
+        candidate_bitstring=measurement['dominant_bitstring'],
+        cut_value=measurement['dominant_cut'],
+        dominant_probability=measurement['dominant_probability'],
+      ))
+    step += 1
+
+    timeline.append(_snapshot_step(
+        step,
+        checkpoint,
+        sv,
+        distribution,
+        'Optimizer updates objective',
+        f"Expected cut untuk checkpoint ini adalah {checkpoint['expected_cut']:.3f}, sedangkan nilai terbaik sejauh ini {checkpoint['best_so_far']:.3f}. Optimizer memakai informasi ini untuk memperbarui parameter iterasi berikutnya.",
+        phase='update',
+        candidate_bitstring=measurement['best_bitstring'],
+        cut_value=measurement['best_cut'],
+        dominant_probability=measurement['dominant_probability'],
+      ))
+
+    return timeline, step + 1, measurement
+
+
 def run_qaoa_payload(case_id, shots):
     case = get_qaoa_case_or_none(case_id)
     if not case:
@@ -559,6 +875,112 @@ def run_qaoa_payload(case_id, shots):
             'sa_approx_ratio': round(sa_ratio, 4),
             'qaoa_approx_ratio': round(qaoa_ratio, 4),
             'note': f'SA={sa_ratio * 100:.1f}% and QAOA={qaoa_ratio * 100:.1f}% of exact optimum.',
+        },
+    }
+
+
+def get_qaoa_animation_payload(case_id, shots=1024):
+    case = get_qaoa_case_or_none(case_id)
+    if not case:
+        return None
+
+    problem = _get_problem_from_case(case)
+
+    exact_cut, exact_partition = compute_exact_maxcut(problem)
+    sa_cut, sa_partition, sa_history = run_simulated_annealing(problem)
+    qaoa = run_qaoa_internal(problem, shots=int(shots))
+
+    qaoa_cut = float(qaoa['best_cut'])
+    denom = exact_cut if abs(exact_cut) > 1e-12 else 1.0
+    sa_ratio = float(sa_cut / denom)
+    qaoa_ratio = float(qaoa_cut / denom)
+
+    checkpoints = _build_qaoa_animation_checkpoints(qaoa.get('evaluation_history', []))
+
+    timeline = []
+    checkpoint_results = []
+    next_step = 0
+    for checkpoint in checkpoints:
+        checkpoint_timeline, next_step, measurement = _build_qaoa_checkpoint_timeline(problem, checkpoint, shots, next_step)
+        timeline.extend(checkpoint_timeline)
+        checkpoint_results.append({
+            **checkpoint,
+            'dominant_bitstring': measurement['dominant_bitstring'],
+            'dominant_cut': measurement['dominant_cut'],
+            'dominant_probability': measurement['dominant_probability'],
+            'dominant_partition': measurement['dominant_partition'],
+            'best_bitstring': measurement['best_bitstring'],
+            'best_cut': measurement['best_cut'],
+            'best_partition': measurement['best_partition'],
+        })
+
+    partitions = _build_qaoa_animation_partitions(timeline)
+
+    return {
+        'case_id': case_id,
+        'problem': problem['problem'],
+        'description': problem['description'],
+        'n_nodes': int(problem['n_nodes']),
+        'n_edges': int(problem['n_edges']),
+        'nodes': problem['nodes'],
+        'edges': problem['edges'],
+        'p_layers': int(problem['p_layers']),
+        'shots': int(shots),
+        'hamiltonian': {
+            'label': 'Max-Cut Ising Hamiltonian',
+            'formula': 'H_C = Σ (I - Z_i Z_j) / 2',
+            'terms': [
+                {
+                    'edge': [int(q0), int(q1)],
+                    'pauli': f'Z{q0}Z{q1}',
+                    'weight': float(weight),
+                }
+                for q0, q1, weight in problem['edges_weighted']
+            ],
+        },
+        'checkpoints': checkpoint_results,
+        'partitions': partitions,
+        'timeline': timeline,
+        'exact': {
+            'method': 'Brute Force Max-Cut',
+            'optimal_cut': _cast_cut(exact_cut),
+            'optimal_partition': exact_partition,
+            'execution_time_ms': 0.0,
+            'time_complexity': f'O(2^{problem["n_nodes"]})',
+        },
+        'classical': {
+            'method': 'Simulated Annealing',
+            'best_cut': _cast_cut(sa_cut),
+            'best_partition': sa_partition,
+            'execution_time_ms': 0.0,
+            'approx_ratio': round(sa_ratio, 4),
+            'cut_history': [_cast_cut(v) for v in sa_history],
+        },
+        'quantum': {
+            'method': 'QAOA',
+            'best_cut': _cast_cut(qaoa_cut),
+            'best_bitstring': qaoa['best_bitstring'],
+            'expected_cut': float(qaoa['expected_cut']),
+            'circuit_depth': int(qaoa['circuit_depth']),
+            'gate_count': int(qaoa['gate_count']),
+            'p_layers': int(problem['p_layers']),
+            'n_qubits': int(problem['n_nodes']),
+            'time_complexity': f'O({problem["p_layers"]} * {problem["n_edges"]} * shots)',
+            'optimal_gamma': qaoa['optimal_gamma'],
+            'optimal_beta': qaoa['optimal_beta'],
+            'cut_distribution': _cast_distribution(qaoa['cut_distribution']),
+            'expected_cut_history': [float(v) for v in qaoa['expected_cut_history']],
+            'iterations': int(qaoa['iterations']),
+            'approx_ratio': round(qaoa_ratio, 4),
+            'execution_time_ms': 0.0,
+        },
+        'comparison': {
+            'exact_cut': _cast_cut(exact_cut),
+            'sa_cut': _cast_cut(sa_cut),
+            'qaoa_cut': _cast_cut(qaoa_cut),
+            'sa_approx_ratio': round(sa_ratio, 4),
+            'qaoa_approx_ratio': round(qaoa_ratio, 4),
+            'note': f'SA={sa_ratio * 100:.1f}% dan QAOA={qaoa_ratio * 100:.1f}% dari optimum eksak.',
         },
     }
 

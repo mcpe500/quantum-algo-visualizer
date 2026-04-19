@@ -21,11 +21,7 @@ function GateTile({
     <group position={[x, y, 0.08]}>
       <mesh>
         <boxGeometry args={[size, size, 0.24]} />
-        <meshStandardMaterial color={color} transparent opacity={active ? 0.36 : 0.18} roughness={0.18} metalness={0.18} />
-      </mesh>
-      <mesh>
-        <boxGeometry args={[size, size, 0.24]} />
-        <meshBasicMaterial color={color} wireframe transparent opacity={active ? 0.8 : 0.4} />
+        <meshStandardMaterial color={color} transparent opacity={active ? 0.9 : 0.5} roughness={0.18} metalness={0.18} />
       </mesh>
       <Text position={[0, 0, 0.13]} fontSize={size * 0.35} color={active ? '#0F172A' : '#475569'} anchorX="center" anchorY="middle">
         {label}

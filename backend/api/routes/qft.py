@@ -7,6 +7,7 @@ from services.qft_service import (
     get_qft_circuit_payload,
     get_qft_classical_payload,
     get_qft_trace_payload,
+    get_qft_animation_payload,
     run_qft_payload,
 )
 
@@ -63,4 +64,14 @@ def qft_classical_run():
     payload = get_qft_classical_payload(case_id=case_id)
     if payload is None:
         return jsonify({'error': f'Case {case_id} not found'}), 404
+    return jsonify(payload)
+
+
+@api_bp.route('/qft/animation/<case_id>', methods=['GET'])
+def qft_animation(case_id):
+    shots = request.args.get('shots', 1024, type=int)
+    payload = get_qft_animation_payload(case_id=case_id, shots=shots)
+    if payload is None:
+        return jsonify({'error': f'Case {case_id} not found'}), 404
+    payload['timestamp'] = datetime.now().isoformat()
     return jsonify(payload)

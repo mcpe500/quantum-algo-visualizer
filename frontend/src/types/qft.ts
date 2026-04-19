@@ -105,3 +105,64 @@ export interface QFTBenchmarkParams {
   case_id: string;
   shots: number;
 }
+
+export interface QFTAnimationSnapshot {
+  phase: string;
+  operation: string;
+  description: string;
+  probabilities: number[];
+  labels: string[];
+}
+
+export interface QFTAnimationPartition {
+  phase: string;
+  label: string;
+  count: number;
+  start: number;
+  end: number;
+}
+
+export interface QFTAnimationStep extends QFTAnimationSnapshot {
+  step: number;
+  statevector: ComplexNumber[];
+  qubit_phases: number[];
+  target_qubit?: number;
+  control_qubit?: number;
+  rotation_angle?: number;
+  swap_pair?: [number, number];
+}
+
+export interface QFTAnimationInputProb {
+  input_bits: string;
+  probability: number;
+}
+
+export interface QFTAnimationPayload {
+  case_id: string;
+  signal_type: string;
+  n_qubits: number;
+  n_points_original: number;
+  n_points_padded: number;
+  input_signal: number[];
+  padded_signal: number[];
+  input_probabilities: QFTAnimationInputProb[];
+  partitions: QFTAnimationPartition[];
+  timeline: QFTAnimationStep[];
+  snapshots: QFTAnimationSnapshot[];
+  measurement: {
+    counts: Record<string, number>;
+    shots: number;
+  };
+  fft: FFTResult;
+  qft: {
+    counts: Record<string, number>;
+    probabilities: QFTProbabilityPoint[];
+    dominant_bins: number[];
+    dominant_probabilities: number[];
+  };
+}
+
+export interface ComplexNumber {
+  re: number;
+  im: number;
+}

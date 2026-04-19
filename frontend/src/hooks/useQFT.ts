@@ -4,6 +4,7 @@ import type {
   QFTBenchmarkResult,
   QFTBenchmarkParams,
   QFTQuantumTrace,
+  QFTAnimationPayload,
 } from '../types/qft';
 import type { QFTCircuitImage } from '../services/api';
 import { sortCaseIds } from '../utils/sorting';
@@ -16,11 +17,13 @@ export interface UseQFTReturn {
   benchmarkResult: QFTBenchmarkResult | null;
   circuitImage: QFTCircuitImage | null;
   trace: QFTQuantumTrace | null;
+  animationData: QFTAnimationPayload | null;
   isLoading: boolean;
+  isLoadingAnimation: boolean;
   error: string | null;
-  activeTab: 'classic' | 'quantum';
+  activeTab: 'classic' | 'quantum' | 'animation';
   setSelectedCaseId: (id: string) => void;
-  setActiveTab: (tab: 'classic' | 'quantum') => void;
+  setActiveTab: (tab: 'classic' | 'quantum' | 'animation') => void;
   handleRun: () => Promise<void>;
   handleDownload: () => Promise<void>;
 }
@@ -31,9 +34,11 @@ export function useQFT(): UseQFTReturn {
   const [benchmarkResult, setBenchmarkResult] = useState<QFTBenchmarkResult | null>(null);
   const [circuitImage, setCircuitImage] = useState<QFTCircuitImage | null>(null);
   const [trace, setTrace] = useState<QFTQuantumTrace | null>(null);
+  const [animationData, setAnimationData] = useState<QFTAnimationPayload | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [isLoadingAnimation, setIsLoadingAnimation] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'classic' | 'quantum'>('classic');
+  const [activeTab, setActiveTab] = useState<'classic' | 'quantum' | 'animation'>('classic');
 
   // Load cases on mount
   useEffect(() => {
@@ -77,6 +82,24 @@ export function useQFT(): UseQFTReturn {
     }
   }, []);
 
+  const loadAnimation = useCallback(async (caseId: string) => {
+    setIsLoadingAnimation(true);
+    try {
+      const data = await qftApi.getAnimation(caseId, DEFAULT_SHOTS);
+      setAnimationData(data);
+    } catch {
+      setAnimationData(null);
+    } finally {
+      setIsLoadingAnimation(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (activeTab === 'animation') {
+      void loadAnimation(selectedCaseId);
+    }
+  }, [activeTab, selectedCaseId, loadAnimation]);
+
   useEffect(() => {
     void loadCircuitImage(selectedCaseId);
     void loadTrace(selectedCaseId);
@@ -107,7 +130,9 @@ export function useQFT(): UseQFTReturn {
     benchmarkResult,
     circuitImage,
     trace,
+    animationData,
     isLoading,
+    isLoadingAnimation,
     error,
     activeTab,
     setSelectedCaseId,

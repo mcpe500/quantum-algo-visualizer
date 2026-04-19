@@ -4,6 +4,7 @@ from api import api_bp
 from services.qaoa_service import (
     get_qaoa_cases,
     get_qaoa_case_or_none,
+    get_qaoa_animation_payload,
     get_qaoa_circuit_payload,
     get_qaoa_classical_payload,
     get_qaoa_trace_payload,
@@ -25,8 +26,17 @@ def qaoa_dataset(case_id):
 def qaoa_run():
     data = request.get_json() or {}
     case_id = data.get('case_id', 'QAOA-01')
-    shots = int(data.get('shots', 512))
+    shots = int(data.get('shots', 1024))
     payload = run_qaoa_payload(case_id=case_id, shots=shots)
+    if payload is None:
+        return jsonify({'error': f'Case {case_id} not found'}), 404
+    payload['timestamp'] = datetime.now().isoformat()
+    return jsonify(payload)
+
+@api_bp.route('/qaoa/animation/<case_id>', methods=['GET'])
+def qaoa_animation(case_id):
+    shots = int(request.args.get('shots', 1024))
+    payload = get_qaoa_animation_payload(case_id=case_id, shots=shots)
     if payload is None:
         return jsonify({'error': f'Case {case_id} not found'}), 404
     payload['timestamp'] = datetime.now().isoformat()
