@@ -52,8 +52,8 @@ export function drawVideoFrame({
   const height = ctx.canvas.height;
   const narration = getExportNarration(mode, data, step);
   const overlayPadding = Math.round(width * 0.038);
-  const bottomPanelHeight = Math.round(height * 0.23);
-  const topPanelHeight = Math.round(height * 0.15);
+  const bottomPanelHeight = Math.round(height * 0.18);
+  const topPanelHeight = Math.round(height * 0.12);
   const topY = overlayPadding;
   const bottomY = height - bottomPanelHeight - overlayPadding;
   const bodyMaxWidth = width - overlayPadding * 2 - 32;
@@ -69,24 +69,24 @@ export function drawVideoFrame({
   ctx.imageSmoothingQuality = 'high';
   ctx.drawImage(sourceCanvas, 0, 0, width, height);
 
-  const topGradient = ctx.createLinearGradient(0, 0, 0, topPanelHeight + overlayPadding * 1.5);
-  topGradient.addColorStop(0, 'rgba(15, 23, 42, 0.92)');
-  topGradient.addColorStop(1, 'rgba(15, 23, 42, 0.18)');
+  const topGradient = ctx.createLinearGradient(0, 0, 0, topPanelHeight + overlayPadding * 1.2);
+  topGradient.addColorStop(0, 'rgba(15, 23, 42, 0.88)');
+  topGradient.addColorStop(1, 'rgba(15, 23, 42, 0.08)');
   ctx.fillStyle = topGradient;
-  ctx.fillRect(0, 0, width, topPanelHeight + overlayPadding * 1.5);
+  ctx.fillRect(0, 0, width, topPanelHeight + overlayPadding * 1.2);
 
-  const bottomGradient = ctx.createLinearGradient(0, height, 0, height - bottomPanelHeight - overlayPadding * 2);
-  bottomGradient.addColorStop(0, 'rgba(15, 23, 42, 0.94)');
-  bottomGradient.addColorStop(1, 'rgba(15, 23, 42, 0.2)');
+  const bottomGradient = ctx.createLinearGradient(0, height, 0, height - bottomPanelHeight - overlayPadding * 1.5);
+  bottomGradient.addColorStop(0, 'rgba(15, 23, 42, 0.88)');
+  bottomGradient.addColorStop(1, 'rgba(15, 23, 42, 0.04)');
   ctx.fillStyle = bottomGradient;
-  ctx.fillRect(0, bottomY - overlayPadding, width, bottomPanelHeight + overlayPadding * 2);
+  ctx.fillRect(0, bottomY - overlayPadding, width, bottomPanelHeight + overlayPadding * 1.5);
 
   roundedRect(ctx, overlayPadding, topY, width - overlayPadding * 2, topPanelHeight, 20);
-  ctx.fillStyle = 'rgba(255, 255, 255, 0.08)';
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.06)';
   ctx.fill();
 
   roundedRect(ctx, overlayPadding, bottomY, width - overlayPadding * 2, bottomPanelHeight, 24);
-  ctx.fillStyle = 'rgba(15, 23, 42, 0.72)';
+  ctx.fillStyle = 'rgba(15, 23, 42, 0.60)';
   ctx.fill();
   ctx.strokeStyle = 'rgba(255, 255, 255, 0.14)';
   ctx.lineWidth = 1;

@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { Cpu, Waves, Zap, GitBranch } from 'lucide-react';
+import { Cpu, Waves, Zap, GitBranch, Globe } from 'lucide-react';
 import { PAGE_BACKGROUND_CLASS } from '../constants/ui';
 
 const algorithms = [
@@ -63,6 +63,23 @@ function AlgorithmSelector() {
               </Link>
             );
           })}
+        </div>
+
+        <div className="mt-8 pt-8 border-t border-gray-200">
+          <Link
+            to="/playground"
+            className="block p-6 bg-indigo-50 border-2 border-indigo-200 rounded-xl hover:border-indigo-400 hover:shadow-lg transition-all group"
+          >
+            <div className="flex items-center gap-4">
+              <div className="p-3 bg-indigo-100 rounded-lg group-hover:bg-indigo-200 transition-colors">
+                <Globe className="w-8 h-8 text-indigo-600" />
+              </div>
+              <div>
+                <h2 className="text-lg font-semibold text-gray-900">Qubit Playground</h2>
+                <p className="text-sm text-gray-500">Main-main dengan qubit dan gerbang kuantum secara interaktif</p>
+              </div>
+            </div>
+          </Link>
         </div>
       </div>
     </div>
