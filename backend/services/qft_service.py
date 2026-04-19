@@ -7,6 +7,7 @@ import numpy as np
 from qiskit import QuantumCircuit, QuantumRegister, ClassicalRegister
 from qiskit_aer import AerSimulator
 from qiskit.visualization import circuit_drawer
+from qiskit.quantum_info import Statevector, Operator
 
 from api.shared.plotting import figure_to_base64
 from services.common import list_cases, load_case
@@ -144,6 +145,187 @@ def _normalize_amplitudes(signal_data):
         state[0] = 1.0
         return state
     return amplitudes / norm
+
+
+def _extract_qubit_phases(statevector, n_qubits):
+    """Extract accumulated phase angle φ untuk setiap qubit dari statevector.
+
+    Untuk QFT, phase accumulation adalah kunci visualisasi. Kita estimasi phase
+    per qubit dengan melihat how phase varies across states yang berbeda di
+    posisi qubit tersebut.
+    """
+    phases = []
+    sv = statevector.data if hasattr(statevector, 'data') else statevector
+    n_states = len(sv)
+
+    for qubit in range(n_qubits):
+        phase_sum = 0.0
+        count = 0
+        bit_pos = n_qubits - 1 - qubit
+        mask = 1 << bit_pos
+
+        for i in range(n_states):
+            j = i ^ mask
+            if j > i and (i & mask) == 0 and (j & mask) == mask:
+                a_i = sv[i]
+                a_j = sv[j]
+                if abs(a_i) > 1e-6 and abs(a_j) > 1e-6:
+                    phase_diff = np.angle(a_j) - np.angle(a_i)
+                    phase_sum += phase_diff
+                    count += 1
+
+        if count > 0:
+            avg_phase = phase_sum / count
+            phases.append(float(avg_phase))
+        else:
+            phases.append(0.0)
+
+    return phases
+
+
+def _sv_to_dict_list(sv):
+    """Convert statevector to list of {re, im} dicts for JSON serialization."""
+    return [{'re': round(c.real, 6), 'im': round(c.imag, 6)} for c in sv.data]
+
+
+def build_qft_animation_timeline(signal_data, n_qubits):
+    """Build step-by-step timeline untuk QFT animation.
+    
+    Setiap step mencakup statevector snapshot dengan phase angles per qubit.
+    Ini adalah inti dari QFT animation spec.
+    """
+    timeline = []
+    steps_count = 0
+    
+    padded_signal = pad_signal(signal_data, 2 ** n_qubits)
+    normalized = _normalize_amplitudes(padded_signal)
+    
+    sv = Statevector(normalized)
+    
+    timeline.append({
+        'step': steps_count,
+        'phase': 'init',
+        'operation': 'Initialize Statevector',
+        'description': f'Load {len(normalized)} signal amplitudes into quantum state |ψ⟩ = Σ aₖ|k⟩. Setiap amplitude sinyal aⱼ di-encode ke basis state |j⟩.',
+        'statevector': _sv_to_dict_list(sv),
+        'qubit_phases': [0.0] * n_qubits,
+        'probabilities': [float(abs(c) ** 2) for c in sv.data],
+        'labels': [f'|{i:0{n_qubits}b}⟩' for i in range(2 ** n_qubits)],
+      })
+    steps_count += 1
+    
+    for j in range(n_qubits - 1, -1, -1):
+        for k in range(n_qubits - 1, j, -1):
+            angle = math.pi / (2 ** (k - j))
+            old_data = sv.data.copy()
+            new_data = np.zeros_like(old_data)
+            
+            for state_idx in range(len(old_data)):
+                if old_data[state_idx] != 0:
+                    new_data[state_idx] = old_data[state_idx]
+            
+            for state_idx in range(len(old_data)):
+                bit_k = (state_idx >> (n_qubits - 1 - k)) & 1
+                bit_j = (state_idx >> (n_qubits - 1 - j)) & 1
+                if bit_k == 1 and bit_j == 0:
+                    new_state = state_idx ^ (1 << (n_qubits - 1 - j))
+                    phase = np.exp(1j * angle)
+                    new_data[new_state] = old_data[state_idx] * phase
+            
+            sv = Statevector(new_data)
+            
+            timeline.append({
+                'step': steps_count,
+                'phase': 'phase_cascade',
+                'operation': f'CPHASE(π/{2 ** (k - j):.0f}) q{j}←q{k}',
+                'description': f'Controlled rotation CR_{k-j+1} menambahkan phase 2π/2^{k-j} pada qubit target q{j} dikendalikan oleh q{k}. Ini adalah operasi inti QFT untuk akumulasi phase.',
+                'target_qubit': j,
+                'control_qubit': k,
+                'rotation_angle': angle,
+                'statevector': _sv_to_dict_list(sv),
+                'qubit_phases': _extract_qubit_phases(sv, n_qubits),
+                'probabilities': [float(abs(c) ** 2) for c in sv.data],
+                'labels': [f'|{i:0{n_qubits}b}⟩' for i in range(2 ** n_qubits)],
+            })
+            steps_count += 1
+    
+    for j in range(n_qubits - 1, -1, -1):
+        # Apply Hadamard using evolve with Hadamard operator
+        h_matrix = np.array([[1, 1], [1, -1]]) / np.sqrt(2)
+        sv = sv.evolve(Operator(h_matrix), [j])
+        timeline.append({
+            'step': steps_count,
+            'phase': 'hadamard',
+            'operation': f'H on qubit {j}',
+            'description': 'Hadamard gate membuka superposisi untuk analisis frekuensi paralel. Qubit berputar 90° mengelilingi sumbu-Y, mengubah |0⟩ atau |1⟩ menjadi superposisi (|0⟩ + |1⟩)/√2.',
+            'target_qubit': j,
+            'statevector': _sv_to_dict_list(sv),
+            'qubit_phases': _extract_qubit_phases(sv, n_qubits),
+            'probabilities': [float(abs(c) ** 2) for c in sv.data],
+            'labels': [f'|{i:0{n_qubits}b}⟩' for i in range(2 ** n_qubits)],
+        })
+        steps_count += 1
+
+    for i in range(n_qubits // 2):
+        # Apply SWAP using evolve with SWAP operator
+        swap_matrix = np.array([[1, 0, 0, 0], [0, 0, 1, 0], [0, 1, 0, 0], [0, 0, 0, 1]])
+        sv = sv.evolve(Operator(swap_matrix), [i, n_qubits - 1 - i])
+        timeline.append({
+            'step': steps_count,
+            'phase': 'swap',
+            'operation': f'SWAP qubit {i} ↔ qubit {n_qubits - 1 - i}',
+            'description': 'SWAP network mengkoreksi bit-reversed ordering. Output QFT secara alami dalam urutan bit-reversed; SWAP gates mengembalikannya ke urutan natural.',
+            'swap_pair': (i, n_qubits - 1 - i),
+            'statevector': _sv_to_dict_list(sv),
+            'qubit_phases': _extract_qubit_phases(sv, n_qubits),
+            'probabilities': [float(abs(c) ** 2) for c in sv.data],
+            'labels': [f'|{i:0{n_qubits}b}⟩' for i in range(2 ** n_qubits)],
+        })
+        steps_count += 1
+
+    timeline.append({
+        'step': steps_count,
+        'phase': 'measurement',
+        'operation': 'Measure all qubits',
+        'description': 'Pengukuran collapsing state ke basis komputasi, menghasilkan spektrum frekuensi. Setiap bin frekuensi berkorelasi dengan probabilitas pengukuran state binary yang sesuai.',
+        'statevector': _sv_to_dict_list(sv),
+        'qubit_phases': _extract_qubit_phases(sv, n_qubits),
+        'probabilities': [float(abs(c) ** 2) for c in sv.data],
+        'labels': [f'|{i:0{n_qubits}b}⟩' for i in range(2 ** n_qubits)],
+    })
+    
+    return timeline
+
+
+def _build_qft_animation_partitions(timeline):
+    """Build partitions dari timeline steps berdasarkan phase."""
+    partitions = []
+    current_phase = None
+    start_idx = 0
+    
+    for i, step in enumerate(timeline):
+        if step['phase'] != current_phase:
+            if current_phase is not None:
+                partitions.append({
+                    'phase': current_phase,
+                    'label': current_phase.capitalize(),
+                    'count': i - start_idx,
+                    'start': start_idx,
+                    'end': i,
+                })
+            current_phase = step['phase']
+            start_idx = i
+    
+    if current_phase is not None:
+        partitions.append({
+            'phase': current_phase,
+            'label': current_phase.capitalize(),
+            'count': len(timeline) - start_idx,
+            'start': start_idx,
+            'end': len(timeline),
+        })
+    
+    return partitions
 
 
 def run_qft_from_signal(signal_data, shots=1024):
@@ -407,4 +589,66 @@ def get_qft_classical_payload(case_id):
         'input_signal': context['signal'],
         'padded_signal': context['padded_signal'],
         'fft': fft_result,
+    }
+
+
+def get_qft_animation_payload(case_id, shots=1024):
+    """Build QFT animation payload dengan timeline step-by-step.
+    
+    Include timeline dengan statevector tracking, partitions untuk phase stepper,
+    dan measurement results dari actual QFT circuit run.
+    """
+    case = get_qft_case_or_none(case_id)
+    if not case:
+        return None
+
+    context = _resolve_signal(case)
+    signal = context['signal']
+    n_qubits = context['n_qubits']
+
+    timeline = build_qft_animation_timeline(signal, n_qubits)
+    partitions = _build_qft_animation_partitions(timeline)
+    
+    fft_result = run_fft_full(context['padded_signal'])
+    qft_result = run_qft_from_signal(signal, int(shots))
+
+    snapshots = [
+        {
+            'phase': step['phase'],
+            'operation': step['operation'],
+            'description': step['description'],
+            'probabilities': step['probabilities'],
+            'labels': step['labels'],
+        }
+        for step in timeline
+    ]
+
+    input_probs = {}
+    probs = [float(abs(c) ** 2) for c in Statevector(_normalize_amplitudes(pad_signal(signal, 2 ** n_qubits))).data]
+    for i, prob in enumerate(probs):
+        input_probs[f'{i:0{n_qubits}b}'] = round(prob, 6)
+
+    return {
+        'case_id': case_id,
+        'signal_type': case.get('signal_type', 'unknown'),
+        'n_qubits': n_qubits,
+        'n_points_original': context['n_points_original'],
+        'n_points_padded': context['n_points_padded'],
+        'input_signal': signal,
+        'padded_signal': context['padded_signal'],
+        'fft': fft_result,
+        'qft': {
+            'counts': qft_result['counts'],
+            'probabilities': qft_result['probabilities'],
+            'dominant_bins': qft_result['dominant_bins'],
+            'dominant_probabilities': qft_result['dominant_probabilities'],
+        },
+        'partitions': partitions,
+        'timeline': timeline,
+        'snapshots': snapshots,
+        'measurement': {
+            'counts': qft_result['counts'],
+            'shots': shots,
+        },
+        'input_probabilities': [{'input_bits': k, 'probability': v} for k, v in sorted(input_probs.items())],
     }

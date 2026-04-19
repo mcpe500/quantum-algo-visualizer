@@ -12,6 +12,7 @@ import type {
   QFTBenchmarkResult,
   QFTQuantumTrace,
   QFTBenchmarkParams,
+  QFTAnimationPayload,
 } from "../types/qft";
 import type {
   VQECase,
@@ -22,6 +23,7 @@ import type {
 } from "../types/vqe";
 import type {
   QAOACase,
+  QAOAAnimationPayload,
   QAOABenchmarkResult,
   QAOATrace,
   QAOABenchmarkParams,
@@ -190,6 +192,14 @@ export const qftApi = {
     }
     return res.json();
   },
+
+  async getAnimation(caseId: string, shots = 1024): Promise<QFTAnimationPayload> {
+    const res = await fetch(`${API_BASE}/qft/animation/${caseId}?shots=${shots}`);
+    if (!res.ok) {
+      throw new Error("Animation data not found");
+    }
+    return res.json();
+  },
 };
 
 export const vqeApi = {
@@ -262,6 +272,12 @@ export const qaoaApi = {
   async getTrace(caseId: string): Promise<QAOATrace> {
     const res = await fetch(`${API_BASE}/qaoa/trace/${caseId}`);
     if (!res.ok) throw new Error("Trace not found");
+    return res.json();
+  },
+
+  async getAnimation(caseId: string, shots = 1024): Promise<QAOAAnimationPayload> {
+    const res = await fetch(`${API_BASE}/qaoa/animation/${caseId}?shots=${shots}`);
+    if (!res.ok) throw new Error("Animation data not found");
     return res.json();
   },
 };

@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { qaoaApi } from '../services/api';
 import type {
+  QAOAAnimationPayload,
   QAOABenchmarkResult,
   QAOABenchmarkParams,
   QAOATrace,
@@ -16,11 +17,13 @@ export interface UseQAOAReturn {
   benchmarkResult: QAOABenchmarkResult | null;
   circuitImage: QAOACircuitImage | null;
   trace: QAOATrace | null;
+  animationData: QAOAAnimationPayload | null;
   isLoading: boolean;
+  isLoadingAnimation: boolean;
   error: string | null;
-  activeTab: 'classic' | 'quantum';
+  activeTab: 'classic' | 'quantum' | 'animation';
   setSelectedCaseId: (id: string) => void;
-  setActiveTab: (tab: 'classic' | 'quantum') => void;
+  setActiveTab: (tab: 'classic' | 'quantum' | 'animation') => void;
   handleRun: () => Promise<void>;
   handleDownload: () => Promise<void>;
 }
@@ -31,9 +34,11 @@ export function useQAOA(): UseQAOAReturn {
   const [benchmarkResult, setBenchmarkResult] = useState<QAOABenchmarkResult | null>(null);
   const [circuitImage, setCircuitImage] = useState<QAOACircuitImage | null>(null);
   const [trace, setTrace] = useState<QAOATrace | null>(null);
+  const [animationData, setAnimationData] = useState<QAOAAnimationPayload | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [isLoadingAnimation, setIsLoadingAnimation] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'classic' | 'quantum'>('classic');
+  const [activeTab, setActiveTab] = useState<'classic' | 'quantum' | 'animation'>('classic');
 
   // Load cases on mount
   useEffect(() => {
@@ -77,6 +82,24 @@ export function useQAOA(): UseQAOAReturn {
     }
   }, []);
 
+  const loadAnimation = useCallback(async (caseId: string) => {
+    setIsLoadingAnimation(true);
+    try {
+      const data = await qaoaApi.getAnimation(caseId, DEFAULT_SHOTS);
+      setAnimationData(data);
+    } catch {
+      setAnimationData(null);
+    } finally {
+      setIsLoadingAnimation(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (activeTab === 'animation') {
+      void loadAnimation(selectedCaseId);
+    }
+  }, [activeTab, selectedCaseId, loadAnimation]);
+
   useEffect(() => {
     void loadCircuitImage(selectedCaseId);
     void loadTrace(selectedCaseId);
@@ -108,7 +131,9 @@ export function useQAOA(): UseQAOAReturn {
     benchmarkResult,
     circuitImage,
     trace,
+    animationData,
     isLoading,
+    isLoadingAnimation,
     error,
     activeTab,
     setSelectedCaseId,

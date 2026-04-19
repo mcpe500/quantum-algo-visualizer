@@ -116,3 +116,100 @@ export interface QAOACircuitImage {
   depth: number;
   gate_count: number;
 }
+
+export interface QAOAComplexNumber {
+  re: number;
+  im: number;
+}
+
+export interface QAOAQubitAnimationSummary {
+  qubit: number;
+  p_zero: number;
+  p_one: number;
+  theta: number;
+  phi: number;
+}
+
+export interface QAOAAnimationCheckpoint {
+  key: string;
+  kind: 'initial' | 'middle' | 'best';
+  label: string;
+  eval_index: number;
+  gamma: number[];
+  beta: number[];
+  expected_cut: number;
+  best_so_far: number;
+  dominant_bitstring: string;
+  dominant_cut: number;
+  dominant_probability: number;
+  dominant_partition: number[];
+  best_bitstring: string;
+  best_cut: number;
+  best_partition: number[];
+}
+
+export interface QAOAAnimationPartition {
+  key: string;
+  checkpoint_key: string;
+  checkpoint_label: string;
+  phase: string;
+  label: string;
+  start: number;
+  end: number;
+  count: number;
+}
+
+export interface QAOAAnimationHamiltonianTerm {
+  edge: [number, number];
+  pauli: string;
+  weight: number;
+}
+
+export interface QAOAAnimationStep {
+  step: number;
+  iteration: number;
+  checkpoint_key: string;
+  checkpoint_label: string;
+  checkpoint_kind: 'initial' | 'middle' | 'best';
+  phase: 'optimizer' | 'superposition' | 'cost' | 'mixer' | 'measurement' | 'update';
+  operation: string;
+  description: string;
+  gamma: number[];
+  beta: number[];
+  expected_cut: number;
+  best_so_far: number;
+  statevector: QAOAComplexNumber[];
+  qubit_summaries: QAOAQubitAnimationSummary[];
+  measurement_distribution: QAOACutPoint[];
+  layer?: number;
+  edge?: [number, number];
+  target_qubit?: number;
+  candidate_bitstring?: string;
+  cut_value?: number;
+  dominant_probability?: number;
+}
+
+export interface QAOAAnimationPayload {
+  timestamp: string;
+  case_id: string;
+  problem: string;
+  description: string;
+  n_nodes: number;
+  n_edges: number;
+  nodes: number[];
+  edges: [number, number][];
+  p_layers: number;
+  shots: number;
+  hamiltonian: {
+    label: string;
+    formula: string;
+    terms: QAOAAnimationHamiltonianTerm[];
+  };
+  checkpoints: QAOAAnimationCheckpoint[];
+  partitions: QAOAAnimationPartition[];
+  timeline: QAOAAnimationStep[];
+  exact: QAOAExactResult;
+  classical: QAOAClassicalResult;
+  quantum: QAOAQuantumResult;
+  comparison: QAOAComparison;
+}
