@@ -1,96 +1,142 @@
-import { useCallback } from 'react';
+import { useCallback, useEffect } from 'react';
 import { Canvas } from '@react-three/fiber';
 import { OrbitControls } from '@react-three/drei';
-import { RotateCcw, Undo2 } from 'lucide-react';
-import { BlochSphere } from '../components/qubit-playground/BlochSphere';
-import { StatePresets } from '../components/qubit-playground/StatePresets';
+import { Link } from 'react-router-dom';
+import { ArrowLeft } from 'lucide-react';
+import { BlochSphere3D } from '../components/qubit-playground/BlochSphere';
+import { StatevectorBars } from '../components/qubit-playground/BlochSphere';
+import { ScenarioPresets } from '../components/qubit-playground/ScenarioPresets';
 import { GateButtons } from '../components/qubit-playground/GateButtons';
 import { StateInfoPanel } from '../components/qubit-playground/StateInfoPanel';
 import { useQubitState } from '../components/qubit-playground/useQubitState';
-import { GATES } from '../components/qubit-playground/constants';
-import { Link } from 'react-router-dom';
-import { ArrowLeft } from 'lucide-react';
 import { PAGE_BACKGROUND_CLASS } from '../constants/ui';
 
-export default function QubitPlaygroundPage() {
-  const { state, history, pZero, pOne, setPreset, applyGate, reset, undo } = useQubitState();
+const SINGLE_GATE_NAMES = ['H', 'X', 'Y', 'Z', 'S', 'T', 'Rx', 'Ry', 'Rz'];
+const TWO_QUBIT_GATE_NAMES = ['CNOT', 'SWAP', 'CPhase'];
 
-  const handleGate = useCallback(
-    (gateIndex: number) => {
-      applyGate(GATES[gateIndex]);
+export default function QubitPlaygroundPage() {
+  useEffect(() => {
+    const originalWarn = console.warn;
+    console.warn = (...args: unknown[]) => {
+      const message = args[0];
+      if (typeof message === 'string' && message.includes('THREE.Clock')) return;
+      originalWarn.apply(console, args);
+    };
+    return () => {
+      console.warn = originalWarn;
+    };
+  }, []);
+
+  const {
+    numQubits,
+    statevector,
+    history,
+    blochData,
+    setNumQubits,
+    applySingleGate,
+    applyTwoQubitGate,
+    loadScenario,
+    reset,
+    undo,
+  } = useQubitState();
+
+  const handleApplySingleGate = useCallback(
+    (gateIndex: number, target: number, angle?: number) => {
+      if (gateIndex >= 0 && gateIndex < SINGLE_GATE_NAMES.length) {
+        applySingleGate(SINGLE_GATE_NAMES[gateIndex], target, angle);
+      }
     },
-    [applyGate]
+    [applySingleGate]
+  );
+
+  const handleApplyTwoQubitGate = useCallback(
+    (gateIndex: number, control: number, target: number, angle?: number) => {
+      if (gateIndex >= 0 && gateIndex < TWO_QUBIT_GATE_NAMES.length) {
+        applyTwoQubitGate(TWO_QUBIT_GATE_NAMES[gateIndex], control, target, angle);
+      }
+    },
+    [applyTwoQubitGate]
+  );
+
+  const handleNumQubitsChange = useCallback(
+    (n: number) => {
+      setNumQubits(n);
+    },
+    [setNumQubits]
   );
 
   return (
-    <div className={`min-h-screen ${PAGE_BACKGROUND_CLASS} p-4 md:p-8`}>
-      <Link
-        to="/"
-        className="inline-flex items-center gap-2 text-gray-600 hover:text-gray-900 mb-6 transition-colors"
-      >
-        <ArrowLeft className="w-4 h-4" />
-        Back to Algorithms
-      </Link>
+    <div className={`min-h-screen ${PAGE_BACKGROUND_CLASS} p-6`}>
+      <div className="max-w-[1280px] mx-auto">
+        <Link
+          to="/"
+          className="inline-flex items-center gap-2 text-gray-600 hover:text-gray-900 mb-6 transition-colors"
+        >
+          <ArrowLeft className="w-4 h-4" />
+          Back to Algorithms
+        </Link>
 
-      <div className="max-w-4xl mx-auto space-y-6">
-        <div className="text-center">
-          <h1 className="text-2xl font-bold text-gray-900 mb-1">Qubit Playground</h1>
-          <p className="text-sm text-gray-500">
-            Main-main dengan qubit. Pilih preset atau apply gate untuk transformasi state.
-          </p>
-        </div>
-
-        <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
-          <div className="h-[380px] md:h-[420px]">
-            <Canvas camera={{ position: [0, 0.5, 3.2], fov: 45 }}>
-              <OrbitControls enablePan={false} enableZoom minDistance={2} maxDistance={6} />
-              <BlochSphere state={state} />
-            </Canvas>
-          </div>
-        </div>
-
-        <div className="bg-white rounded-xl border border-slate-200 p-4 space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3 mb-5">
           <div>
-            <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-3">
-              Preset States
-            </p>
-            <StatePresets onSelect={setPreset} />
+            <h1 className="text-2xl font-bold text-gray-900">Qubit Playground</h1>
+            <p className="text-sm text-gray-500 mt-0.5">Main-main dengan qubit dan gerbang quantum secara interaktif</p>
           </div>
-
-          <div>
-            <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-3">
-              Gate Operations
-            </p>
-            <GateButtons onApply={handleGate} />
-          </div>
-
-          <div className="flex gap-2 justify-center">
-            <button
-              onClick={undo}
-              disabled={history.length <= 1}
-              className="px-3 py-1.5 text-xs font-medium border border-slate-300 rounded-lg hover:bg-slate-50 transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1.5"
-            >
-              <Undo2 className="w-3 h-3" />
-              Undo
-            </button>
-            <button
-              onClick={reset}
-              className="px-3 py-1.5 text-xs font-medium border border-slate-300 rounded-lg hover:bg-slate-50 transition-all flex items-center gap-1.5"
-            >
-              <RotateCcw className="w-3 h-3" />
-              Reset
-            </button>
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-medium text-gray-600">Qubits:</span>
+            {[1, 2, 3].map((n) => (
+              <button
+                key={n}
+                onClick={() => handleNumQubitsChange(n)}
+                className={`w-9 h-9 text-sm font-bold rounded-lg border-2 transition-all ${
+                  numQubits === n
+                    ? 'border-indigo-500 bg-indigo-50 text-indigo-700'
+                    : 'border-gray-300 bg-white text-gray-600 hover:border-gray-400'
+                }`}
+              >
+                {n}
+              </button>
+            ))}
           </div>
         </div>
 
-        <div className="max-w-sm mx-auto">
-          <StateInfoPanel
-            state={state}
-            pZero={pZero}
-            pOne={pOne}
-            historyLength={history.length}
-          />
+        <div className="mb-5">
+          <ScenarioPresets onLoadScenario={loadScenario} />
         </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 mb-5">
+          <div className="lg:col-span-7">
+            <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+              <div className="h-[300px] md:h-[340px]">
+                <Canvas camera={{ position: [0, 1.5, 7], fov: 50 }}>
+                  <OrbitControls enablePan={false} enableZoom minDistance={3} maxDistance={14} />
+                  <ambientLight intensity={0.4} />
+                  <directionalLight position={[5, 5, 5]} intensity={0.8} />
+                  <directionalLight position={[-5, -5, -5]} intensity={0.3} />
+                  <BlochSphere3D blochData={blochData.map((b, i) => ({ ...b, label: `q${i}` }))} numQubits={numQubits} />
+                </Canvas>
+              </div>
+              <StatevectorBars statevector={statevector} />
+            </div>
+          </div>
+
+          <div className="lg:col-span-5">
+            <GateButtons
+              numQubits={numQubits}
+              onApplySingleGate={handleApplySingleGate}
+              onApplyTwoQubitGate={handleApplyTwoQubitGate}
+              onUndo={undo}
+              onReset={reset}
+              canUndo={history.length > 1}
+            />
+          </div>
+        </div>
+
+        <StateInfoPanel
+          statevector={statevector}
+          blochData={blochData.map((b, i) => ({ ...b, label: `q${i}` }))}
+          numQubits={numQubits}
+          historyLength={history.length}
+        />
       </div>
     </div>
   );
