@@ -85,38 +85,38 @@ function BlochSphereNode({
   return (
     <group ref={groupRef} position={[targetX, y, 0.32]}>
       <mesh>
-        <sphereGeometry args={[0.38, 26, 26]} />
+        <sphereGeometry args={[0.42, 26, 26]} />
         <meshStandardMaterial ref={matRef} color={color} emissive={color} emissiveIntensity={isSuper ? 0.48 : 0.15} transparent opacity={isSuper ? 0.68 : 0.96} wireframe={isSuper} roughness={0.24} metalness={0.18} />
       </mesh>
 
       <mesh ref={arrowRef} position={[0, 0, 0]}>
         <group>
-          <mesh position={[0, 0.22, 0]}>
-            <coneGeometry args={[0.055, 0.14, 8]} />
+          <mesh position={[0, 0.24, 0]}>
+            <coneGeometry args={[0.07, 0.16, 8]} />
             <meshStandardMaterial color={color} emissive={color} emissiveIntensity={0.5} />
           </mesh>
-          <mesh position={[0, 0.08, 0]}>
-            <cylinderGeometry args={[0.022, 0.022, 0.16, 8]} />
+          <mesh position={[0, 0.09, 0]}>
+            <cylinderGeometry args={[0.028, 0.028, 0.18, 8]} />
             <meshStandardMaterial color={color} emissive={color} emissiveIntensity={0.35} />
           </mesh>
         </group>
       </mesh>
 
       <mesh rotation={[Math.PI / 2, 0, 0]}>
-        <torusGeometry args={[0.5, 0.025, 12, 48]} />
+        <torusGeometry args={[0.55, 0.028, 12, 48]} />
         <meshStandardMaterial color={phaseColor} emissive={phaseColor} emissiveIntensity={0.22} />
       </mesh>
 
-      <mesh position={[0, 0.6, 0]}>
-        <sphereGeometry args={[0.06, 12, 12]} />
+      <mesh position={[0, 0.65, 0]}>
+        <sphereGeometry args={[0.08, 12, 12]} />
         <meshStandardMaterial color={color} emissive={color} emissiveIntensity={0.6} />
       </mesh>
 
-      <Text position={[0, -0.52, 0]} fontSize={0.16} color={color} anchorX="center" anchorY="middle">
+      <Text position={[0, -0.56, 0]} fontSize={0.22} color={color} anchorX="center" anchorY="middle">
         {label}
       </Text>
 
-      <Text position={[0, -0.74, 0]} fontSize={0.11} color="#94A3B8" anchorX="center" anchorY="middle">
+      <Text position={[0, -0.78, 0]} fontSize={0.15} color="#475569" anchorX="center" anchorY="middle">
         {`P(|0⟩)=${Math.round(p0 * 100)}%`}
       </Text>
     </group>
