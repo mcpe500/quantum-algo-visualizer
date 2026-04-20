@@ -43,7 +43,7 @@ export default function QubitPlaygroundPage() {
   const circuitBuilder = useCircuitBuilder();
 
   const blochCards = blochData.map((b, i) => ({ ...b, label: `q${i}` }));
-  const pageWidthClass = activeTab === 'circuit' ? 'max-w-[1600px]' : 'max-w-[1280px]';
+  const pageWidthClass = activeTab === 'circuit' ? 'max-w-none' : 'max-w-[1280px]';
   const pageSubtitle = useMemo(
     () => activeTab === 'state'
       ? 'Main-main dengan qubit dan gerbang quantum secara interaktif.'
@@ -76,69 +76,74 @@ export default function QubitPlaygroundPage() {
     [setNumQubits]
   );
 
+  const tabSwitch = (
+    <div className="inline-flex rounded-xl border border-slate-200 bg-white p-1 shadow-sm">
+      <button
+        type="button"
+        onClick={() => setActiveTab('state')}
+        className={`rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
+          activeTab === 'state'
+            ? 'bg-slate-900 text-white'
+            : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+        }`}
+      >
+        State Lab
+      </button>
+      <button
+        type="button"
+        onClick={() => setActiveTab('circuit')}
+        className={`rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
+          activeTab === 'circuit'
+            ? 'bg-slate-900 text-white'
+            : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+        }`}
+      >
+        Circuit Lab
+      </button>
+    </div>
+  );
+
   return (
-    <div className={`min-h-screen ${PAGE_BACKGROUND_CLASS} p-6`}>
+    <div className={`min-h-screen ${PAGE_BACKGROUND_CLASS} ${activeTab === 'circuit' ? 'p-4 lg:p-6' : 'p-6'}`}>
       <div className={`${pageWidthClass} mx-auto`}>
         <Link
           to="/"
-          className="inline-flex items-center gap-2 text-gray-600 hover:text-gray-900 mb-6 transition-colors"
+          className={`inline-flex items-center gap-2 text-gray-600 hover:text-gray-900 transition-colors ${
+            activeTab === 'circuit' ? 'mb-4' : 'mb-6'
+          }`}
         >
           <ArrowLeft className="w-4 h-4" />
           Back to Algorithms
         </Link>
 
-        <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3 mb-5">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">Quantum Playground</h1>
-            <p className="text-sm text-gray-500 mt-0.5">{pageSubtitle}</p>
-          </div>
-          {activeTab === 'state' && (
-            <div className="flex items-center gap-2">
-              <span className="text-sm font-medium text-gray-600">Qubits:</span>
-              {[1, 2, 3].map((n) => (
-                <button
-                  key={n}
-                  onClick={() => handleNumQubitsChange(n)}
-                  className={`w-9 h-9 text-sm font-bold rounded-lg border-2 transition-all ${
-                    numQubits === n
-                      ? 'border-indigo-500 bg-indigo-50 text-indigo-700'
-                      : 'border-gray-300 bg-white text-gray-600 hover:border-gray-400'
-                  }`}
-                >
-                  {n}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-
-        <div className="mb-5 inline-flex rounded-xl border border-slate-200 bg-white p-1 shadow-sm">
-          <button
-            type="button"
-            onClick={() => setActiveTab('state')}
-            className={`rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
-              activeTab === 'state'
-                ? 'bg-slate-900 text-white'
-                : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
-            }`}
-          >
-            State Lab
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveTab('circuit')}
-            className={`rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
-              activeTab === 'circuit'
-                ? 'bg-slate-900 text-white'
-                : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
-            }`}
-          >
-            Circuit Lab
-          </button>
-        </div>
-
         {activeTab === 'state' ? (
           <>
+            <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3 mb-5">
+              <div>
+                <h1 className="text-2xl font-bold text-gray-900">Quantum Playground</h1>
+                <p className="text-sm text-gray-500 mt-0.5">{pageSubtitle}</p>
+              </div>
+              <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-medium text-gray-600">Qubits:</span>
+                  {[1, 2, 3].map((n) => (
+                    <button
+                      key={n}
+                      onClick={() => handleNumQubitsChange(n)}
+                      className={`w-9 h-9 text-sm font-bold rounded-lg border-2 transition-all ${
+                        numQubits === n
+                          ? 'border-indigo-500 bg-indigo-50 text-indigo-700'
+                          : 'border-gray-300 bg-white text-gray-600 hover:border-gray-400'
+                      }`}
+                    >
+                      {n}
+                    </button>
+                  ))}
+                </div>
+                {tabSwitch}
+              </div>
+            </div>
+
             <div className="mb-5">
               <ScenarioPresets onLoadScenario={loadScenario} />
             </div>
@@ -168,7 +173,17 @@ export default function QubitPlaygroundPage() {
             />
           </>
         ) : (
-          <CircuitLabTab builder={circuitBuilder} />
+          <div className="space-y-4">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <h1 className="text-xl font-bold text-gray-900">Quantum Playground</h1>
+                <p className="text-sm text-gray-500 mt-0.5">{pageSubtitle}</p>
+              </div>
+              {tabSwitch}
+            </div>
+
+            <CircuitLabTab builder={circuitBuilder} />
+          </div>
         )}
       </div>
     </div>
