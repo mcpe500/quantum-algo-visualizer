@@ -250,7 +250,7 @@ function createPlacementId(): string {
 }
 
 function clampQubits(value: number): number {
-  return Math.max(1, Math.min(3, Math.round(value)));
+  return Math.max(1, Math.round(value));
 }
 
 function clampColumns(value: number): number {
@@ -660,7 +660,7 @@ export function useCircuitBuilder() {
     [placements, selectedPlacementId]
   );
 
-  const canIncreaseQubits = numQubits < 3;
+  const canIncreaseQubits = true;
   const canDecreaseQubits = numQubits > 1;
 
   const setNumQubits = useCallback((value: number) => {
@@ -708,7 +708,7 @@ export function useCircuitBuilder() {
       const definition = getGateDefinition(gate);
       if (row < 0 || row >= numQubits) return false;
       if (definition.numQubits === 2) {
-        return numQubits >= 2 && row < numQubits - 1;
+        return numQubits >= 2;
       }
       return true;
     },
@@ -731,44 +731,54 @@ export function useCircuitBuilder() {
   );
 
   const placeGate = useCallback(
-    (gate: CircuitGateName, row: number, column: number) => {
+    (gate: CircuitGateName, row: number, column: number, targetRow?: number) => {
       if (!canPlaceGate(gate, row)) return false;
       if (column < 0 || column >= columnCount) return false;
 
       const definition = getGateDefinition(gate);
+      let actualTargetRow: number | undefined = targetRow;
+      if (definition.numQubits === 2 && actualTargetRow === undefined) {
+        actualTargetRow = row < numQubits - 1 ? row + 1 : Math.max(0, row - 1);
+      }
       const placement: CircuitPlacement = {
         id: createPlacementId(),
         gate,
         row,
         column,
-        targetRow: definition.numQubits === 2 ? row + 1 : undefined,
+        targetRow: actualTargetRow,
         angle: definition.defaultAngle,
       };
 
       upsertPlacement(placement);
       return true;
     },
-    [canPlaceGate, columnCount, upsertPlacement]
+    [canPlaceGate, columnCount, numQubits, upsertPlacement]
   );
 
   const movePlacement = useCallback(
-    (placementId: string, row: number, column: number) => {
+    (placementId: string, row: number, column: number, targetRow?: number) => {
       const existing = placements.find((placement) => placement.id === placementId);
       if (!existing) return false;
       if (!canPlaceGate(existing.gate, row)) return false;
       if (column < 0 || column >= columnCount) return false;
 
+      const definition = getGateDefinition(existing.gate);
+      let actualTargetRow: number | undefined = targetRow ?? existing.targetRow;
+      if (definition.numQubits === 2 && actualTargetRow === undefined) {
+        actualTargetRow = row < numQubits - 1 ? row + 1 : Math.max(0, row - 1);
+      }
+
       const movedPlacement: CircuitPlacement = {
         ...existing,
         row,
         column,
-        targetRow: getGateDefinition(existing.gate).numQubits === 2 ? row + 1 : undefined,
+        targetRow: actualTargetRow,
       };
 
       upsertPlacement(movedPlacement, placementId);
       return true;
     },
-    [placements, canPlaceGate, columnCount, upsertPlacement]
+    [placements, canPlaceGate, columnCount, numQubits, upsertPlacement]
   );
 
   const removePlacementAt = useCallback(
@@ -798,6 +808,19 @@ export function useCircuitBuilder() {
       })
     );
   }, [selectedPlacementId]);
+
+  const updateSelectedTargetRow = useCallback((targetRow: number) => {
+    setPlacements((current) =>
+      current.map((placement) => {
+        if (placement.id !== selectedPlacementId) return placement;
+        const definition = getGateDefinition(placement.gate);
+        if (definition.numQubits !== 2) return placement;
+        if (targetRow < 0 || targetRow >= numQubits) return placement;
+        if (targetRow === placement.row) return placement;
+        return { ...placement, targetRow };
+      })
+    );
+  }, [selectedPlacementId, numQubits]);
 
   const getCellState = useCallback(
     (row: number, column: number): CircuitCellState | null => {
@@ -1023,6 +1046,7 @@ export function useCircuitBuilder() {
     removePlacementAt,
     selectPlacement,
     updateSelectedAngle,
+    updateSelectedTargetRow,
     canPlaceGate,
     getCellState,
     exportProjectData,

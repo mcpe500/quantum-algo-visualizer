@@ -199,6 +199,7 @@ export default function CircuitLabTab({ builder }: CircuitLabTabProps) {
     removePlacementAt,
     selectPlacement,
     updateSelectedAngle,
+    updateSelectedTargetRow,
     canPlaceGate,
     getCellState,
     exportCircuitCode,
@@ -565,6 +566,9 @@ export default function CircuitLabTab({ builder }: CircuitLabTabProps) {
                           isHovered && activeDraggedGate && activeDraggedGate.numQubits === 2 && !canPlaceGate(activeDraggedGate.gate, row)
                         );
                         const placementDefinition = cellState ? getGateDefinition(cellState.placement.gate) : null;
+                        const targetRow = cellState?.placement.targetRow;
+                        const targetIsAbove = targetRow !== undefined && targetRow < row;
+                        const targetIsBelow = targetRow !== undefined && targetRow > row;
                         const isSelected = cellState?.placement.id === selectedPlacementId;
                         const isActiveStep = cellState?.placement.id === activePlacementId;
                         const isActiveColumn = activeColumn === column;
@@ -600,8 +604,11 @@ export default function CircuitLabTab({ builder }: CircuitLabTabProps) {
                             {isTwoQubitGate && cellState?.role === 'primary' && (
                               <>
                                 <div
-                                  className={`absolute left-1/2 top-1/2 z-0 w-0.5 -translate-x-1/2 ${isActiveStep ? 'bg-blue-400' : 'bg-violet-300'}`}
-                                  style={{ height: 'calc(100% + 24px)' }}
+                                  className={`absolute left-1/2 z-0 w-0.5 -translate-x-1/2 ${isActiveStep ? 'bg-blue-400' : 'bg-violet-300'}`}
+                                  style={targetIsAbove
+                                    ? { bottom: '50%', height: 'calc(100% + 24px)' }
+                                    : { top: '50%', height: 'calc(100% + 24px)' }
+                                  }
                                 />
                                 {placementDefinition?.gate === 'SWAP' ? (
                                   <div className="absolute left-1/2 top-1/2 z-10 -translate-x-1/2 -translate-y-1/2 text-2xl font-semibold text-violet-600">×</div>
@@ -614,8 +621,11 @@ export default function CircuitLabTab({ builder }: CircuitLabTabProps) {
                             {isTwoQubitGate && cellState?.role === 'secondary' && (
                               <>
                                 <div
-                                  className={`absolute left-1/2 top-[-24px] z-0 w-0.5 -translate-x-1/2 ${isActiveStep ? 'bg-blue-400' : 'bg-violet-300'}`}
-                                  style={{ height: 'calc(50% + 24px)' }}
+                                  className={`absolute left-1/2 z-0 w-0.5 -translate-x-1/2 ${isActiveStep ? 'bg-blue-400' : 'bg-violet-300'}`}
+                                  style={targetIsBelow
+                                    ? { top: '-24px', height: 'calc(50% + 24px)' }
+                                    : { bottom: '-24px', height: 'calc(50% + 24px)' }
+                                  }
                                 />
                                 {placementDefinition?.gate === 'SWAP' ? (
                                   <div className="absolute left-1/2 top-1/2 z-10 -translate-x-1/2 -translate-y-1/2 text-2xl font-semibold text-violet-600">×</div>
@@ -633,7 +643,7 @@ export default function CircuitLabTab({ builder }: CircuitLabTabProps) {
 
                             {!cellState && (
                               <span className="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-300">
-                                {invalidTwoQubitDrop ? 'Need q+1' : ''}
+                                {invalidTwoQubitDrop ? 'Need 2+ qubits' : ''}
                               </span>
                             )}
 
@@ -663,7 +673,7 @@ export default function CircuitLabTab({ builder }: CircuitLabTabProps) {
                                   event.stopPropagation();
                                   handlePlacementSelection(cellState.placement.id);
                                 }}
-                                className={`absolute left-1/2 top-2 z-20 flex h-10 min-w-[52px] -translate-x-1/2 items-center justify-center rounded-2xl px-3 text-sm font-bold shadow-lg ${GATE_TILE_CLASSES[placementDefinition.tone]}`}
+                                className={`absolute left-1/2 ${targetIsAbove ? 'bottom-2' : 'top-2'} z-20 flex h-10 min-w-[52px] -translate-x-1/2 items-center justify-center rounded-2xl px-3 text-sm font-bold shadow-lg ${GATE_TILE_CLASSES[placementDefinition.tone]}`}
                               >
                                 {placementDefinition.symbol}
                               </button>
@@ -810,6 +820,21 @@ export default function CircuitLabTab({ builder }: CircuitLabTabProps) {
                               onChange={(event) => updateSelectedAngle(Number(event.target.value))}
                               className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none transition-colors focus:border-blue-400"
                             />
+                          </label>
+                        )}
+
+                        {selectedPlacement.targetRow !== undefined && (
+                          <label className="block space-y-2">
+                            <span className="text-sm font-medium text-slate-700">Target Qubit</span>
+                            <select
+                              value={selectedPlacement.targetRow}
+                              onChange={(event) => updateSelectedTargetRow(Number(event.target.value))}
+                              className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none transition-colors focus:border-blue-400"
+                            >
+                              {Array.from({ length: numQubits }, (_, i) => i).filter(i => i !== selectedPlacement.row).map(i => (
+                                <option key={i} value={i}>q{i}</option>
+                              ))}
+                            </select>
                           </label>
                         )}
 
