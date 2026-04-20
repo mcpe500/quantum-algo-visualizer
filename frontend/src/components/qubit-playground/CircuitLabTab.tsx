@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type DragEvent } from 'react';
 import {
   Box,
+  Download,
   Grip,
   Info,
   Lightbulb,
@@ -14,11 +15,13 @@ import {
   Trash2,
   WandSparkles,
 } from 'lucide-react';
+import { downloadBlob } from '../../utils/download';
 import { QubitStatePreview } from './QubitStatePreview';
 import { StateInfoPanel } from './StateInfoPanel';
 import {
   CIRCUIT_GATE_LIBRARY,
   type CircuitBuilderState,
+  type CircuitCodeExportFormat,
   type CircuitGateDefinition,
   type CircuitGateName,
 } from './useCircuitBuilder';
@@ -48,6 +51,15 @@ const INSIGHT_TONES = {
   violet: 'bg-violet-50 border-violet-200 text-violet-900',
   amber: 'bg-amber-50 border-amber-200 text-amber-900',
 } as const;
+
+const EXPORT_FORMATS: CircuitCodeExportFormat[] = ['json', 'qiskit', 'cirq', 'projectq'];
+
+const EXPORT_LABELS: Record<CircuitCodeExportFormat, string> = {
+  json: 'JSON',
+  qiskit: 'Qiskit',
+  cirq: 'Cirq',
+  projectq: 'ProjectQ',
+};
 
 function parseDragPayload(event: DragEvent<HTMLElement>): DragPayload | null {
   const rawPayload = event.dataTransfer.getData('application/json');
@@ -116,11 +128,14 @@ export default function CircuitLabTab({ builder }: CircuitLabTabProps) {
     placements,
     selectedPlacementId,
     selectedPlacement,
+    canIncreaseQubits,
+    canDecreaseQubits,
     statevector,
     blochCards,
     playbackFrames,
     insights,
-    setNumQubits,
+    increaseQubits,
+    decreaseQubits,
     addColumn,
     removeColumn,
     clearCircuit,
@@ -131,12 +146,14 @@ export default function CircuitLabTab({ builder }: CircuitLabTabProps) {
     updateSelectedAngle,
     canPlaceGate,
     getCellState,
+    exportCircuitCode,
   } = builder;
 
   const [dragPayload, setDragPayload] = useState<DragPayload | null>(null);
   const [hoveredCell, setHoveredCell] = useState<string | null>(null);
   const [currentStep, setCurrentStep] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
+  const [exportFormat, setExportFormat] = useState<CircuitCodeExportFormat>('json');
 
   const groupedGates = useMemo(() => {
     return {
@@ -193,6 +210,15 @@ export default function CircuitLabTab({ builder }: CircuitLabTabProps) {
   const previewSubtitle = activeFrame?.column === null
     ? 'Snapshot awal sebelum gate diterapkan ke state |0...0⟩.'
     : `Step ${formatPlaybackSummary(currentStep, totalSteps)} · ${activeFrame.label}`;
+  const exportOutputs = useMemo(() => {
+    return {
+      json: exportCircuitCode('json'),
+      qiskit: exportCircuitCode('qiskit'),
+      cirq: exportCircuitCode('cirq'),
+      projectq: exportCircuitCode('projectq'),
+    };
+  }, [exportCircuitCode]);
+  const activeExportCode = exportOutputs[exportFormat];
 
   useEffect(() => {
     setCurrentStep((value) => Math.min(value, totalSteps));
@@ -295,6 +321,15 @@ export default function CircuitLabTab({ builder }: CircuitLabTabProps) {
     clearDragState();
   };
 
+  const downloadExport = (format: CircuitCodeExportFormat) => {
+    const extension = format === 'json' ? 'json' : 'py';
+    const mimeType = format === 'json' ? 'application/json' : 'text/x-python';
+    const filename = `quantum-playground-${format}-q${numQubits}-c${columnCount}.${extension}`;
+    const content = exportOutputs[format];
+
+    downloadBlob(new Blob([content], { type: mimeType }), filename);
+  };
+
   return (
     <div className="space-y-5">
       <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
@@ -302,21 +337,26 @@ export default function CircuitLabTab({ builder }: CircuitLabTabProps) {
           <div className="flex flex-wrap items-center gap-4">
             <div className="flex items-center gap-2">
               <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Qubits</span>
-              <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 p-1">
-                {[1, 2, 3].map((value) => (
-                  <button
-                    key={value}
-                    type="button"
-                    onClick={() => setNumQubits(value)}
-                    className={`h-9 w-9 rounded-lg text-sm font-semibold transition-colors ${
-                      numQubits === value
-                        ? 'bg-white text-indigo-700 shadow-sm ring-1 ring-indigo-100'
-                        : 'text-slate-600 hover:bg-white hover:text-slate-900'
-                    }`}
-                  >
-                    {value}
-                  </button>
-                ))}
+              <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-2 py-1.5">
+                <button
+                  type="button"
+                  onClick={decreaseQubits}
+                  disabled={!canDecreaseQubits}
+                  className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700 transition-colors hover:border-slate-300 disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  <Minus className="h-4 w-4" />
+                </button>
+                <span className="min-w-[88px] text-center text-sm font-medium text-slate-700">
+                  {numQubits} qubits
+                </span>
+                <button
+                  type="button"
+                  onClick={increaseQubits}
+                  disabled={!canIncreaseQubits}
+                  className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700 transition-colors hover:border-slate-300 disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  <Plus className="h-4 w-4" />
+                </button>
               </div>
             </div>
 
@@ -351,6 +391,15 @@ export default function CircuitLabTab({ builder }: CircuitLabTabProps) {
               <MousePointer2 className="h-3.5 w-3.5 text-slate-400" />
               Drag & drop gate ke grid, lalu replay langkahnya.
             </div>
+
+            <button
+              type="button"
+              onClick={() => downloadExport('json')}
+              className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition-colors hover:border-slate-300 hover:bg-slate-50"
+            >
+              <Download className="h-4 w-4" />
+              Save JSON
+            </button>
 
             <button
               type="button"
@@ -855,6 +904,51 @@ export default function CircuitLabTab({ builder }: CircuitLabTabProps) {
           </section>
         </div>
       </div>
+
+      <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+          <div>
+            <h3 className="text-lg font-semibold text-slate-900">Export Preview</h3>
+            <p className="mt-1 text-sm text-slate-500">
+              Lihat langsung bentuk project JSON dan syntax yang setara untuk Qiskit, Cirq, atau ProjectQ.
+            </p>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="inline-flex rounded-xl border border-slate-200 bg-slate-50 p-1">
+              {EXPORT_FORMATS.map((format) => (
+                <button
+                  key={format}
+                  type="button"
+                  onClick={() => setExportFormat(format)}
+                  className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
+                    exportFormat === format
+                      ? 'bg-white text-slate-900 shadow-sm'
+                      : 'text-slate-500 hover:text-slate-900'
+                  }`}
+                >
+                  {EXPORT_LABELS[format]}
+                </button>
+              ))}
+            </div>
+
+            <button
+              type="button"
+              onClick={() => downloadExport(exportFormat)}
+              className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition-colors hover:border-slate-300 hover:bg-slate-50"
+            >
+              <Download className="h-4 w-4" />
+              Download {EXPORT_LABELS[exportFormat]}
+            </button>
+          </div>
+        </div>
+
+        <div className="mt-4 overflow-x-auto rounded-2xl bg-slate-950 p-4 shadow-inner">
+          <pre className="min-w-max font-mono text-[12px] leading-6 text-cyan-300">
+            <code>{activeExportCode}</code>
+          </pre>
+        </div>
+      </section>
 
       <StateInfoPanel
         statevector={statevector}
