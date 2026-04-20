@@ -1,6 +1,7 @@
-import type { MutableRefObject } from 'react';
 import type { QAOAAnimationCheckpoint, QAOAAnimationPayload, QAOAAnimationStep } from '../../../types/qaoa';
 import { PHASE_ORDER } from './constants';
+
+export { wait, waitForAnimationFrame, waitForAnimationFrames, waitForCanvasReady } from '../../../shared/utils';
 
 export function formatPercent(value: number): string {
   return `${(value * 100).toFixed(1)}%`;
@@ -41,41 +42,4 @@ export function getActivePhases(data: QAOAAnimationPayload, checkpointKey: strin
       .map((step) => step.phase),
   );
   return PHASE_ORDER.filter((phase) => phases.has(phase));
-}
-
-export function wait(ms: number) {
-  return new Promise<void>((resolve) => {
-    window.setTimeout(resolve, ms);
-  });
-}
-
-export function waitForAnimationFrame() {
-  return new Promise<void>((resolve) => {
-    window.requestAnimationFrame(() => resolve());
-  });
-}
-
-export async function waitForAnimationFrames(count = 2) {
-  for (let index = 0; index < count; index += 1) {
-    await waitForAnimationFrame();
-  }
-}
-
-export async function waitForCanvasReady(
-  canvasRef: MutableRefObject<HTMLCanvasElement | null>,
-  minWidth: number,
-  minHeight: number,
-  timeoutMs = 5000,
-) {
-  const start = performance.now();
-
-  while (performance.now() - start < timeoutMs) {
-    const canvas = canvasRef.current;
-    if (canvas && canvas.width >= minWidth && canvas.height >= minHeight) {
-      return canvas;
-    }
-    await waitForAnimationFrame();
-  }
-
-  throw new Error('Canvas export 1080p belum siap. Coba ulangi beberapa saat lagi.');
 }

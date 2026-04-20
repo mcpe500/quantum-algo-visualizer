@@ -1,64 +1,15 @@
-import { ChevronRight } from 'lucide-react';
-import type { DJAnimationPartition, DJAnimationPayload, DJAnimationStep } from '../../../types/dj';
-import { MARKER_STYLE, PHASE_LABEL, PROFILE_LABEL } from './constants';
+import type { DJAnimationPayload, DJAnimationStep } from '../../../types/dj';
+import { MARKER_STYLE, PROFILE_LABEL } from './constants';
 import { formatPercent } from './helpers';
 import { getContextGlossary, getStepExplanation, getStepHeadline } from './narration';
 import { buildOracleConstructionModel } from './oracle-construction';
+export { DetailCard } from '../../../shared/components/DetailCard';
+export { PhaseStepper } from '../../../shared/components/PhaseStepper';
 
 export function MarkerBadge({ marker }: { marker: string }) {
   const value = marker || '-';
   const classes = MARKER_STYLE[value] || 'bg-slate-50 text-slate-400 border-slate-200';
   return <span className={`inline-flex min-w-8 justify-center rounded border px-1.5 py-0.5 font-mono text-[11px] ${classes}`}>{value}</span>;
-}
-
-export function PhaseStepper({
-  partitions,
-  activePhase,
-  activeStep,
-  onJumpPhase,
-  disabled,
-}: {
-  partitions: DJAnimationPartition[];
-  activePhase: string;
-  activeStep: DJAnimationStep;
-  onJumpPhase: (phase: string) => void;
-  disabled: boolean;
-}) {
-  return (
-    <div className="px-4 pb-4 pt-2 space-y-2">
-      <div className="flex items-center gap-1.5 overflow-x-auto">
-        {partitions.map((partition, index) => {
-          const isActive = partition.phase === activePhase;
-          return (
-            <div key={`${partition.phase}-${partition.start_col}`} className="flex items-center gap-1.5 shrink-0">
-              {index > 0 && <ChevronRight className="h-3.5 w-3.5 text-slate-300" />}
-              <button
-                onClick={() => onJumpPhase(partition.phase)}
-                disabled={disabled}
-                className={`rounded-full border px-3 py-1.5 text-[11px] font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-55 ${
-                  isActive
-                    ? 'border-violet-400 bg-violet-600 text-white'
-                    : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'
-                }`}
-              >
-                {PHASE_LABEL[partition.phase] || partition.label}
-                <span className="ml-1 opacity-80">({partition.count})</span>
-              </button>
-            </div>
-          );
-        })}
-      </div>
-
-      <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
-        <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Active Column</p>
-        <p className="mt-1 text-[15px] font-semibold text-slate-900">Step {activeStep.step} · {activeStep.operation}</p>
-        {activeStep.comment && (
-          <p className="mt-1 text-[13px] font-medium text-violet-600">{activeStep.comment}</p>
-        )}
-        <p className="mt-1 text-[13px] leading-6 text-slate-600">{activeStep.description}</p>
-      </div>
-    </div>
-  );
 }
 
 export function ActiveMarkerStrip({ step, nQubits }: { step: DJAnimationStep; nQubits: number }) {
@@ -134,16 +85,6 @@ export function StateSummaryPanel({ step, nQubits }: { step: DJAnimationStep; nQ
           })}
         </tbody>
       </table>
-    </div>
-  );
-}
-
-export function DetailCard({ label, value, hint }: { label: string; value: string; hint: string }) {
-  return (
-    <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5">
-      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{label}</p>
-      <p className="text-base font-bold text-slate-900">{value}</p>
-      <p className="text-[10px] text-slate-500 leading-tight mt-0.5">{hint}</p>
     </div>
   );
 }

@@ -372,7 +372,7 @@ export function DJQuantumAnimation({ data, onExportingChange }: DJQuantumAnimati
         </div>
       </header>
 
-      <PhaseStepper partitions={data.partitions} activePhase={activePhase} activeStep={activeStep} onJumpPhase={handleJumpPhase} disabled={isExporting || isConverting} />
+      <PhaseStepper partitions={data.partitions} activePhase={activePhase} activeStep={activeStep} onJumpPhase={handleJumpPhase} disabled={isExporting || isConverting} color="violet" startKey="start_col" activeLabel="Active Column" />
 
       <div className="grid gap-4 px-4 pb-4 xl:grid-cols-[1fr_380px]">
         <div className="space-y-4">

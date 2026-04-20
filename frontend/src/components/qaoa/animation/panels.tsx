@@ -1,5 +1,6 @@
 import { ChevronRight } from 'lucide-react';
 import { GraphVisualization } from '../../charts/GraphVisualization';
+import { DetailCard } from '../../../shared/components/DetailCard';
 import type {
   QAOAAnimationCheckpoint,
   QAOAAnimationPayload,
@@ -10,15 +11,7 @@ import { buildHybridLoopModel } from './hybrid-loop';
 import { formatPercent, formatRadians, getActivePhases, getPartitionFromBitstring } from './helpers';
 import { getStepExplanation, getStepHeadline } from './narration';
 
-export function DetailCard({ label, value, hint }: { label: string; value: string; hint: string }) {
-  return (
-    <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5">
-      <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">{label}</p>
-      <p className="text-base font-bold text-slate-900">{value}</p>
-      <p className="mt-0.5 text-[10px] leading-tight text-slate-500">{hint}</p>
-    </div>
-  );
-}
+export { DetailCard };
 
 export function CheckpointRail({
   checkpoints,

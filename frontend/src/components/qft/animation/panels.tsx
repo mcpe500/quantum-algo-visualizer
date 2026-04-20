@@ -1,73 +1,14 @@
-import { ChevronRight } from 'lucide-react';
 import type {
-  QFTAnimationPartition,
   QFTAnimationPayload,
   QFTAnimationStep,
 } from '../../../types/qft';
-import { PHASE_LABEL, SIGNAL_TYPE_LABEL } from './constants';
+import { SIGNAL_TYPE_LABEL } from './constants';
 import { formatPercent, formatRadians } from './helpers';
 import { getContextGlossary, getStepExplanation, getStepHeadline } from './narration';
 import { buildPhaseCascadeModel } from './phase-cascade';
 import { PhaseWheelStack } from './phase-wheel';
-
-export function PhaseStepper({
-  partitions,
-  activePhase,
-  activeStep,
-  onJumpPhase,
-  disabled,
-}: {
-  partitions: QFTAnimationPartition[];
-  activePhase: string;
-  activeStep: QFTAnimationStep;
-  onJumpPhase: (phase: string) => void;
-  disabled: boolean;
-}) {
-  return (
-    <div className="px-4 pb-4 pt-2 space-y-2">
-      <div className="flex items-center gap-1.5 overflow-x-auto">
-        {partitions.map((partition, index) => {
-          const isActive = partition.phase === activePhase;
-          return (
-            <div key={`${partition.phase}-${partition.start}`} className="flex items-center gap-1.5 shrink-0">
-              {index > 0 && <ChevronRight className="h-3.5 w-3.5 text-slate-300" />}
-              <button
-                onClick={() => onJumpPhase(partition.phase)}
-                disabled={disabled}
-                className={`rounded-full border px-3 py-1.5 text-[11px] font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-55 ${
-                  isActive
-                    ? 'border-teal-400 bg-teal-600 text-white'
-                    : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'
-                }`}
-              >
-                {PHASE_LABEL[partition.phase] || partition.label}
-                <span className="ml-1 opacity-80">({partition.count})</span>
-              </button>
-            </div>
-          );
-        })}
-      </div>
-
-      <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
-        <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Step Aktif</p>
-        <p className="mt-1 text-[15px] font-semibold text-slate-900">
-          Step {activeStep.step} · {activeStep.operation}
-        </p>
-        <p className="mt-1 text-[13px] leading-6 text-slate-600">{activeStep.description}</p>
-      </div>
-    </div>
-  );
-}
-
-export function DetailCard({ label, value, hint }: { label: string; value: string; hint: string }) {
-  return (
-    <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5">
-      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{label}</p>
-      <p className="text-base font-bold text-slate-900">{value}</p>
-      <p className="text-[10px] text-slate-500 leading-tight mt-0.5">{hint}</p>
-    </div>
-  );
-}
+export { DetailCard } from '../../../shared/components/DetailCard';
+export { PhaseStepper } from '../../../shared/components/PhaseStepper';
 
 export function SignalInputPanel({ data }: { data: QFTAnimationPayload }) {
   const signalType = SIGNAL_TYPE_LABEL[data.signal_type] || data.signal_type;

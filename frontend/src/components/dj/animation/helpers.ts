@@ -1,51 +1,13 @@
-import type { MutableRefObject } from 'react';
 import type { DJAnimationStep } from '../../../types/dj';
 
-export function clamp(value: number, min: number, max: number) {
-  return Math.min(Math.max(value, min), max);
-}
-
-export function wait(ms: number) {
-  return new Promise<void>((resolve) => {
-    window.setTimeout(resolve, ms);
-  });
-}
-
-export function waitForAnimationFrame() {
-  return new Promise<void>((resolve) => {
-    window.requestAnimationFrame(() => resolve());
-  });
-}
-
-export async function waitForAnimationFrames(count = 2) {
-  for (let index = 0; index < count; index += 1) {
-    await waitForAnimationFrame();
-  }
-}
-
-export async function waitForCanvasReady(
-  canvasRef: MutableRefObject<HTMLCanvasElement | null>,
-  minWidth: number,
-  minHeight: number,
-  timeoutMs = 5000,
-) {
-  const start = performance.now();
-
-  while (performance.now() - start < timeoutMs) {
-    const canvas = canvasRef.current;
-    if (canvas && canvas.width >= minWidth && canvas.height >= minHeight) {
-      return canvas;
-    }
-    await waitForAnimationFrame();
-  }
-
-  throw new Error('Canvas export 1080p belum siap. Coba ulangi beberapa saat lagi.');
-}
+export { wait, waitForAnimationFrame, waitForAnimationFrames, waitForCanvasReady } from '../../../shared/utils';
+export { getColumnLayout, formatPercent } from '../../../shared/utils';
+export { clamp } from '../../../shared/utils';
+import { getLaneYs as sharedGetLaneYs } from '../../../shared/utils';
 
 export function getLaneYs(nQubits: number) {
   const total = nQubits + 1;
-  const gap = total >= 5 ? 1.38 : 1.52;
-  return Array.from({ length: total }, (_, index) => ((total - 1) / 2 - index) * gap);
+  return sharedGetLaneYs(total);
 }
 
 export function getQubitP1(probs: number[], labels: string[], qubitIdx: number, totalQubits: number) {
@@ -57,21 +19,6 @@ export function getQubitP1(probs: number[], labels: string[], qubitIdx: number, 
     }
   }
   return p1;
-}
-
-export function getColumnLayout(stepCount: number) {
-  const span = stepCount <= 10 ? 14 : stepCount <= 18 ? 18 : stepCount <= 26 ? 21 : 24;
-  const startX = -span / 2;
-  const endX = span / 2;
-  const gap = stepCount > 1 ? span / (stepCount - 1) : 0;
-  const columnXs = Array.from({ length: stepCount }, (_, index) => (stepCount === 1 ? 0 : startX + index * gap));
-  return { startX, endX, gap, columnXs };
-}
-
-export function formatPercent(value: number) {
-  const percent = value * 100;
-  if (percent >= 10) return `${percent.toFixed(1)}%`;
-  return `${percent.toFixed(2)}%`;
 }
 
 export function roundedRect(ctx: CanvasRenderingContext2D, x: number, y: number, width: number, height: number, radius: number) {
