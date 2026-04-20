@@ -1,5 +1,4 @@
-import { useRef, useMemo } from 'react';
-import { useFrame } from '@react-three/fiber';
+import { useMemo } from 'react';
 import { Text } from '@react-three/drei';
 import * as THREE from 'three';
 
@@ -38,27 +37,39 @@ function SingleBlochSphere({
   bloch: SingleBlochData;
   numQubits: number;
 }) {
-  const vectorRef = useRef<THREE.Group>(null);
-  const targetRef = useRef(new THREE.Vector3(bloch.x, bloch.z, bloch.y));
-
-  useFrame(() => {
-    if (vectorRef.current) {
-      targetRef.current.set(bloch.x, bloch.z, bloch.y);
-      vectorRef.current.position.lerp(targetRef.current, 0.1);
+  const targetVector = useMemo(
+    () => new THREE.Vector3(bloch.x, bloch.z, bloch.y),
+    [bloch.x, bloch.y, bloch.z]
+  );
+  const vectorLength = useMemo(() => Math.min(targetVector.length(), 1), [targetVector]);
+  const direction = useMemo(() => {
+    if (vectorLength < 1e-6) {
+      return new THREE.Vector3(0, 1, 0);
     }
-  });
+
+    return targetVector.clone().normalize();
+  }, [targetVector, vectorLength]);
+  const arrowQuaternion = useMemo(
+    () => new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), direction),
+    [direction]
+  );
 
   const color = useMemo(
     () => getStateColor(bloch.x, bloch.y, bloch.z),
     [bloch.x, bloch.y, bloch.z]
   );
 
-  const posX = (index - (numQubits - 1) / 2) * 2.8;
+  const sphereScale = numQubits <= 1 ? 1.0 : numQubits === 2 ? 0.9 : 0.65;
+  const spacing = numQubits <= 1 ? 0 : numQubits === 2 ? 2.4 : 2.0;
+  const posX = (index - (numQubits - 1) / 2) * spacing;
+  const headLength =
+    vectorLength < 0.12 ? Math.max(vectorLength * 0.6, 0.04) : Math.min(0.18, vectorLength * 0.28);
+  const shaftLength = Math.max(vectorLength - headLength, 0);
 
   return (
-    <group position={[posX, 0, 0]}>
+    <group position={[posX, 0, 0]} scale={[sphereScale, sphereScale, sphereScale]}>
       <Text
-        position={[0, 1.4, 0]}
+        position={[0, 1.8, 0]}
         fontSize={0.2}
         color="#000000"
         anchorX="center"
@@ -87,38 +98,38 @@ function SingleBlochSphere({
         <meshStandardMaterial color="#9ca3af" />
       </mesh>
 
-      <Text position={[0, 1.25, 0]} fontSize={0.18} color="#6b7280" anchorX="center">
+      <Text position={[0, 1.38, 0]} fontSize={0.18} color="#6b7280" anchorX="center">
         |0⟩
       </Text>
-      <Text position={[0, -1.25, 0]} fontSize={0.18} color="#6b7280" anchorX="center">
+      <Text position={[0, -1.38, 0]} fontSize={0.18} color="#6b7280" anchorX="center">
         |1⟩
       </Text>
-      <Text position={[1.25, 0, 0]} fontSize={0.18} color="#6b7280" anchorX="center">
+      <Text position={[1.35, 0, 0]} fontSize={0.18} color="#6b7280" anchorX="center">
         |+⟩
       </Text>
-      <Text position={[-1.25, 0, 0]} fontSize={0.18} color="#6b7280" anchorX="center">
+      <Text position={[-1.35, 0, 0]} fontSize={0.18} color="#6b7280" anchorX="center">
         |−⟩
       </Text>
-      <Text position={[0, 0, 1.25]} fontSize={0.18} color="#6b7280" anchorX="center">
+      <Text position={[0, 0, 1.35]} fontSize={0.18} color="#6b7280" anchorX="center">
         |+i⟩
       </Text>
-      <Text position={[0, 0, -1.25]} fontSize={0.18} color="#6b7280" anchorX="center">
+      <Text position={[0, 0, -1.35]} fontSize={0.18} color="#6b7280" anchorX="center">
         |−i⟩
       </Text>
 
-      <group ref={vectorRef}>
-        <mesh position={[0, 0.4, 0]}>
-          <coneGeometry args={[0.06, 0.25, 16]} />
-          <meshStandardMaterial color={color} />
-        </mesh>
-        <mesh position={[0, 0.15, 0]}>
-          <cylinderGeometry args={[0.025, 0.025, 0.3, 16]} />
-          <meshStandardMaterial color={color} />
-        </mesh>
-        <mesh>
-          <sphereGeometry args={[0.06, 16, 16]} />
-          <meshStandardMaterial color={color} />
-        </mesh>
+      <group quaternion={arrowQuaternion}>
+        {shaftLength > 0.01 && (
+          <mesh position={[0, shaftLength * 0.5, 0]}>
+            <cylinderGeometry args={[0.02, 0.02, shaftLength, 16]} />
+            <meshStandardMaterial color={color} />
+          </mesh>
+        )}
+        {vectorLength > 0.02 && (
+          <mesh position={[0, shaftLength + headLength * 0.5, 0]}>
+            <coneGeometry args={[0.055, headLength, 16]} />
+            <meshStandardMaterial color={color} />
+          </mesh>
+        )}
       </group>
 
       <Text position={[0, -2, 0]} fontSize={0.16} color="#374151" anchorX="center">

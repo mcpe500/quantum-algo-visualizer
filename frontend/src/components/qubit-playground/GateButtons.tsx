@@ -11,24 +11,24 @@ interface GateButtonsProps {
 }
 
 const FIXED_GATES = [
-  { name: 'H', index: 0 },
-  { name: 'X', index: 1 },
-  { name: 'Y', index: 2 },
-  { name: 'Z', index: 3 },
-  { name: 'S', index: 4 },
-  { name: 'T', index: 5 },
+  { symbol: 'H', fullName: 'Hadamard', index: 0 },
+  { symbol: 'X', fullName: 'Pauli-X', index: 1 },
+  { symbol: 'Y', fullName: 'Pauli-Y', index: 2 },
+  { symbol: 'Z', fullName: 'Pauli-Z', index: 3 },
+  { symbol: 'S', fullName: 'Phase (S)', index: 4 },
+  { symbol: 'T', fullName: 'T Gate', index: 5 },
 ];
 
 const PARAMETRIC_GATES = [
-  { name: 'Rx', index: 6 },
-  { name: 'Ry', index: 7 },
-  { name: 'Rz', index: 8 },
+  { symbol: 'Rx', fullName: 'Rotation-X', name: 'Rx', index: 6 },
+  { symbol: 'Ry', fullName: 'Rotation-Y', name: 'Ry', index: 7 },
+  { symbol: 'Rz', fullName: 'Rotation-Z', name: 'Rz', index: 8 },
 ];
 
 const TWO_QUBIT_GATES = [
-  { name: 'CNOT', index: 0 },
-  { name: 'SWAP', index: 1 },
-  { name: 'CPhase', index: 2 },
+  { symbol: 'CNOT', fullName: 'Controlled-NOT', name: 'CNOT', index: 0 },
+  { symbol: 'SWAP', fullName: 'Swap', name: 'SWAP', index: 1 },
+  { symbol: 'CPhase', fullName: 'Controlled-Phase', name: 'CPhase', index: 2 },
 ];
 
 export const GateButtons: React.FC<GateButtonsProps> = ({
@@ -85,11 +85,13 @@ export const GateButtons: React.FC<GateButtonsProps> = ({
         <div className="flex flex-wrap items-center gap-2">
           {FIXED_GATES.map(gate => (
             <button
-              key={gate.name}
+              key={gate.symbol}
               onClick={() => onApplySingleGate(gate.index, singleTarget)}
-              className="w-11 h-9 bg-blue-50 hover:bg-blue-100 text-blue-700 font-mono font-semibold rounded-lg border border-blue-200 transition-colors text-sm"
+              title={`${gate.symbol} = ${gate.fullName}`}
+              className="w-[4.75rem] h-12 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-lg border border-blue-200 transition-colors flex flex-col items-center justify-center leading-none"
             >
-              {gate.name}
+              <span className="font-mono font-semibold text-sm">{gate.symbol}</span>
+              <span className="text-[10px] font-medium mt-1">{gate.fullName}</span>
             </button>
           ))}
           <select
@@ -109,8 +111,11 @@ export const GateButtons: React.FC<GateButtonsProps> = ({
         <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">1-Qubit Parametric</h3>
         <div className="space-y-2">
           {PARAMETRIC_GATES.map(gate => (
-            <div key={gate.name} className="flex items-center gap-2">
-              <span className="w-10 font-mono font-semibold text-gray-700 text-sm">{gate.name}</span>
+            <div key={gate.name} className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
+              <span className="w-28 shrink-0 flex flex-col leading-none">
+                <span className="font-mono font-semibold text-gray-700 text-sm">{gate.symbol}</span>
+                <span className="text-[10px] text-gray-500 mt-1">{gate.fullName}</span>
+              </span>
               <input
                 type="number"
                 step="0.1"
@@ -149,15 +154,20 @@ export const GateButtons: React.FC<GateButtonsProps> = ({
                 key={gate.name}
                 onClick={() => handleTwoQubitApply(gate.index)}
                 disabled={twoQubitControl === twoQubitTarget}
-                className="w-16 h-9 bg-purple-50 hover:bg-purple-100 text-purple-700 font-mono font-semibold rounded-lg border border-purple-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm"
+                title={`${gate.symbol} = ${gate.fullName}`}
+                className="w-[7.5rem] h-12 bg-purple-50 hover:bg-purple-100 text-purple-700 rounded-lg border border-purple-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex flex-col items-center justify-center leading-none"
               >
-                {gate.name}
+                <span className="font-mono font-semibold text-sm">{gate.symbol}</span>
+                <span className="text-[10px] font-medium mt-1">{gate.fullName}</span>
               </button>
             ))}
           </div>
           {/* CPhase row */}
           <div className="flex flex-wrap items-center gap-2">
-            <span className="w-16 font-mono font-semibold text-gray-700 text-sm">CPhase</span>
+            <span className="w-28 shrink-0 flex flex-col leading-none">
+              <span className="font-mono font-semibold text-gray-700 text-sm">CPhase</span>
+              <span className="text-[10px] text-gray-500 mt-1">Controlled-Phase</span>
+            </span>
             <input
               type="number"
               step="0.1"

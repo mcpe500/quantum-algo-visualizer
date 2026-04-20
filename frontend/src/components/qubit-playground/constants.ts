@@ -50,11 +50,6 @@ export function complexExp(c: Complex): Complex {
 // GATE DEFINITIONS
 // ============================================================================
 
-const I: Complex[][] = [
-  [{ re: 1, im: 0 }, { re: 0, im: 0 }],
-  [{ re: 0, im: 0 }, { re: 1, im: 0 }],
-];
-
 export const H: Complex[][] = [
   [{ re: 1 / Math.sqrt(2), im: 0 }, { re: 1 / Math.sqrt(2), im: 0 }],
   [{ re: 1 / Math.sqrt(2), im: 0 }, { re: -1 / Math.sqrt(2), im: 0 }],
@@ -201,12 +196,23 @@ export function tensorProduct(A: Complex[][], B: Complex[][]): Complex[][] {
   return result;
 }
 
-export function embedGate1Q(gate: Complex[][], targetQubit: number, numQubits: number): Complex[][] {
-  let result: Complex[][] = gate;
+function createZeroMatrix(size: number): Complex[][] {
+  return Array.from({ length: size }, () =>
+    Array.from({ length: size }, () => ({ re: 0, im: 0 }))
+  );
+}
 
-  for (let i = 0; i < numQubits; i++) {
-    if (i === targetQubit) continue;
-    result = tensorProduct(result, I);
+export function embedGate1Q(gate: Complex[][], targetQubit: number, numQubits: number): Complex[][] {
+  const size = 1 << numQubits;
+  const result = createZeroMatrix(size);
+
+  for (let col = 0; col < size; col++) {
+    const inputBit = getBit(col, targetQubit, numQubits);
+
+    for (let outputBit = 0; outputBit < 2; outputBit++) {
+      const row = setBit(col, targetQubit, numQubits, outputBit);
+      result[row][col] = gate[outputBit][inputBit];
+    }
   }
 
   return result;
@@ -218,13 +224,22 @@ export function embedGate2Q(
   target: number,
   numQubits: number
 ): Complex[][] {
-  const sortedIndices = [control, target].sort((a, b) => b - a);
+  const size = 1 << numQubits;
+  const result = createZeroMatrix(size);
 
-  let result = gate;
+  for (let col = 0; col < size; col++) {
+    const controlBit = getBit(col, control, numQubits);
+    const targetBit = getBit(col, target, numQubits);
+    const inputState = controlBit * 2 + targetBit;
 
-  for (let i = numQubits - 1; i >= 0; i--) {
-    if (i === sortedIndices[0] || i === sortedIndices[1]) continue;
-    result = tensorProduct(result, I);
+    for (let outputControl = 0; outputControl < 2; outputControl++) {
+      for (let outputTarget = 0; outputTarget < 2; outputTarget++) {
+        const rowWithControl = setBit(col, control, numQubits, outputControl);
+        const row = setBit(rowWithControl, target, numQubits, outputTarget);
+        const outputState = outputControl * 2 + outputTarget;
+        result[row][col] = gate[outputState][inputState];
+      }
+    }
   }
 
   return result;
@@ -254,8 +269,8 @@ export function partialTrace(
   for (let i = 0; i < dim; i++) {
     for (let j = 0; j < dim; j++) {
       for (let k = 0; k < Math.pow(dim, otherQubits); k++) {
-        const idx0 = getStateIndex([i, k], qubitIndex, numQubits, dim);
-        const idx1 = getStateIndex([j, k], qubitIndex, numQubits, dim);
+        const idx0 = getStateIndex(i, k, qubitIndex, numQubits);
+        const idx1 = getStateIndex(j, k, qubitIndex, numQubits);
 
         const stateIdx0 = idx0 < stateLen ? idx0 : 0;
         const stateIdx1 = idx1 < stateLen ? idx1 : 0;
@@ -286,20 +301,31 @@ export function partialTrace(
   return { theta, phi };
 }
 
-function getStateIndex(indices: number[], qubitIndex: number, numQubits: number, dim: number): number {
+function getStateIndex(targetBit: number, otherBits: number, qubitIndex: number, numQubits: number): number {
   let result = 0;
-  for (let q = numQubits - 1; q >= 0; q--) {
+
+  let otherBitIndex = numQubits - 2;
+  for (let q = 0; q < numQubits; q++) {
+    result <<= 1;
+
     if (q === qubitIndex) {
-      result = result * dim + indices[0];
+      result |= targetBit;
     } else {
-      result = result * dim + indices[1];
+      result |= (otherBits >> otherBitIndex) & 1;
+      otherBitIndex -= 1;
     }
   }
+
   return result;
 }
 
 function getBit(index: number, qubitIndex: number, numQubits: number): number {
   return (index >> (numQubits - 1 - qubitIndex)) & 1;
+}
+
+function setBit(index: number, qubitIndex: number, numQubits: number, value: number): number {
+  const bitMask = 1 << (numQubits - 1 - qubitIndex);
+  return value === 1 ? index | bitMask : index & ~bitMask;
 }
 
 export function marginalProb(

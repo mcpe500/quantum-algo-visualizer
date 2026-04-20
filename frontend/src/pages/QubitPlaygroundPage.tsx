@@ -40,6 +40,8 @@ export default function QubitPlaygroundPage() {
     undo,
   } = useQubitState();
 
+  const blochCards = blochData.map((b, i) => ({ ...b, label: `q${i}` }));
+
   const handleApplySingleGate = useCallback(
     (gateIndex: number, target: number, angle?: number) => {
       if (gateIndex >= 0 && gateIndex < SINGLE_GATE_NAMES.length) {
@@ -105,17 +107,35 @@ export default function QubitPlaygroundPage() {
 
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 mb-5">
           <div className="lg:col-span-7">
-            <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
-              <div className="h-[300px] md:h-[340px]">
-                <Canvas camera={{ position: [0, 1.5, 7], fov: 50 }}>
-                  <OrbitControls enablePan={false} enableZoom minDistance={3} maxDistance={14} />
-                  <ambientLight intensity={0.4} />
-                  <directionalLight position={[5, 5, 5]} intensity={0.8} />
-                  <directionalLight position={[-5, -5, -5]} intensity={0.3} />
-                  <BlochSphere3D blochData={blochData.map((b, i) => ({ ...b, label: `q${i}` }))} numQubits={numQubits} />
-                </Canvas>
+            <div className="bg-white rounded-xl border border-slate-200 p-3 sm:p-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+                {blochCards.map((bloch, i) => (
+                  <div
+                    key={bloch.label}
+                    className={`rounded-lg border border-slate-200 bg-slate-50 overflow-hidden ${
+                      numQubits === 3 && i === 2 ? 'md:col-span-2 xl:col-span-1' : ''
+                    }`}
+                  >
+                    <div className="h-[240px] sm:h-[260px]">
+                      <Canvas camera={{ position: [0, 0.3, 5.2], fov: 44 }}>
+                        <OrbitControls
+                          enablePan={false}
+                          enableZoom={false}
+                          enableDamping
+                          dampingFactor={0.08}
+                        />
+                        <ambientLight intensity={0.4} />
+                        <directionalLight position={[5, 5, 5]} intensity={0.8} />
+                        <directionalLight position={[-5, -5, -5]} intensity={0.3} />
+                        <BlochSphere3D blochData={[bloch]} numQubits={1} />
+                      </Canvas>
+                    </div>
+                  </div>
+                ))}
               </div>
-              <StatevectorBars statevector={statevector} />
+              <div className="mt-3">
+                <StatevectorBars statevector={statevector} />
+              </div>
             </div>
           </div>
 
@@ -133,7 +153,7 @@ export default function QubitPlaygroundPage() {
 
         <StateInfoPanel
           statevector={statevector}
-          blochData={blochData.map((b, i) => ({ ...b, label: `q${i}` }))}
+          blochData={blochCards}
           numQubits={numQubits}
           historyLength={history.length}
         />
