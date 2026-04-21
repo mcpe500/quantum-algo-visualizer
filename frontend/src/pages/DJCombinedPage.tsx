@@ -1,4 +1,4 @@
-import { Cpu, BookOpen } from 'lucide-react';
+import { Cpu, BookOpen, Video } from 'lucide-react';
 import { useDJBenchmark } from '../hooks/useDJBenchmark';
 import { AlgorithmPageShell } from '../shared/components/AlgorithmPageShell';
 import { ClassicalVisualization } from '../components/dj/ClassicalVisualization';
@@ -48,9 +48,10 @@ export default function DJCombinedPage() {
         tabs={[
           { id: 'classic', label: 'Klasik', icon: BookOpen },
           { id: 'quantum', label: 'Kuantum', icon: Cpu },
+          { id: 'animation', label: 'Animasi 3D', icon: Video },
         ]}
         activeTab={activeTab}
-        onTabChange={(tab) => setActiveTab(tab as 'classic' | 'quantum')}
+        onTabChange={(tab) => setActiveTab(tab as 'classic' | 'quantum' | 'animation')}
         captureId={CAPTURE_IDS.djQuantum}
         classicTab={
           classicalResult ? (
@@ -62,9 +63,6 @@ export default function DJCombinedPage() {
         quantumTab={
           benchmarkResult ? (
             <>
-              {animationData && (
-                <DJQuantumAnimation data={animationData} onExportingChange={setIsVideoExporting} />
-              )}
               <QuantumVisualization
                 quantum={benchmarkResult.quantum}
                 circuitImage={circuitImage}
@@ -86,6 +84,17 @@ export default function DJCombinedPage() {
               )}
               <ComparisonSection result={benchmarkResult} />
             </>
+          ) : (
+            <InlineEmptyState message={UI_MESSAGES.emptyQuantum} />
+          )
+        }
+        animationTab={
+          benchmarkResult ? (
+            animationData ? (
+              <DJQuantumAnimation data={animationData} onExportingChange={setIsVideoExporting} />
+            ) : (
+              <InlineEmptyState message="Animasi tidak tersedia untuk kasus ini." />
+            )
           ) : (
             <InlineEmptyState message={UI_MESSAGES.emptyQuantum} />
           )

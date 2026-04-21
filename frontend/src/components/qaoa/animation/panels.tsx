@@ -2,13 +2,13 @@ import { ChevronRight } from 'lucide-react';
 import { GraphVisualization } from '../../charts/GraphVisualization';
 import { DetailCard } from '../../../shared/components/DetailCard';
 import { ReadingGuideCard as SharedReadingGuideCard } from '../../../shared/components/ReadingGuideCard';
+import { HybridFlowPanel as SharedHybridFlowPanel } from '../../../shared/components/panels/HybridFlowPanel';
 import type {
   QAOAAnimationCheckpoint,
   QAOAAnimationPayload,
   QAOAAnimationStep,
 } from '../../../types/qaoa';
 import { CHECKPOINT_LABEL, PHASE_COLOR, PHASE_LABEL } from './constants';
-import { buildHybridLoopModel } from './hybrid-loop';
 import { formatPercent, formatRadians, getActivePhases, getPartitionFromBitstring } from './helpers';
 import { getStepExplanation, getStepHeadline } from './narration';
 
@@ -140,54 +140,7 @@ export function ProblemGraphPanel({ data }: { data: QAOAAnimationPayload }) {
 }
 
 export function HybridLoopPanel({ data, activeStep }: { data: QAOAAnimationPayload; activeStep: QAOAAnimationStep }) {
-  const model = buildHybridLoopModel(data, activeStep);
-
-  return (
-    <div className="rounded-xl border border-slate-200 bg-white p-4">
-      <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Hybrid Loop</p>
-      <p className="mt-1 text-[15px] font-semibold text-slate-900">Optimizer klasik {'->'} evaluasi kuantum</p>
-      <p className="mt-1.5 text-[12px] leading-relaxed text-slate-600">{model.intro}</p>
-
-      {model.activeCheckpoint && (
-        <div className="mt-3 rounded-lg border border-blue-100 bg-blue-50 px-3 py-2.5">
-          <div className="flex items-center justify-between">
-            <span className="text-[11px] font-semibold text-blue-700">{model.activeCheckpoint.label}</span>
-            <span className="text-[10px] font-medium text-blue-600">iter {model.activeCheckpoint.eval_index}</span>
-          </div>
-          <div className="mt-2 flex flex-wrap gap-1.5">
-            {model.activeCheckpoint.gamma.map((gamma, index) => (
-              <span key={`g-${index}`} className="rounded-full bg-white px-2 py-0.5 text-[10px] font-mono text-blue-700">
-                gamma{index + 1}={gamma.toFixed(3)}
-              </span>
-            ))}
-            {model.activeCheckpoint.beta.map((beta, index) => (
-              <span key={`b-${index}`} className="rounded-full bg-white px-2 py-0.5 text-[10px] font-mono text-teal-700">
-                beta{index + 1}={beta.toFixed(3)}
-              </span>
-            ))}
-          </div>
-        </div>
-      )}
-
-      <div className="mt-3 space-y-2">
-        {data.checkpoints.map((checkpoint) => {
-          const width = model.bestExpected > 0 ? (checkpoint.expected_cut / model.bestExpected) * 100 : 0;
-          const isActive = checkpoint.key === activeStep.checkpoint_key;
-          return (
-            <div key={checkpoint.key} className={`rounded-lg border px-3 py-2 ${isActive ? 'border-blue-300 bg-blue-50' : 'border-slate-100 bg-slate-50'}`}>
-              <div className="flex items-center justify-between">
-                <span className="text-[11px] font-semibold text-slate-800">{checkpoint.label}</span>
-                <span className="text-[10px] font-mono text-slate-500">{checkpoint.expected_cut.toFixed(3)}</span>
-              </div>
-              <div className="mt-2 h-2 rounded-full bg-slate-200">
-                <div className="h-full rounded-full bg-blue-500" style={{ width: `${Math.max(8, width)}%` }} />
-              </div>
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
+  return <SharedHybridFlowPanel data={data} activeStep={activeStep} />;
 }
 
 export function CostMixerPanel({ activeStep }: { activeStep: QAOAAnimationStep }) {

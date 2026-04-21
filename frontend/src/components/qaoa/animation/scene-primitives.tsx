@@ -1,26 +1,9 @@
 import { Line, OrbitControls, Text } from '@react-three/drei';
-import { useThree } from '@react-three/fiber';
-import { useEffect, useMemo } from 'react';
+import { useMemo } from 'react';
 import type { QAOAAnimationPayload, QAOAAnimationStep } from '../../../types/qaoa';
 import { PHASE_COLOR } from './constants';
 import { getPartitionFromBitstring } from './helpers';
-
-function CameraRig({ mode, distance }: { mode: 'fixed' | 'orbit'; distance: number }) {
-  const { camera } = useThree();
-
-  useEffect(() => {
-    if (mode === 'fixed') {
-      camera.position.set(0, 0.4, distance);
-      camera.lookAt(0, 0, 0);
-    } else {
-      camera.position.set(1.8, 2, distance - 2);
-      camera.lookAt(0, 0, 0);
-    }
-    camera.updateProjectionMatrix();
-  }, [camera, distance, mode]);
-
-  return null;
-}
+import { HadamardGate, CameraRig } from '../../../shared/components';
 
 function getGraphPositions(count: number, centerX: number, centerY: number, radius: number) {
   return Array.from({ length: count }, (_, index) => ({
@@ -133,7 +116,7 @@ export function QAOAStoryScene({
 
   return (
     <>
-      <CameraRig mode={cameraMode} distance={22} />
+      <CameraRig mode={cameraMode} distance={22} fixedOffset={{ x: 0, y: 0.4 }} orbitOffset={{ x: 1.8, y: 2, z: 2 }} lookAtY={0} />
       <ambientLight intensity={0.86} />
       <directionalLight position={[7, 8, 9]} intensity={0.85} />
       <directionalLight position={[-7, 5, 6]} intensity={0.28} color="#93c5fd" />
@@ -216,7 +199,7 @@ export function QAOAStoryScene({
 
       {activeStep.phase === 'superposition' &&
         laneYs.map((y, index) => (
-          <GateDisc key={`h-${index}`} x={-1.2} y={y} label="H" color={PHASE_COLOR.superposition} active />
+          <HadamardGate key={`h-${index}`} x={-1.2} y={y} isActive />
         ))}
 
       {activeStep.phase === 'cost' && activeStep.edge && (

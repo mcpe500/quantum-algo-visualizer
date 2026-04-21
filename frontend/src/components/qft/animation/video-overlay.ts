@@ -1,0 +1,170 @@
+import type { QFTAnimationPayload, QFTAnimationStep } from '../../../types/qft';
+import { PHASE_LABEL, VIDEO_MIME_TYPES, type ExportOverlayMode } from './constants';
+import { roundedRect, wrapText } from './helpers';
+
+export function getSupportedVideoMimeType() {
+  if (typeof MediaRecorder === 'undefined') {
+    return null;
+  }
+  if (typeof MediaRecorder.isTypeSupported !== 'function') {
+    return VIDEO_MIME_TYPES[VIDEO_MIME_TYPES.length - 1];
+  }
+  return VIDEO_MIME_TYPES.find((candidate) => MediaRecorder.isTypeSupported(candidate)) ?? null;
+}
+
+export function isFFmpegSupported() {
+  try {
+    return typeof FFmpeg !== 'undefined' && typeof FFmpeg.wasm !== 'undefined';
+  } catch {
+    return false;
+  }
+}
+
+function drawLegendPill(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  label: string,
+  fill: string,
+  textColor = '#E2E8F0',
+) {
+  ctx.font = '600 13px Inter, Segoe UI, Arial, sans-serif';
+  const width = ctx.measureText(label).width + 26;
+  roundedRect(ctx, x, y, width, 28, 999);
+  ctx.fillStyle = fill;
+  ctx.fill();
+  ctx.fillStyle = textColor;
+  ctx.fillText(label, x + 13, y + 19);
+  return width;
+}
+
+function getQFTNarration(mode: ExportOverlayMode, data: QFTAnimationPayload, step: QFTAnimationStep) {
+  if (mode === 'intro') {
+    return {
+      headline: 'Cara baca animasi QFT',
+      detail: 'Signal klasik di-encode ke statevector kuantum. Phase cascade mentransformasi ke domain frekuensi.',
+      accent: `Signal: ${data.signal_type} · ${data.n_points_padded} poin → ${data.n_qubits} qubit`,
+    };
+  }
+  if (mode === 'outro') {
+    const dominant = data.qft.dominant_bins[0] ?? 0;
+    const prob = data.qft.dominant_probabilities[0] ?? 0;
+    return {
+      headline: `Frequency bin |${dominant}⟩ dominant`,
+      detail: `QFT mengukur distribusi probabilitas domain frekuensi. Bin dengan probabilitas tertinggi adalah |${dominant}⟩.`,
+      accent: `P(|${dominant}⟩) = ${(prob * 100).toFixed(1)}% · ${data.measurement.shots} shots`,
+    };
+  }
+  const phaseList = (step.qubit_phases || [])
+    .slice(0, data.n_qubits)
+    .map((p, i) => `q${i}:${((p * 180) / Math.PI).toFixed(1)}°`)
+    .join(', ');
+  return {
+    headline: `${PHASE_LABEL[step.phase] || step.phase} · Step ${step.step}`,
+    detail: step.description || `Operasi ${step.operation} pada step ${step.step}`,
+    accent: phaseList || `Step ${step.step}/${data.timeline.length}`,
+  };
+}
+
+export function drawVideoFrame({
+  ctx,
+  sourceCanvas,
+  data,
+  mode,
+  step,
+  phaseColor,
+}: {
+  ctx: CanvasRenderingContext2D;
+  sourceCanvas: HTMLCanvasElement;
+  data: QFTAnimationPayload;
+  mode: ExportOverlayMode;
+  step: QFTAnimationStep;
+  phaseColor: string;
+}) {
+  const width = ctx.canvas.width;
+  const height = ctx.canvas.height;
+  const narration = getQFTNarration(mode, data, step);
+  const overlayPadding = Math.round(width * 0.038);
+  const bottomPanelHeight = Math.round(height * 0.18);
+  const topPanelHeight = Math.round(height * 0.12);
+  const topY = overlayPadding;
+  const bottomY = height - bottomPanelHeight - overlayPadding;
+  const bodyMaxWidth = width - overlayPadding * 2 - 32;
+
+  const baseGradient = ctx.createLinearGradient(0, 0, 0, height);
+  baseGradient.addColorStop(0, '#F8FAFC');
+  baseGradient.addColorStop(1, '#E2E8F0');
+
+  ctx.clearRect(0, 0, width, height);
+  ctx.fillStyle = baseGradient;
+  ctx.fillRect(0, 0, width, height);
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = 'high';
+  ctx.drawImage(sourceCanvas, 0, 0, width, height);
+
+  const topGradient = ctx.createLinearGradient(0, 0, 0, topPanelHeight + overlayPadding * 1.2);
+  topGradient.addColorStop(0, 'rgba(15, 23, 42, 0.88)');
+  topGradient.addColorStop(1, 'rgba(15, 23, 42, 0.08)');
+  ctx.fillStyle = topGradient;
+  ctx.fillRect(0, 0, width, topPanelHeight + overlayPadding * 1.2);
+
+  const bottomGradient = ctx.createLinearGradient(0, height, 0, height - bottomPanelHeight - overlayPadding * 1.5);
+  bottomGradient.addColorStop(0, 'rgba(15, 23, 42, 0.88)');
+  bottomGradient.addColorStop(1, 'rgba(15, 23, 42, 0.04)');
+  ctx.fillStyle = bottomGradient;
+  ctx.fillRect(0, bottomY - overlayPadding, width, bottomPanelHeight + overlayPadding * 1.5);
+
+  roundedRect(ctx, overlayPadding, topY, width - overlayPadding * 2, topPanelHeight, 20);
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.06)';
+  ctx.fill();
+
+  roundedRect(ctx, overlayPadding, bottomY, width - overlayPadding * 2, bottomPanelHeight, 24);
+  ctx.fillStyle = 'rgba(15, 23, 42, 0.60)';
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(255, 255, 255, 0.14)';
+  ctx.lineWidth = 1;
+  ctx.stroke();
+
+  ctx.fillStyle = '#E2E8F0';
+  ctx.font = '600 18px Inter, Segoe UI, Arial, sans-serif';
+  ctx.fillText('VIDEO QUANTUM', overlayPadding + 28, topY + 32);
+
+  ctx.fillStyle = '#FFFFFF';
+  ctx.font = '700 30px Inter, Segoe UI, Arial, sans-serif';
+  ctx.fillText(`QFT · ${data.case_id}`, overlayPadding + 28, topY + 68);
+
+  let legendX = overlayPadding + 28;
+  const legendY = topY + 88;
+  legendX += drawLegendPill(ctx, legendX, legendY, 'Signal → Phase', 'rgba(59, 130, 246, 0.16)') + 10;
+  legendX += drawLegendPill(ctx, legendX, legendY, 'Hadamard layer', 'rgba(124, 58, 237, 0.16)') + 10;
+  legendX += drawLegendPill(ctx, legendX, legendY, 'CPHASE cascade', 'rgba(13, 148, 136, 0.16)') + 10;
+  drawLegendPill(ctx, legendX, legendY, 'SWAP bit-reverse', 'rgba(245, 158, 11, 0.16)');
+
+  roundedRect(ctx, width - overlayPadding - 250, topY + 22, 222, 44, 999);
+  ctx.fillStyle = `${phaseColor}55`;
+  ctx.fill();
+  ctx.fillStyle = '#FFFFFF';
+  ctx.font = '600 17px Inter, Segoe UI, Arial, sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText(PHASE_LABEL[step.phase] || step.phase, width - overlayPadding - 139, topY + 50);
+  ctx.textAlign = 'left';
+
+  ctx.fillStyle = '#CBD5E1';
+  ctx.font = '600 16px Inter, Segoe UI, Arial, sans-serif';
+  ctx.fillText(`Step ${step.step}/${data.timeline.length}`, overlayPadding + 28, bottomY + 34);
+
+  ctx.fillStyle = '#FFFFFF';
+  ctx.font = '700 28px Inter, Segoe UI, Arial, sans-serif';
+  ctx.fillText(narration.headline, overlayPadding + 28, bottomY + 76);
+
+  ctx.fillStyle = '#E2E8F0';
+  ctx.font = '500 19px Inter, Segoe UI, Arial, sans-serif';
+  const bodyLines = wrapText(ctx, narration.detail, bodyMaxWidth).slice(0, 3);
+  bodyLines.forEach((line, index) => {
+    ctx.fillText(line, overlayPadding + 28, bottomY + 114 + index * 28);
+  });
+
+  ctx.fillStyle = phaseColor;
+  ctx.font = '600 17px Inter, Segoe UI, Arial, sans-serif';
+  ctx.fillText(narration.accent, overlayPadding + 28, bottomY + bottomPanelHeight - 20);
+}
