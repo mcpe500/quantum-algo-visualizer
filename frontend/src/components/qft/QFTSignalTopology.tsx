@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Activity, Waves, Zap, GitCommitHorizontal } from 'lucide-react';
+import { Activity, Waves, Zap, GitCommitHorizontal, Camera } from 'lucide-react';
 import { qftApi } from '../../services/api';
 import type { QFTCase } from '../../types/qft';
 import { sortCaseIds } from '../../utils/sorting';
+import { downloadElementAsPNG } from '../../utils/download';
 
 interface SignalWaveformProps {
   data: number[];
@@ -118,12 +119,27 @@ interface DatasetCardProps {
 }
 
 function DatasetCard({ data, index, mounted }: DatasetCardProps) {
+  const [isCapturing, setIsCapturing] = useState(false);
   const isMixed = data.signal_type.includes('mixed');
   const Icon = isMixed ? Activity : Waves;
   const signalLabel = data.signal_type.replace('synthetic_', '').replace('_', ' ');
 
+  const handleTakePicture = async () => {
+    if (isCapturing) return;
+
+    setIsCapturing(true);
+
+    try {
+      await downloadElementAsPNG(`qft-signal-${data.case_id}`, `qft-signal-${data.case_id}.png`);
+    } finally {
+      window.setTimeout(() => setIsCapturing(false), 10_000);
+    }
+  };
+
   return (
     <div
+      id={`qft-signal-${data.case_id}`}
+      data-capture-root
       className={`bg-white rounded-3xl border border-slate-200 overflow-hidden flex flex-col h-full transform transition-all duration-700 ease-out shadow-sm hover:shadow-[0_16px_50px_rgb(0,0,0,0.08)] ${
         mounted ? 'translate-y-0 opacity-100' : 'translate-y-12 opacity-0'
       }`}
@@ -135,15 +151,32 @@ function DatasetCard({ data, index, mounted }: DatasetCardProps) {
             <div className="text-blue-500">
               <Zap size={24} />
             </div>
-            <h2 className="text-4xl sm:text-5xl font-black text-slate-800 tracking-tight">{data.case_id}</h2>
+            <h2 className="inline-flex min-h-12 items-center text-4xl sm:text-5xl font-black text-slate-800 tracking-tight leading-none">
+              <span className="block translate-y-[-0.02em]">{data.case_id}</span>
+            </h2>
           </div>
-          <span className="text-sm sm:text-base font-bold text-slate-400 tracking-widest uppercase ml-9">
+          <span className="inline-flex min-h-5 items-center text-sm sm:text-base font-bold text-slate-400 tracking-widest uppercase leading-none ml-9">
             {signalLabel}
           </span>
         </div>
 
-        <div className="w-16 h-16 rounded-2xl bg-blue-50 flex items-center justify-center text-blue-500 shrink-0">
-          <Icon strokeWidth={2.5} size={32} />
+        <div className="flex items-center gap-3 shrink-0">
+          <div className="w-16 h-16 rounded-2xl bg-blue-50 flex items-center justify-center text-blue-500 shrink-0">
+            <Icon strokeWidth={2.5} size={32} />
+          </div>
+          <button
+            type="button"
+            onClick={() => void handleTakePicture()}
+            disabled={isCapturing}
+            data-html2canvas-ignore
+            className={`p-2 rounded-lg border border-gray-200 text-gray-500 transition-all ${
+              isCapturing ? 'cursor-wait opacity-40' : 'hover:bg-gray-50'
+            }`}
+            title="Take Picture"
+            aria-label={`Take picture ${data.case_id}`}
+          >
+            <Camera size={20} />
+          </button>
         </div>
       </div>
 
@@ -156,12 +189,12 @@ function DatasetCard({ data, index, mounted }: DatasetCardProps) {
           <div className="w-10 h-10 rounded-full bg-white border border-slate-200 flex items-center justify-center">
             <GitCommitHorizontal size={20} className="text-slate-400" />
           </div>
-          <span className="text-base font-bold text-slate-800">{data.description}</span>
+          <span className="inline-flex min-h-6 items-center text-base font-bold text-slate-800 leading-none">{data.description}</span>
         </div>
 
         <div className="flex items-center gap-3">
-          <div className="px-4 py-2 bg-white border border-slate-200 rounded-lg text-sm font-black text-blue-500 tracking-widest uppercase shadow-sm">
-            {data.n_points} Data Points
+          <div className="inline-flex items-center justify-center px-4 py-2 bg-white border border-slate-200 rounded-lg text-sm font-black text-blue-500 tracking-widest uppercase leading-none tabular-nums shadow-sm">
+            <span className="block translate-y-[-0.02em]">{data.n_points} Data Points</span>
           </div>
         </div>
       </div>

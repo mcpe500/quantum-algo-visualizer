@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
-import { Compass, Scale, Binary } from 'lucide-react';
+import { Compass, Scale, Binary, Camera } from 'lucide-react';
 import { djApi } from '../../services/api';
 import type { DJCase } from '../../types/dj';
 import { sortCaseIds } from '../../utils/sorting';
+import { downloadElementAsPNG } from '../../utils/download';
 
 interface TruthTableCellProps {
   input: string;
@@ -21,13 +22,15 @@ function TruthTableCell({ input, output }: TruthTableCellProps) {
       }`}
     >
       <span
-        className={`text-lg sm:text-xl lg:text-2xl font-mono font-bold mb-1 sm:mb-2 tracking-widest tabular-nums ${
+        className={`inline-flex w-full items-center justify-center text-center text-lg sm:text-xl lg:text-2xl font-mono font-bold leading-none mb-1 sm:mb-2 tracking-widest tabular-nums ${
           isOne ? 'text-blue-100' : 'text-slate-400'
         }`}
       >
-        {input}
+        <span className="block translate-y-[-0.02em]">{input}</span>
       </span>
-      <span className="text-3xl sm:text-4xl font-black tabular-nums">{output}</span>
+      <span className="inline-flex w-full items-center justify-center text-center text-3xl sm:text-4xl font-black leading-none tabular-nums">
+        <span className="block translate-y-[-0.02em]">{output}</span>
+      </span>
     </div>
   );
 }
@@ -39,13 +42,28 @@ interface DatasetCardProps {
 }
 
 function DatasetCard({ data, index, mounted }: DatasetCardProps) {
+  const [isCapturing, setIsCapturing] = useState(false);
   const isBalanced = data.expected_classification === 'BALANCED';
   const Icon = isBalanced ? Scale : Compass;
   const entries = Object.entries(data.oracle_definition.truth_table)
     .sort(([a], [b]) => parseInt(a, 2) - parseInt(b, 2));
 
+  const handleTakePicture = async () => {
+    if (isCapturing) return;
+
+    setIsCapturing(true);
+
+    try {
+      await downloadElementAsPNG(`dj-oracle-${data.case_id}`, `dj-oracle-${data.case_id}.png`);
+    } finally {
+      window.setTimeout(() => setIsCapturing(false), 10_000);
+    }
+  };
+
   return (
     <div
+      id={`dj-oracle-${data.case_id}`}
+      data-capture-root
       className={`bg-white rounded-2xl border border-slate-200 overflow-hidden flex flex-col h-full transform transition-all duration-700 ease-out hover:shadow-[0_12px_40px_rgb(0,0,0,0.08)] ${
         mounted ? 'translate-y-0 opacity-100' : 'translate-y-12 opacity-0'
       }`}
@@ -54,21 +72,38 @@ function DatasetCard({ data, index, mounted }: DatasetCardProps) {
       <div className="p-6 sm:p-8 pb-6 flex justify-between items-start border-b border-slate-200 bg-white">
         <div>
           <div className="flex items-center gap-3 mb-2">
-            <div className="text-blue-500 flex flex-col leading-none text-xs font-black font-mono">
-              <span>01</span>
-              <span>10</span>
+            <div className="text-blue-500 grid h-10 place-items-center text-xs font-black font-mono leading-none tabular-nums">
+              <div className="translate-y-[-0.02em] text-center">
+                <span className="block">01</span>
+                <span className="block">10</span>
+              </div>
             </div>
             <h2 className="text-3xl sm:text-4xl font-black text-slate-800 tracking-tight">
               {data.case_id}
             </h2>
           </div>
-          <span className="text-sm font-bold text-slate-400 tracking-widest uppercase ml-7">
+          <span className="inline-flex min-h-5 items-center text-sm font-bold text-slate-400 tracking-widest uppercase leading-none ml-7">
             {data.n_qubits} Qubits
           </span>
         </div>
 
-        <div className="w-14 h-14 rounded-full bg-blue-50 border border-blue-100 flex items-center justify-center text-blue-500 shadow-inner">
-          <Icon strokeWidth={2.5} size={26} />
+        <div className="flex items-center gap-3">
+          <div className="w-14 h-14 rounded-full bg-blue-50 border border-blue-100 flex items-center justify-center text-blue-500 shadow-inner">
+            <Icon strokeWidth={2.5} size={26} />
+          </div>
+          <button
+            type="button"
+            onClick={() => void handleTakePicture()}
+            disabled={isCapturing}
+            data-html2canvas-ignore
+            className={`p-2 rounded-lg border border-gray-200 text-gray-500 transition-all ${
+              isCapturing ? 'cursor-wait opacity-40' : 'hover:bg-gray-50'
+            }`}
+            title="Take Picture"
+            aria-label={`Take picture ${data.case_id}`}
+          >
+            <Camera size={18} />
+          </button>
         </div>
       </div>
 
@@ -81,12 +116,12 @@ function DatasetCard({ data, index, mounted }: DatasetCardProps) {
       </div>
 
       <div className="bg-slate-50 border-t border-slate-200 p-6 flex items-center justify-between">
-        <span className="text-sm font-black text-slate-800 tracking-widest uppercase">
+        <span className="inline-flex min-h-5 items-center text-sm font-black text-slate-800 tracking-widest uppercase leading-none">
           Classification
         </span>
         <div className="flex items-center gap-3">
           <div className="w-3 h-3 rounded-full bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.8)]" />
-          <span className="text-base sm:text-lg font-black text-blue-600 uppercase tracking-widest">
+          <span className="inline-flex min-h-6 items-center text-base sm:text-lg font-black text-blue-600 uppercase tracking-widest leading-none">
             {data.expected_classification}
           </span>
         </div>
