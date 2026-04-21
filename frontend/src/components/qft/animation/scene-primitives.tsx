@@ -3,7 +3,7 @@ import { useThree } from '@react-three/fiber';
 import { useEffect, useMemo } from 'react';
 import type { QFTAnimationPartition, QFTAnimationPayload } from '../../../types/qft';
 import { PHASE_COLOR, SCENE_PHASE_LABEL, PHASE_LABEL } from './constants';
-import { getColumnLayout, getLaneYs } from './helpers';
+import { getColumnLayout, getLaneYs } from '../../../shared/utils/animation-helpers';
 
 function CameraRig({ mode, distance }: { mode: 'fixed' | 'orbit'; distance: number }) {
   const { camera } = useThree();

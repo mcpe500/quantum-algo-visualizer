@@ -566,9 +566,10 @@ export default function CircuitLabTab({ builder }: CircuitLabTabProps) {
                           isHovered && activeDraggedGate && activeDraggedGate.numQubits === 2 && !canPlaceGate(activeDraggedGate.gate, row)
                         );
                         const placementDefinition = cellState ? getGateDefinition(cellState.placement.gate) : null;
+                        const controlRow = cellState?.placement.row;
                         const targetRow = cellState?.placement.targetRow;
-                        const targetIsAbove = targetRow !== undefined && targetRow < row;
-                        const targetIsBelow = targetRow !== undefined && targetRow > row;
+                        const targetIsAbove = targetRow !== undefined && controlRow !== undefined && targetRow < controlRow;
+                        const targetIsBelow = targetRow !== undefined && controlRow !== undefined && targetRow > controlRow;
                         const isSelected = cellState?.placement.id === selectedPlacementId;
                         const isActiveStep = cellState?.placement.id === activePlacementId;
                         const isActiveColumn = activeColumn === column;
