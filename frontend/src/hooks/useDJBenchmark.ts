@@ -23,11 +23,11 @@ export interface UseDJBenchmarkReturn {
   classicalResult: ClassicalResult | null;
   isLoading: boolean;
   error: string | null;
-  activeTab: 'classic' | 'quantum';
+  activeTab: 'classic' | 'quantum' | 'animation';
   isVideoExporting: boolean;
   setIsVideoExporting: (v: boolean) => void;
   setSelectedCaseId: (id: string) => void;
-  setActiveTab: (tab: 'classic' | 'quantum') => void;
+  setActiveTab: (tab: 'classic' | 'quantum' | 'animation') => void;
   handleRun: () => Promise<void>;
   handleDownload: () => Promise<void>;
 }
@@ -43,7 +43,7 @@ export function useDJBenchmark(): UseDJBenchmarkReturn {
   const [classicalResult, setClassicalResult] = useState<ClassicalResult | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'classic' | 'quantum'>('classic');
+  const [activeTab, setActiveTab] = useState<'classic' | 'quantum' | 'animation'>('classic');
   const [isVideoExporting, setIsVideoExporting] = useState(false);
 
   useEffect(() => {

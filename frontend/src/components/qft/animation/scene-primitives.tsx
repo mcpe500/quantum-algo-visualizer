@@ -1,66 +1,9 @@
 import { Line, OrbitControls, Text } from '@react-three/drei';
-import { useThree } from '@react-three/fiber';
-import { useEffect, useMemo } from 'react';
+import { useMemo } from 'react';
 import type { QFTAnimationPartition, QFTAnimationPayload } from '../../../types/qft';
 import { PHASE_COLOR, SCENE_PHASE_LABEL, PHASE_LABEL } from './constants';
 import { getColumnLayout, getLaneYs } from '../../../shared/utils/animation-helpers';
-
-function CameraRig({ mode, distance }: { mode: 'fixed' | 'orbit'; distance: number }) {
-  const { camera } = useThree();
-
-  useEffect(() => {
-    if (mode === 'fixed') {
-      camera.position.set(0, -0.5, distance);
-      camera.lookAt(0, -0.5, 0);
-    } else {
-      camera.position.set(2, 1.5, distance - 2);
-      camera.lookAt(0, -0.5, 0);
-    }
-    camera.updateProjectionMatrix();
-  }, [camera, distance, mode]);
-
-  return null;
-}
-
-function PhaseBand({
-  startX,
-  endX,
-  color,
-  label,
-  topY,
-  height,
-}: {
-  startX: number;
-  endX: number;
-  color: string;
-  label: string;
-  topY: number;
-  height: number;
-}) {
-  const width = Math.max(endX - startX, 0.6);
-  const centerX = (startX + endX) / 2;
-
-  return (
-    <group position={[centerX, 0, -0.16]}>
-      <mesh>
-        <planeGeometry args={[width, height]} />
-        <meshBasicMaterial color={color} transparent opacity={0.07} />
-      </mesh>
-      <Line points={[[(-width / 2), topY, 0], [width / 2, topY, 0]]} color={color} lineWidth={1} />
-      {width >= 1.55 && (
-        <Text
-          position={[0, topY + 0.34, 0.02]}
-          fontSize={width < 2.2 ? 0.14 : 0.18}
-          color={color}
-          anchorX="center"
-          anchorY="middle"
-        >
-          {label}
-        </Text>
-      )}
-    </group>
-  );
-}
+import { HadamardGate, CameraRig, PhaseBand } from '../../../shared/components';
 
 interface GateNodeProps {
   x: number;
@@ -180,7 +123,7 @@ export function QFTStoryScene({
 
   return (
     <>
-      <CameraRig mode={cameraMode} distance={cameraDistance} />
+      <CameraRig mode={cameraMode} distance={cameraDistance} fixedOffset={{ x: 0, y: -0.5 }} orbitOffset={{ x: 2, y: 1.5, z: 2 }} lookAtY={-0.5} />
       <ambientLight intensity={0.82} />
       <directionalLight position={[6, 8, 8]} intensity={0.88} />
       <directionalLight position={[-6, 4, 5]} intensity={0.28} color="#C4B5FD" />
@@ -250,12 +193,10 @@ export function QFTStoryScene({
 
         if (step.phase === 'hadamard' && step.target_qubit !== undefined) {
           return (
-            <GateNode
+            <HadamardGate
               key={`gate-${step.step}`}
               x={x}
               y={laneYs[step.target_qubit]}
-              label="H"
-              color={PHASE_COLOR.hadamard}
               isActive={isActive}
             />
           );

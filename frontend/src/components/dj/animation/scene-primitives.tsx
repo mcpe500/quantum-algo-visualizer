@@ -1,68 +1,11 @@
 import { Line, OrbitControls, Text } from '@react-three/drei';
-import { useThree } from '@react-three/fiber';
-import { useEffect, useMemo } from 'react';
+import { useMemo } from 'react';
 import type { DJAnimationPartition, DJAnimationPayload } from '../../../types/dj';
 import { PHASE_COLOR, PHASE_LABEL, SCENE_PHASE_LABEL } from './constants';
 import { getColumnLayout, getLaneYs, getQubitP1 } from './helpers';
 import { StageColumn } from './scene-column';
 import { BlochSphereNode, ResultBoard } from './scene-bloch';
-
-function CameraRig({ mode, distance }: { mode: 'fixed' | 'orbit'; distance: number }) {
-  const { camera } = useThree();
-
-  useEffect(() => {
-    if (mode === 'fixed') {
-      camera.position.set(0, -0.1, distance);
-      camera.lookAt(0, -0.1, 0);
-    } else {
-      camera.position.set(1.8, 1.2, distance - 1.5);
-      camera.lookAt(0, -0.1, 0);
-    }
-    camera.updateProjectionMatrix();
-  }, [camera, distance, mode]);
-
-  return null;
-}
-
-function PhaseBand({
-  startX,
-  endX,
-  color,
-  label,
-  topY,
-  height,
-}: {
-  startX: number;
-  endX: number;
-  color: string;
-  label: string;
-  topY: number;
-  height: number;
-}) {
-  const width = Math.max(endX - startX, 0.6);
-  const centerX = (startX + endX) / 2;
-
-  return (
-    <group position={[centerX, 0, -0.16]}>
-      <mesh>
-        <planeGeometry args={[width, height]} />
-        <meshBasicMaterial color={color} transparent opacity={0.07} />
-      </mesh>
-      <Line points={[[(-width / 2), topY, 0], [width / 2, topY, 0]]} color={color} lineWidth={1} />
-      {width >= 1.55 && (
-        <Text
-          position={[0, topY + 0.34, 0.02]}
-          fontSize={width < 2.2 ? 0.14 : 0.18}
-          color={color}
-          anchorX="center"
-          anchorY="middle"
-        >
-          {label}
-        </Text>
-      )}
-    </group>
-  );
-}
+import { CameraRig, PhaseBand } from '../../../shared/components';
 
 export function StoryScene({
   data,

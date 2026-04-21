@@ -4,3 +4,5 @@ export { ReadingGuideCard } from './ReadingGuideCard';
 export { ProbabilityBarList } from './ProbabilityBarList';
 export { AlgorithmPageShell } from './AlgorithmPageShell';
 export type { AlgorithmPageShellProps } from './AlgorithmPageShell';
+export { HadamardGate, HADAMARD_COLOR, CameraRig, PhaseBand } from './3d';
+export type { HadamardGateProps, CameraRigProps, PhaseBandProps } from './3d';

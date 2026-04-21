@@ -1,6 +1,7 @@
 import { Line, Text } from '@react-three/drei';
 import type { DJAnimationStep } from '../../../types/dj';
 import { clamp } from './helpers';
+import { HadamardGate } from '../../../shared/components';
 
 function GateTile({
   x,
@@ -99,7 +100,7 @@ export function StageColumn({
 
       {markers.map((marker, index) => {
         const y = laneYs[index];
-        if (marker === 'H') return <GateTile key={`${step.step}-${index}-H`} x={x} y={y} label="H" color="#2563EB" size={plateSize} active={active} />;
+        if (marker === 'H') return <HadamardGate key={`${step.step}-${index}-H`} x={x} y={y} isActive={active} size={plateSize} />;
         if (marker === 'X') return <GateTile key={`${step.step}-${index}-X`} x={x} y={y} label="X" color="#E11D48" size={plateSize} active={active} />;
         if (marker === 'M') return <GateTile key={`${step.step}-${index}-M`} x={x} y={y} label="M" color="#475569" size={plateSize} active={active || isFinalMeasure} />;
         if (marker === '●') return <ControlDot key={`${step.step}-${index}-dot`} x={x} y={y} active={active} />;
