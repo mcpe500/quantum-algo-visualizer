@@ -3,7 +3,7 @@ import { useMemo } from 'react';
 import type { QAOAAnimationPayload, QAOAAnimationStep } from '../../../types/qaoa';
 import { PHASE_COLOR } from './constants';
 import { getPartitionFromBitstring } from './helpers';
-import { HadamardGate, CameraRig } from '../../../shared/components';
+import { HadamardGate, CameraRig, LabeledDiscGate, QubitOrb } from '../../../shared/components';
 
 function getGraphPositions(count: number, centerX: number, centerY: number, radius: number) {
   return Array.from({ length: count }, (_, index) => ({
@@ -34,54 +34,6 @@ function NodeSphere({
       <Text position={[0, 0, 0.33]} fontSize={0.16} color="#ffffff" anchorX="center" anchorY="middle">
         {label}
       </Text>
-    </group>
-  );
-}
-
-function GateDisc({
-  x,
-  y,
-  label,
-  color,
-  active,
-}: {
-  x: number;
-  y: number;
-  label: string;
-  color: string;
-  active: boolean;
-}) {
-  return (
-    <group position={[x, y, 0]}>
-      <mesh>
-        <cylinderGeometry args={[0.2, 0.2, 0.08, 24]} />
-        <meshStandardMaterial color={color} emissive={active ? color : '#000000'} emissiveIntensity={active ? 0.35 : 0} />
-      </mesh>
-      <Text position={[0, 0, 0.12]} fontSize={0.11} color="#ffffff" anchorX="center" anchorY="middle">
-        {label}
-      </Text>
-    </group>
-  );
-}
-
-function QubitOrb({
-  x,
-  y,
-  pOne,
-  active,
-}: {
-  x: number;
-  y: number;
-  pOne: number;
-  active: boolean;
-}) {
-  const color = pOne > 0.5 ? '#0ea5e9' : '#8b5cf6';
-  return (
-    <group position={[x, y, 0.18]}>
-      <mesh>
-        <sphereGeometry args={[active ? 0.22 : 0.18, 20, 20]} />
-        <meshStandardMaterial color={color} emissive={color} emissiveIntensity={active ? 0.4 : 0.2} />
-      </mesh>
     </group>
   );
 }
@@ -209,18 +161,18 @@ export function QAOAStoryScene({
             color={PHASE_COLOR.cost}
             lineWidth={2}
           />
-          <GateDisc x={0.4} y={laneYs[activeStep.edge[0]]} label="C" color={PHASE_COLOR.cost} active />
-          <GateDisc x={0.4} y={laneYs[activeStep.edge[1]]} label="ZZ" color={PHASE_COLOR.cost} active />
+          <LabeledDiscGate x={0.4} y={laneYs[activeStep.edge[0]]} label="C" color={PHASE_COLOR.cost} isActive />
+          <LabeledDiscGate x={0.4} y={laneYs[activeStep.edge[1]]} label="ZZ" color={PHASE_COLOR.cost} isActive />
         </>
       )}
 
       {activeStep.phase === 'mixer' && activeStep.target_qubit !== undefined && (
-        <GateDisc x={2.1} y={laneYs[activeStep.target_qubit]} label="Rx" color={PHASE_COLOR.mixer} active />
+        <LabeledDiscGate x={2.1} y={laneYs[activeStep.target_qubit]} label="Rx" color={PHASE_COLOR.mixer} isActive />
       )}
 
       {(activeStep.phase === 'measurement' || activeStep.phase === 'update') &&
         laneYs.map((y, index) => (
-          <GateDisc key={`m-${index}`} x={3.9} y={y} label="M" color={PHASE_COLOR.measurement} active />
+          <LabeledDiscGate key={`m-${index}`} x={3.9} y={y} label="M" color={PHASE_COLOR.measurement} isActive />
         ))}
 
       {activeStep.phase === 'optimizer' && (
@@ -232,10 +184,11 @@ export function QAOAStoryScene({
       {activeStep.qubit_summaries.map((summary) => (
         <QubitOrb
           key={`orb-${summary.qubit}`}
+          variant="probability"
           x={orbX}
           y={laneYs[summary.qubit]}
           pOne={summary.p_one}
-          active={activeStep.target_qubit === summary.qubit || activeStep.phase === 'superposition'}
+          isActive={activeStep.target_qubit === summary.qubit || activeStep.phase === 'superposition'}
         />
       ))}
     </>

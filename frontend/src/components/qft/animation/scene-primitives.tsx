@@ -3,66 +3,7 @@ import { useMemo } from 'react';
 import type { QFTAnimationPartition, QFTAnimationPayload } from '../../../types/qft';
 import { PHASE_COLOR, SCENE_PHASE_LABEL, PHASE_LABEL } from './constants';
 import { getColumnLayout, getLaneYs } from '../../../shared/utils/animation-helpers';
-import { HadamardGate, CameraRig, PhaseBand } from '../../../shared/components';
-
-interface GateNodeProps {
-  x: number;
-  y: number;
-  label: string;
-  color: string;
-  isActive: boolean;
-}
-
-function GateNode({ x, y, label, color, isActive }: GateNodeProps) {
-  return (
-    <group position={[x, y, 0]}>
-      <mesh>
-        <sphereGeometry args={[isActive ? 0.22 : 0.18, 16, 16]} />
-        <meshStandardMaterial
-          color={color}
-          emissive={isActive ? color : '#000000'}
-          emissiveIntensity={isActive ? 0.4 : 0}
-        />
-      </mesh>
-      <Text
-        position={[0, 0, 0.26]}
-        fontSize={0.12}
-        color={isActive ? '#ffffff' : '#64748b'}
-        anchorX="center"
-        anchorY="middle"
-      >
-        {label}
-      </Text>
-    </group>
-  );
-}
-
-interface QubitOrbProps {
-  x: number;
-  y: number;
-  phase: number;
-  isActive: boolean;
-}
-
-function QubitOrb({ x, y, phase, isActive }: QubitOrbProps) {
-  const hue = ((phase * 180) / Math.PI) % 360;
-  const color = `hsl(${hue}, 70%, 55%)`;
-
-  return (
-    <group position={[x, y, 0.1]}>
-      <mesh>
-        <sphereGeometry args={[isActive ? 0.28 : 0.22, 24, 24]} />
-        <meshStandardMaterial
-          color={color}
-          emissive={color}
-          emissiveIntensity={isActive ? 0.5 : 0.25}
-          transparent
-          opacity={0.9}
-        />
-      </mesh>
-    </group>
-  );
-}
+import { HadamardGate, CameraRig, PhaseBand, LabeledSphereGate, QubitOrb } from '../../../shared/components';
 
 interface SignalBarProps {
   x: number;
@@ -205,7 +146,7 @@ export function QFTStoryScene({
         if (step.phase === 'phase_cascade' && step.target_qubit !== undefined && step.control_qubit !== undefined) {
           return (
             <group key={`gate-${step.step}`}>
-              <GateNode x={x} y={laneYs[step.target_qubit]} label={`C${step.control_qubit}`} color={PHASE_COLOR.phase_cascade} isActive={isActive} />
+              <LabeledSphereGate x={x} y={laneYs[step.target_qubit]} label={`C${step.control_qubit}`} color={PHASE_COLOR.phase_cascade} isActive={isActive} />
               <Line points={[[x, laneYs[step.control_qubit], 0.1], [x, laneYs[step.target_qubit], 0.1]]} color={PHASE_COLOR.phase_cascade} lineWidth={1.5} />
             </group>
           );
@@ -215,8 +156,8 @@ export function QFTStoryScene({
           const [a, b] = step.swap_pair;
           return (
             <group key={`gate-${step.step}`}>
-              <GateNode x={x} y={laneYs[a]} label="S" color={PHASE_COLOR.swap} isActive={isActive} />
-              <GateNode x={x} y={laneYs[b]} label="S" color={PHASE_COLOR.swap} isActive={isActive} />
+              <LabeledSphereGate x={x} y={laneYs[a]} label="S" color={PHASE_COLOR.swap} isActive={isActive} />
+              <LabeledSphereGate x={x} y={laneYs[b]} label="S" color={PHASE_COLOR.swap} isActive={isActive} />
               <Line points={[[x, laneYs[a], 0.1], [x, laneYs[b], 0.1]]} color={PHASE_COLOR.swap} lineWidth={2} />
             </group>
           );
@@ -230,6 +171,7 @@ export function QFTStoryScene({
         return (
           <QubitOrb
             key={`orb-${index}`}
+            variant="phase"
             x={columnXs[currentStep]}
             y={y}
             phase={phase}

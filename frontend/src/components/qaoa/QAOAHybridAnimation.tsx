@@ -378,7 +378,7 @@ export function QAOAHybridAnimation({ data }: QAOAHybridAnimationProps) {
             <DetailCard label="Nodes" value={`${data.n_nodes}`} hint="Dari dataset JSON." />
             <DetailCard label="Edges" value={`${data.n_edges}`} hint="Masalah Max-Cut." />
             <DetailCard label="Layers" value={`${data.p_layers}`} hint="Ansatz QAOA." />
-            <DetailCard label="Shots" value={`${data.shots}`} hint="1024 shots." />
+            <DetailCard label="Shots" value={`${data.shots}`} hint={`${data.shots} shots.`} />
           </div>
         </div>
       </header>

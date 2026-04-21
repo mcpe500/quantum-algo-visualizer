@@ -81,7 +81,7 @@ function getExportNarration(mode: ExportOverlayMode, data: QAOAAnimationPayload,
   if (mode === 'intro') {
     return {
       headline: 'Loop hybrid QAOA untuk Max-Cut',
-      detail: `${data.case_id} memadukan optimizer klasik, cost Hamiltonian Ising, mixer ansatz, dan measurement 1024 shots untuk mencari partisi cut terbaik.`,
+      detail: `${data.case_id} memadukan optimizer klasik, cost Hamiltonian Ising, mixer ansatz, dan measurement ${data.shots} shots untuk mencari partisi cut terbaik.`,
       accent: `Checkpoint: ${step.checkpoint_label} | p = ${data.p_layers}`,
     };
   }

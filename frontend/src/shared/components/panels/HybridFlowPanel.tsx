@@ -1,19 +1,9 @@
 import type { QAOAAnimationPayload, QAOAAnimationStep } from '../../../types/qaoa';
-import { PHASE_COLOR } from '../../../components/qaoa/animation/constants';
 
 interface HybridFlowPanelProps {
   data: QAOAAnimationPayload;
   activeStep: QAOAAnimationStep;
 }
-
-const PSEUDOCODE_LINES = [
-  'Initialize γ₀, β₀ (random)',
-  '→ Build QAOA circuit with γ, β',
-  '→ Statevector simulation → ⟨H_C⟩ expected cut',
-  '← COBYLA receives -⟨H_C⟩, updates γ, β',
-  '→ Repeat until convergence',
-  '→ Final: AerSimulator(shots=1024) → bitstring',
-];
 
 const PHASE_TO_LINE: Record<string, number> = {
   optimizer: 3,
@@ -25,6 +15,15 @@ const PHASE_TO_LINE: Record<string, number> = {
 };
 
 export function HybridFlowPanel({ data, activeStep }: HybridFlowPanelProps) {
+  const PSEUDOCODE_LINES = [
+    'Initialize γ₀, β₀ (random)',
+    '→ Build QAOA circuit with γ, β',
+    '→ Statevector simulation → ⟨H_C⟩ expected cut',
+    '← COBYLA receives -⟨H_C⟩, updates γ, β',
+    '→ Repeat until convergence',
+    `→ Final: AerSimulator(shots=${data.shots}) → bitstring`,
+  ];
+
   const activeLine = PHASE_TO_LINE[activeStep.phase] ?? -1;
   const checkpoint = data.checkpoints.find((cp) => cp.key === activeStep.checkpoint_key);
 
