@@ -25,6 +25,30 @@ def load_case(dataset_name, case_id):
         return None
     return load_json(file_path)
 
+def load_case_canonical(dataset_name, case_id):
+    """
+    Read canonical JSON. If it doesn't exist, generate from raw JSON,
+    save to canonical folder, then return.
+    """
+    canonical_dir = os.path.join(dataset_dir(dataset_name), 'canonical')
+    canonical_path = os.path.join(canonical_dir, f'{case_id}.canonical.json')
+
+    if os.path.exists(canonical_path):
+        return load_json(canonical_path)
+
+    raw = load_case(dataset_name, case_id)
+    if raw is None:
+        return None
+
+    from services.vqe_preprocess import preprocess_raw_to_canonical
+    canonical = preprocess_raw_to_canonical(raw)
+
+    os.makedirs(canonical_dir, exist_ok=True)
+    with open(canonical_path, 'w') as f:
+        json.dump(canonical, f, indent=2)
+
+    return canonical
+
 def list_cases(dataset_name, prefix):
     root = dataset_dir(dataset_name)
     cases = []

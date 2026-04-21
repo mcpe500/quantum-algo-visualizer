@@ -10,11 +10,11 @@ from qiskit.quantum_info import SparsePauliOp, Statevector
 from qiskit.visualization import circuit_drawer
 
 from api.shared.plotting import figure_to_base64
-from services.common import list_cases, load_case
+from services.common import list_cases, load_case_canonical
 
 
 def get_vqe_case_or_none(case_id):
-    return load_case('vqe', case_id)
+    return load_case_canonical('vqe', case_id)
 
 
 def get_vqe_cases():

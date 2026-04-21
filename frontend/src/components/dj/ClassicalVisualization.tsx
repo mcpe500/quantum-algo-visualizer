@@ -54,7 +54,7 @@ export function ClassicalVisualization({
 
         {/* MAIN FLOW */}
         <main className="flex flex-col lg:flex-row items-start justify-center mt-6 lg:mt-8 gap-6">
-          <InputsPanel n_qubits={n_qubits} totalSteps={steps.length} />
+          <InputsPanel n_qubits={n_qubits} steps={steps} />
 
           {/* ARROW */}
           <div className="hidden lg:flex items-center shrink-0 self-center mt-6">

@@ -8,9 +8,10 @@ const CHART_PADDING = 30;
 interface SpectrumChartProps {
   data: { bin: number; magnitude: number }[];
   title?: string;
+  highlightBins?: number[]; // Bins to highlight (dominant bins)
 }
 
-export function SpectrumChart({ data, title = 'FFT Spectrum' }: SpectrumChartProps) {
+export function SpectrumChart({ data, title = 'FFT Spectrum', highlightBins = [] }: SpectrumChartProps) {
   if (!data || data.length === 0) return null;
 
   const width = CHART_SIZE.width;
@@ -51,6 +52,7 @@ export function SpectrumChart({ data, title = 'FFT Spectrum' }: SpectrumChartPro
         {/* Bars */}
         {data.map((d, i) => {
           const barHeight = (d.magnitude / maxMag) * (height - 2 * padding);
+          const isHighlighted = highlightBins.includes(d.bin);
           return (
             <g key={d.bin}>
               <rect
@@ -58,10 +60,22 @@ export function SpectrumChart({ data, title = 'FFT Spectrum' }: SpectrumChartPro
                 y={height - padding - barHeight}
                 width={Math.max(1, barWidth - 1)}
                 height={barHeight}
-                fill="#2563EB"
-                opacity={0.8}
+                fill={isHighlighted ? '#f59e0b' : '#2563EB'}
+                opacity={isHighlighted ? 1 : 0.8}
               />
-              {i % labelStep === 0 && (
+              {isHighlighted && (
+                <text
+                  x={padding + i * barWidth + barWidth / 2}
+                  y={height - padding - barHeight - 5}
+                  fontSize="8"
+                  fill="#f59e0b"
+                  textAnchor="middle"
+                  fontWeight="bold"
+                >
+                  {d.bin}
+                </text>
+              )}
+              {i % labelStep === 0 && !isHighlighted && (
                 <text
                   x={padding + i * barWidth + barWidth / 2}
                   y={height - padding + 12}
@@ -82,6 +96,20 @@ export function SpectrumChart({ data, title = 'FFT Spectrum' }: SpectrumChartPro
         </text>
         <text x={padding - 5} y={height - padding} fontSize="10" fill="#6b7280" textAnchor="end">0</text>
       </svg>
+      
+      {/* Legend */}
+      {highlightBins.length > 0 && (
+        <div className="flex items-center gap-4 mt-2 text-xs">
+          <div className="flex items-center gap-1">
+            <div className="w-3 h-3 bg-amber-500 rounded-sm" />
+            <span className="text-gray-600">Dominant Bin</span>
+          </div>
+          <div className="flex items-center gap-1">
+            <div className="w-3 h-3 bg-blue-600 rounded-sm opacity-80" />
+            <span className="text-gray-600">Other Bins</span>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
