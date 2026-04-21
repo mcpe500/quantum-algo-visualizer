@@ -1,17 +1,49 @@
 import { HTML2CANVAS_CAPTURE_OPTIONS } from '../constants/app';
 
+function waitForNextPaint(): Promise<void> {
+  return new Promise((resolve) => {
+    window.requestAnimationFrame(() => resolve());
+  });
+}
+
+async function waitForCaptureReady(): Promise<void> {
+  if ('fonts' in document) {
+    await document.fonts.ready;
+  }
+
+  await waitForNextPaint();
+  await waitForNextPaint();
+}
+
 export async function downloadElementAsPNG(
-  elementId: string, 
+  elementId: string,
   filename: string
 ): Promise<void> {
   const html2canvas = (await import('html2canvas')).default;
   const element = document.getElementById(elementId);
-  
+
   if (!element) {
     throw new Error(`Element with id '${elementId}' not found`);
   }
 
-  const canvas = await html2canvas(element, HTML2CANVAS_CAPTURE_OPTIONS);
+  await waitForCaptureReady();
+
+  const canvas = await html2canvas(element, {
+    ...HTML2CANVAS_CAPTURE_OPTIONS,
+    logging: false,
+    onclone: (clonedDocument) => {
+      const clonedElement = clonedDocument.getElementById(elementId);
+
+      if (!clonedElement) {
+        return;
+      }
+
+      clonedElement.querySelectorAll<HTMLElement>('*').forEach((node) => {
+        node.style.animation = 'none';
+        node.style.transition = 'none';
+      });
+    },
+  });
 
   const link = document.createElement('a');
   link.download = filename;
