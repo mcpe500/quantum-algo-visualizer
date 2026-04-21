@@ -3,8 +3,11 @@
   "description": "Max-Cut pada graph K3 (triangle)",
   "problem": "maxcut",
   "graph": {
-    "nodes": [0, 1, 2],
-    "edges": [[0, 1], [0, 2], [1, 2]]
+    "adjacency_matrix": [
+      [0, 1, 1],
+      [1, 0, 1],
+      [1, 1, 0]
+    ]
   },
   "p_layers": 1
 }

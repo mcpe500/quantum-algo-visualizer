@@ -3,5 +3,5 @@ export_project_to_txt.py
 project_export.txt
 *__pycache__*
 *dist*
-*session-ses*
+# *session-ses*
 *.diff*

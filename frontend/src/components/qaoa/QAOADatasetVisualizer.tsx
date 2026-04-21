@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Camera } from 'lucide-react';
 import { qaoaApi } from '../../services/api';
 import type { QAOACase } from '../../types/qaoa';
@@ -6,16 +6,12 @@ import { AdjacencyMatrixGrid } from './AdjacencyMatrixGrid';
 import { MiniGraph } from './MiniGraph';
 import { sortCaseIds } from '../../utils/sorting';
 import { downloadElementAsPNG } from '../../utils/download';
+import { deriveGraphFromMatrix } from '../../utils/qaoaGraph';
 
-function inferGraphType(nodes: number[], edges: [number, number][]): string {
-  const n = nodes.length;
-  const maxEdges = (n * (n - 1)) / 2;
-  if (edges.length === maxEdges) {
-    return `K${n}`;
-  }
-  if (edges.length === n - 1) {
-    return `P${n}`;
-  }
+function inferGraphType(nNodes: number, nEdges: number): string {
+  const maxEdges = (nNodes * (nNodes - 1)) / 2;
+  if (nEdges === maxEdges) return `K${nNodes}`;
+  if (nEdges === nNodes - 1) return `P${nNodes}`;
   return `custom`;
 }
 
@@ -48,8 +44,12 @@ function HeaderBadge({ children, tone = 'muted', widthClass }: HeaderBadgeProps)
 
 function DatasetCard({ data, index, mounted }: DatasetCardProps) {
   const [isCapturing, setIsCapturing] = useState(false);
-  const graphType = inferGraphType(data.graph.nodes, data.graph.edges);
-  const n = data.graph.nodes.length;
+  const { nodes, edges } = useMemo(
+    () => deriveGraphFromMatrix(data.graph.adjacency_matrix),
+    [data.graph.adjacency_matrix]
+  );
+  const graphType = inferGraphType(nodes.length, edges.length);
+  const n = nodes.length;
   const cellSize = n <= 3 ? 72 : 64;
 
   const handleTakePicture = async () => {
@@ -99,22 +99,20 @@ function DatasetCard({ data, index, mounted }: DatasetCardProps) {
           </button>
         </div>
         <div className="flex h-9 items-center gap-4 text-sm font-bold text-slate-400 leading-none tabular-nums">
-          <span className="inline-flex h-full items-center">edges: {data.graph.edges.length}</span>
+          <span className="inline-flex h-full items-center">edges: {edges.length}</span>
           <span className="inline-flex h-full items-center text-slate-300">|</span>
-          <span className="inline-flex h-full items-center">nodes: {data.graph.nodes.length}</span>
+          <span className="inline-flex h-full items-center">nodes: {nodes.length}</span>
         </div>
       </div>
 
       <div className="p-8 sm:p-10 flex items-center justify-center gap-10">
         <AdjacencyMatrixGrid
-          nodes={data.graph.nodes}
-          edges={data.graph.edges}
+          adjacencyMatrix={data.graph.adjacency_matrix}
           cellSize={cellSize}
         />
         <div className="flex flex-col items-center gap-4">
           <MiniGraph
-            nodes={data.graph.nodes}
-            edges={data.graph.edges}
+            adjacencyMatrix={data.graph.adjacency_matrix}
           />
           <span className="inline-flex h-5 items-center text-xs font-bold text-slate-400 uppercase tracking-widest leading-none">
             graph
