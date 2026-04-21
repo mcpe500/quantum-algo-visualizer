@@ -4,3 +4,5 @@ export { CameraRig } from './CameraRig';
 export type { CameraRigProps } from './CameraRig';
 export { PhaseBand } from './PhaseBand';
 export type { PhaseBandProps } from './PhaseBand';
+
+export * from './gates';

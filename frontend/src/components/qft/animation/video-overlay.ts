@@ -12,14 +12,6 @@ export function getSupportedVideoMimeType() {
   return VIDEO_MIME_TYPES.find((candidate) => MediaRecorder.isTypeSupported(candidate)) ?? null;
 }
 
-export function isFFmpegSupported() {
-  try {
-    return typeof FFmpeg !== 'undefined' && typeof FFmpeg.wasm !== 'undefined';
-  } catch {
-    return false;
-  }
-}
-
 function drawLegendPill(
   ctx: CanvasRenderingContext2D,
   x: number,

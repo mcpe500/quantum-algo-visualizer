@@ -1,13 +1,24 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Canvas } from '@react-three/fiber';
-import { Gauge, Lock, Move3D, Pause, Play, RotateCcw, SkipForward } from 'lucide-react';
+import { Gauge, LoaderCircle, Lock, Move3D, Pause, Play, RotateCcw, SkipForward, Video } from 'lucide-react';
 import type { QFTAnimationPayload } from '../../types/qft';
+import { downloadBlob } from '../../utils/download';
+import { convertWebmToMp4, isFFmpegSupported } from '../../utils/videoConvert';
 import {
   DEFAULT_STEP_MS,
+  EXPORT_FPS,
+  EXPORT_INTRO_MS,
+  EXPORT_OUTRO_MS,
+  EXPORT_STEP_MS_MIN,
+  EXPORT_VIDEO_BITRATE,
+  EXPORT_VIDEO_HEIGHT,
+  EXPORT_VIDEO_WIDTH,
   PHASE_COLOR,
   PHASE_LABEL,
   SPEED_SLIDER,
+  type ExportOverlayMode,
 } from './animation/constants';
+import { wait, waitForAnimationFrames, waitForCanvasReady } from './animation/helpers';
 import {
   DetailCard,
   FrequencySpectrumPanel,
@@ -17,12 +28,14 @@ import {
   SignalInputPanel,
 } from './animation/panels';
 import { QFTStoryScene } from './animation/scene-primitives';
+import { drawVideoFrame, getSupportedVideoMimeType } from './animation/video-overlay';
 
 interface QFTQuantumAnimationProps {
   data: QFTAnimationPayload;
+  onExportingChange?: (isExporting: boolean) => void;
 }
 
-export function QFTQuantumAnimation({ data }: QFTQuantumAnimationProps) {
+export function QFTQuantumAnimation({ data, onExportingChange }: QFTQuantumAnimationProps) {
   const [currentStep, setCurrentStep] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
   const [speed, setSpeed] = useState(DEFAULT_STEP_MS);
@@ -31,6 +44,11 @@ export function QFTQuantumAnimation({ data }: QFTQuantumAnimationProps) {
   const currentStepRef = useRef(currentStep);
   const isPlayingRef = useRef(isPlaying);
   const speedRef = useRef(speed);
+  const [isExporting, setIsExporting] = useState(false);
+  const [isConverting, setIsConverting] = useState(false);
+  const [exportError, setExportError] = useState<string | null>(null);
+  const exportRendererCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const exportAnimationFrameRef = useRef<number | null>(null);
 
   const totalSteps = data.timeline.length;
   const activeStep = data.timeline[currentStep];
@@ -38,6 +56,8 @@ export function QFTQuantumAnimation({ data }: QFTQuantumAnimationProps) {
   const phaseColor = PHASE_COLOR[activePhase] || '#7c3aed';
   const isLastStep = currentStep >= totalSteps - 1;
   const canvasHeight = data.n_qubits >= 4 || totalSteps > 18 ? 560 : 520;
+  const supportedVideoMimeType = useMemo(() => getSupportedVideoMimeType(), []);
+  const ffmpegReady = useMemo(() => isFFmpegSupported(), []);
 
   const stopTimer = useCallback(() => {
     if (!timerRef.current) return;
@@ -56,6 +76,16 @@ export function QFTQuantumAnimation({ data }: QFTQuantumAnimationProps) {
   useEffect(() => {
     speedRef.current = speed;
   }, [speed]);
+
+  useEffect(() => {
+    onExportingChange?.(isExporting);
+  }, [isExporting, onExportingChange]);
+
+  useEffect(() => {
+    return () => {
+      onExportingChange?.(false);
+    };
+  }, [onExportingChange]);
 
   useEffect(() => {
     if (isPlaying && currentStep < totalSteps - 1) {
@@ -80,36 +110,42 @@ export function QFTQuantumAnimation({ data }: QFTQuantumAnimationProps) {
   }, [currentStep, isPlaying, speed, stopTimer, totalSteps]);
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     setCurrentStep(0);
-     
     setIsPlaying(false);
+    setExportError(null);
     stopTimer();
   }, [data.case_id, stopTimer]);
 
   useEffect(() => {
     return () => {
       stopTimer();
+      if (exportAnimationFrameRef.current !== null) {
+        window.cancelAnimationFrame(exportAnimationFrameRef.current);
+      }
     };
   }, [stopTimer]);
 
   const handlePlay = () => {
+    if (isExporting) return;
     if (isLastStep) setCurrentStep(0);
     setIsPlaying(true);
   };
 
   const handlePause = () => {
+    if (isExporting) return;
     setIsPlaying(false);
     stopTimer();
   };
 
   const handleStep = () => {
+    if (isExporting) return;
     setIsPlaying(false);
     stopTimer();
     setCurrentStep((previous) => Math.min(previous + 1, totalSteps - 1));
   };
 
   const handleReset = () => {
+    if (isExporting) return;
     setIsPlaying(false);
     stopTimer();
     setCurrentStep(0);
@@ -117,6 +153,7 @@ export function QFTQuantumAnimation({ data }: QFTQuantumAnimationProps) {
 
   const handleJumpPhase = useCallback(
     (phase: string) => {
+      if (isExporting) return;
       const index = data.timeline.findIndex((step) => step.phase === phase);
       if (index >= 0) {
         setCurrentStep(index);
@@ -124,8 +161,200 @@ export function QFTQuantumAnimation({ data }: QFTQuantumAnimationProps) {
         stopTimer();
       }
     },
-    [data.timeline, stopTimer],
+    [data.timeline, isExporting, stopTimer],
   );
+
+  const runExportPipeline = useCallback(async (target: 'webm' | 'mp4') => {
+    if (isExporting) return;
+
+    if (!supportedVideoMimeType || typeof MediaRecorder === 'undefined') {
+      setExportError(
+        target === 'webm'
+          ? 'Browser ini belum mendukung export video WebM dari canvas. Gunakan Chrome, Edge, atau Firefox terbaru.'
+          : 'Browser ini belum mendukung perekaman video. Gunakan Chrome, Edge, atau Firefox terbaru.',
+      );
+      return;
+    }
+
+    const previousStep = currentStepRef.current;
+    const previousSpeed = speedRef.current;
+    const previousPlaying = isPlayingRef.current;
+    const exportStepMs = Math.max(previousSpeed, EXPORT_STEP_MS_MIN);
+    const compositorCanvas = document.createElement('canvas');
+    const exportWidth = EXPORT_VIDEO_WIDTH;
+    const exportHeight = EXPORT_VIDEO_HEIGHT;
+    const compositorContext = compositorCanvas.getContext('2d', { alpha: false });
+
+    if (!compositorContext) {
+      setExportError('Gagal membuat canvas komposit untuk export video.');
+      return;
+    }
+
+    compositorCanvas.width = exportWidth;
+    compositorCanvas.height = exportHeight;
+
+    let overlayMode: ExportOverlayMode = 'intro';
+    let recorder: MediaRecorder | null = null;
+    let stream: MediaStream | null = null;
+    let sourceCanvas: HTMLCanvasElement | null = null;
+    const chunks: BlobPart[] = [];
+    let cancelled = false;
+
+    try {
+      stream = compositorCanvas.captureStream(EXPORT_FPS);
+      recorder = new MediaRecorder(stream, {
+        mimeType: supportedVideoMimeType,
+        videoBitsPerSecond: EXPORT_VIDEO_BITRATE,
+      });
+    } catch {
+      setExportError(
+        target === 'webm'
+          ? 'Recorder browser gagal diinisialisasi untuk export video WebM.'
+          : 'Recorder browser gagal diinisialisasi.',
+      );
+      return;
+    }
+
+    const recorderPromise = new Promise<Blob>((resolve, reject) => {
+      recorder!.ondataavailable = (event) => {
+        if (event.data && event.data.size > 0) {
+          chunks.push(event.data);
+        }
+      };
+
+      recorder!.onerror = () => {
+        reject(new Error(target === 'webm' ? 'Recorder browser gagal membuat video WebM.' : 'Recorder browser gagal merekam video.'));
+      };
+
+      recorder!.onstop = () => {
+        resolve(new Blob(chunks, { type: supportedVideoMimeType }));
+      };
+    });
+
+    const drawCompositeFrame = () => {
+      if (cancelled) return;
+      if (!sourceCanvas) {
+        exportAnimationFrameRef.current = window.requestAnimationFrame(drawCompositeFrame);
+        return;
+      }
+      const exportStep = data.timeline[currentStepRef.current] ?? data.timeline[0];
+      const exportPhaseColor = PHASE_COLOR[exportStep.phase] || '#0d9488';
+
+      drawVideoFrame({
+        ctx: compositorContext,
+        sourceCanvas,
+        data,
+        mode: overlayMode,
+        step: exportStep,
+        phaseColor: exportPhaseColor,
+      });
+
+      exportAnimationFrameRef.current = window.requestAnimationFrame(drawCompositeFrame);
+    };
+
+    setExportError(null);
+    setIsExporting(true);
+    setIsConverting(false);
+
+    try {
+      stopTimer();
+      setIsPlaying(false);
+      setCurrentStep(0);
+      setSpeed(exportStepMs);
+      await waitForAnimationFrames(2);
+
+      sourceCanvas = await waitForCanvasReady(
+        exportRendererCanvasRef,
+        EXPORT_VIDEO_WIDTH,
+        EXPORT_VIDEO_HEIGHT,
+      );
+      await waitForAnimationFrames(3);
+
+      drawCompositeFrame();
+      recorder?.start(250);
+
+      await wait(EXPORT_INTRO_MS);
+
+      overlayMode = 'play';
+      setCurrentStep(0);
+      await waitForAnimationFrames(2);
+      setIsPlaying(true);
+
+      const playbackDurationMs = Math.max(totalSteps - 1, 0) * exportStepMs + Math.round(exportStepMs * 0.6);
+      await wait(playbackDurationMs);
+
+      setIsPlaying(false);
+      stopTimer();
+      setCurrentStep(totalSteps - 1);
+      await waitForAnimationFrames(3);
+
+      overlayMode = 'outro';
+      await wait(EXPORT_OUTRO_MS);
+
+      cancelled = true;
+      if (exportAnimationFrameRef.current !== null) {
+        window.cancelAnimationFrame(exportAnimationFrameRef.current);
+        exportAnimationFrameRef.current = null;
+      }
+
+      recorder?.stop();
+      const webmBlob = await recorderPromise;
+
+      if (target === 'mp4') {
+        setIsConverting(true);
+        const mp4Blob = await convertWebmToMp4(webmBlob);
+        downloadBlob(mp4Blob, `qft_${data.case_id}_video-quantum.mp4`);
+      } else {
+        downloadBlob(webmBlob, `qft_${data.case_id}_video-quantum.webm`);
+      }
+    } catch (error) {
+      setExportError(
+        error instanceof Error
+          ? error.message
+          : target === 'webm'
+            ? 'Export video gagal dijalankan.'
+            : 'Export MP4 gagal. Pastikan menggunakan Chrome atau Edge terbaru.',
+      );
+      if (recorder && recorder.state !== 'inactive') {
+        recorder.stop();
+      }
+    } finally {
+      cancelled = true;
+      if (exportAnimationFrameRef.current !== null) {
+        window.cancelAnimationFrame(exportAnimationFrameRef.current);
+        exportAnimationFrameRef.current = null;
+      }
+      stream?.getTracks().forEach((track) => track.stop());
+      exportRendererCanvasRef.current = null;
+
+      setSpeed(previousSpeed);
+      setCurrentStep(previousStep);
+      setIsPlaying(false);
+      setIsConverting(false);
+      await waitForAnimationFrames(2);
+
+      if (previousPlaying && previousStep < totalSteps - 1) {
+        setIsPlaying(true);
+      }
+
+      setIsExporting(false);
+    }
+  }, [data, isExporting, stopTimer, supportedVideoMimeType, totalSteps]);
+
+  const handleExportVideo = useCallback(async () => {
+    await runExportPipeline('webm');
+  }, [runExportPipeline]);
+
+  const handleExportMp4 = useCallback(async () => {
+    if (isExporting) return;
+
+    if (!ffmpegReady) {
+      setExportError('Browser ini tidak mendukung konversi MP4 di sisi klien. Gunakan Chrome, Edge, atau Firefox terbaru.');
+      return;
+    }
+
+    await runExportPipeline('mp4');
+  }, [ffmpegReady, isExporting, runExportPipeline]);
 
   return (
     <div className="rounded-2xl border-2 border-slate-300 bg-white overflow-hidden">
@@ -159,7 +388,7 @@ export function QFTQuantumAnimation({ data }: QFTQuantumAnimationProps) {
         activePhase={activePhase}
         activeStep={activeStep}
         onJumpPhase={handleJumpPhase}
-        disabled={false}
+        disabled={isExporting || isConverting}
       />
 
       <div className="grid gap-4 px-4 pb-4 xl:grid-cols-[1fr_380px]">
@@ -191,7 +420,8 @@ export function QFTQuantumAnimation({ data }: QFTQuantumAnimationProps) {
 
               <button
                 onClick={() => setCameraMode((previous) => (previous === 'fixed' ? 'orbit' : 'fixed'))}
-                className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-[12px] font-medium text-slate-700 hover:bg-slate-50"
+                disabled={isExporting}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-[12px] font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-45"
               >
                 {cameraMode === 'fixed' ? <Lock className="h-3.5 w-3.5" /> : <Move3D className="h-3.5 w-3.5" />}
                 {cameraMode === 'fixed' ? 'Fixed Camera' : 'Orbit Camera'}
@@ -245,14 +475,15 @@ export function QFTQuantumAnimation({ data }: QFTQuantumAnimationProps) {
             <div className="flex flex-wrap items-center gap-3">
               <button
                 onClick={isPlaying ? handlePause : handlePlay}
-                className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-900 text-white hover:bg-slate-700"
+                disabled={isExporting}
+                className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-900 text-white hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-35"
               >
                 {isPlaying ? <Pause className="h-4 w-4" /> : <Play className="ml-0.5 h-4 w-4" />}
               </button>
 
               <button
                 onClick={handleStep}
-                disabled={isLastStep}
+                disabled={isLastStep || isExporting}
                 className="flex h-10 w-10 items-center justify-center rounded-full border border-slate-300 text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-35"
               >
                 <SkipForward className="h-4 w-4" />
@@ -260,7 +491,8 @@ export function QFTQuantumAnimation({ data }: QFTQuantumAnimationProps) {
 
               <button
                 onClick={handleReset}
-                className="flex h-10 w-10 items-center justify-center rounded-full border border-slate-300 text-slate-700 hover:bg-slate-50"
+                disabled={isExporting}
+                className="flex h-10 w-10 items-center justify-center rounded-full border border-slate-300 text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-35"
               >
                 <RotateCcw className="h-4 w-4" />
               </button>
@@ -273,8 +505,9 @@ export function QFTQuantumAnimation({ data }: QFTQuantumAnimationProps) {
                   max={SPEED_SLIDER.max}
                   step={SPEED_SLIDER.step}
                   value={speed}
+                  disabled={isExporting}
                   onChange={(event) => setSpeed(Number(event.target.value))}
-                  className="h-1.5 flex-1 accent-teal-600"
+                  className="h-1.5 flex-1 accent-teal-600 disabled:cursor-not-allowed disabled:opacity-40"
                 />
                 <span className="w-[62px] text-[11px] text-slate-600">{speed}ms</span>
               </div>
@@ -282,6 +515,24 @@ export function QFTQuantumAnimation({ data }: QFTQuantumAnimationProps) {
               <span className="font-mono text-[12px] text-slate-500">
                 {currentStep + 1}/{totalSteps}
               </span>
+
+              <button
+                onClick={handleExportVideo}
+                disabled={isExporting || !supportedVideoMimeType}
+                className="ml-auto inline-flex items-center gap-2 rounded-lg border border-teal-300 bg-teal-50 px-3.5 py-2 text-[12px] font-semibold text-teal-700 hover:bg-teal-100 disabled:cursor-not-allowed disabled:opacity-45"
+              >
+                {isExporting && !isConverting ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Video className="h-4 w-4" />}
+                {isExporting && !isConverting ? 'Merekam...' : 'WebM 1080p'}
+              </button>
+
+              <button
+                onClick={handleExportMp4}
+                disabled={isExporting || !supportedVideoMimeType || !ffmpegReady}
+                className="inline-flex items-center gap-2 rounded-lg border border-emerald-300 bg-emerald-50 px-3.5 py-2 text-[12px] font-semibold text-emerald-700 hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-45"
+              >
+                {isConverting ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Video className="h-4 w-4" />}
+                {isConverting ? 'Mengkonversi ke MP4...' : 'MP4 1080p'}
+              </button>
             </div>
 
             <div className="mt-3 h-2 w-full overflow-hidden rounded-full bg-slate-100">
@@ -289,6 +540,27 @@ export function QFTQuantumAnimation({ data }: QFTQuantumAnimationProps) {
                 className="h-full rounded-full transition-all duration-300"
                 style={{ width: `${((currentStep + 1) / totalSteps) * 100}%`, backgroundColor: phaseColor }}
               />
+            </div>
+
+            <div className="mt-3 flex flex-wrap items-start justify-between gap-3 text-[12px] leading-6 text-slate-500">
+              <p>
+                WebM = instant. MP4 = rekam lalu konversi via FFmpeg.wasm (~5-15 detik). Keduanya merekam canvas 1920x1080.
+              </p>
+              {!supportedVideoMimeType && (
+                <p className="text-rose-600">
+                  Browser belum mendukung export video. Gunakan Chrome, Edge, atau Firefox terbaru.
+                </p>
+              )}
+              {!ffmpegReady && (
+                <p className="text-amber-600">
+                  MP4 tidak tersedia di browser ini. Gunakan browser modern yang mendukung WebAssembly + Worker.
+                </p>
+              )}
+              {exportError && (
+                <p className="text-rose-600">
+                  {exportError}
+                </p>
+              )}
             </div>
           </div>
         </div>
@@ -308,6 +580,35 @@ export function QFTQuantumAnimation({ data }: QFTQuantumAnimationProps) {
           </div>
         </div>
       </div>
+
+      {isExporting && (
+        <div
+          aria-hidden="true"
+          style={{
+            position: 'fixed',
+            left: '-10000px',
+            top: '0',
+            width: `${EXPORT_VIDEO_WIDTH}px`,
+            height: `${EXPORT_VIDEO_HEIGHT}px`,
+            opacity: 0,
+            pointerEvents: 'none',
+          }}
+        >
+          <Canvas
+            dpr={1}
+            camera={{ position: [0, -0.5, 22], fov: 38, near: 0.1, far: 100 }}
+            style={{ width: `${EXPORT_VIDEO_WIDTH}px`, height: `${EXPORT_VIDEO_HEIGHT}px` }}
+            gl={{ antialias: true, preserveDrawingBuffer: true, powerPreference: 'high-performance' }}
+            onCreated={({ gl }) => {
+              gl.setPixelRatio(1);
+              gl.setSize(EXPORT_VIDEO_WIDTH, EXPORT_VIDEO_HEIGHT, false);
+              exportRendererCanvasRef.current = gl.domElement;
+            }}
+          >
+            <QFTStoryScene data={data} currentStep={currentStep} cameraMode={cameraMode} />
+          </Canvas>
+        </div>
+      )}
     </div>
   );
 }
