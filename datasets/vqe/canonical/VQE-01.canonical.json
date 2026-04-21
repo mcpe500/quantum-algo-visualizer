@@ -1,0 +1,20 @@
+{
+  "case_id": "VQE-01",
+  "description": "H2 molecule ground state energy - 2 qubit",
+  "molecule": "H2",
+  "qubits": 2,
+  "ansatz": {
+    "type": "ry_linear",
+    "n_layers": 1
+  },
+  "hamiltonian": {
+    "terms": {
+      "II": -1.0524,
+      "ZI": 0.3979,
+      "IZ": -0.3979,
+      "ZZ": -0.0113,
+      "XX": 0.1809,
+      "YY": 0.1809
+    }
+  }
+}
