@@ -1,30 +1,21 @@
 {
   "case_id": "VQE-02",
-  "description": "H2 molecule ground state energy - 4 qubit with 2 layers ansatz",
-  "molecule": "H2",
-  "qubits": 4,
-  "ansatz": {
-    "type": "ry_circular",
-    "n_layers": 2
+  "problem_type": "molecule_ground_state",
+  "molecule_spec": {
+    "formula": "H2",
+    "interatomic_distance_angstrom": 0.735,
+    "basis": "sto-3g",
+    "charge": 0,
+    "multiplicity": 1
   },
-  "hamiltonian": {
-    "terms": {
-      "IIII": -0.097,
-      "IIIZ": 0.071,
-      "IIZI": -0.071,
-      "IIZZ": 0.171,
-      "IZII": 0.071,
-      "IZIZ": 0.171,
-      "IZZI": -0.218,
-      "IZZZ": 0.174,
-      "ZIII": -0.071,
-      "ZIIZ": 0.171,
-      "ZIZI": -0.218,
-      "ZIZZ": -0.099,
-      "ZZII": 0.171,
-      "ZZIZ": -0.099,
-      "ZZZI": 0.174,
-      "ZZZZ": 0.048
-    }
+  "preprocessing": {
+    "mapping": "jordan_wigner",
+    "target_qubits": 4
+  },
+  "experiment": {
+    "ansatz_type": "ry_linear",
+    "n_layers": 2,
+    "shots": 1024,
+    "classical_reference": "FCI"
   }
 }
