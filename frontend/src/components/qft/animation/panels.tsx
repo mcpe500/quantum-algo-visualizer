@@ -3,12 +3,14 @@ import type {
   QFTAnimationStep,
 } from '../../../types/qft';
 import { SIGNAL_TYPE_LABEL } from './constants';
-import { formatPercent, formatRadians } from './helpers';
+import { formatRadians } from '../../../shared/utils/animation-helpers';
 import { getContextGlossary, getStepExplanation, getStepHeadline } from './narration';
 import { buildPhaseCascadeModel } from './phase-cascade';
 import { PhaseWheelStack } from './phase-wheel';
 export { DetailCard } from '../../../shared/components/DetailCard';
 export { PhaseStepper } from '../../../shared/components/PhaseStepper';
+import { ReadingGuideCard as SharedReadingGuideCard } from '../../../shared/components/ReadingGuideCard';
+import { ProbabilityBarList } from '../../../shared/components/ProbabilityBarList';
 
 export function SignalInputPanel({ data }: { data: QFTAnimationPayload }) {
   const signalType = SIGNAL_TYPE_LABEL[data.signal_type] || data.signal_type;
@@ -193,8 +195,8 @@ export function FFTvsQFTComparisonPanel({ data }: { data: QFTAnimationPayload })
 export function FrequencySpectrumPanel({ data }: { data: QFTAnimationPayload }) {
   const topStates = Object.entries(data.measurement.counts)
     .map(([state, count]) => ({
-      state,
-      count,
+      key: state,
+      label: `|${state}⟩`,
       probability: count / data.measurement.shots,
     }))
     .sort((a, b) => b.probability - a.probability)
@@ -213,41 +215,20 @@ export function FrequencySpectrumPanel({ data }: { data: QFTAnimationPayload }) 
           {topStates.length} bins shown
         </span>
       </div>
-      <div className="p-3 space-y-2">
-        {topStates.map((entry) => (
-          <div key={entry.state}>
-            <div className="flex items-center justify-between text-[11px] text-slate-700">
-              <span className="font-mono font-semibold tracking-wider">|{entry.state}⟩</span>
-              <span className="text-slate-500">{formatPercent(entry.probability)}</span>
-            </div>
-            <div className="mt-0.5 h-1.5 rounded-full bg-slate-100">
-              <div
-                className="h-full rounded-full bg-teal-500"
-                style={{ width: `${Math.max(entry.probability * 100, 2)}%` }}
-              />
-            </div>
-          </div>
-        ))}
+      <div className="p-3">
+        <ProbabilityBarList items={topStates} barColor="bg-teal-500" />
       </div>
     </div>
   );
 }
 
 export function ReadingGuideCard({ step, nQubits }: { step: QFTAnimationStep; nQubits: number }) {
-  const notes = getContextGlossary(step, nQubits);
-
   return (
-    <div className="rounded-xl border border-slate-200 bg-white p-4">
-      <h3 className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Cara Baca Animasi QFT</h3>
-      <h4 className="mt-1.5 text-[14px] font-semibold text-slate-900">{getStepHeadline(step)}</h4>
-      <p className="mt-2 text-[12px] text-slate-600 leading-relaxed">{getStepExplanation(step)}</p>
-      <div className="mt-3 space-y-1.5">
-        {notes.map((note, i) => (
-          <div key={i} className="px-3 py-2 bg-slate-50 border border-slate-100 rounded-lg text-[11px] text-slate-600 leading-relaxed">
-            {note}
-          </div>
-        ))}
-      </div>
-    </div>
+    <SharedReadingGuideCard
+      title="Cara Baca Animasi QFT"
+      headline={getStepHeadline(step)}
+      explanation={getStepExplanation(step)}
+      notes={getContextGlossary(step, nQubits)}
+    />
   );
 }

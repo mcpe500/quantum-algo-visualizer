@@ -12,4 +12,6 @@ export {
   degreesToRadians,
   normalizeAngle,
   getLaneYs,
+  roundedRect,
+  wrapText,
 } from './animation-helpers';

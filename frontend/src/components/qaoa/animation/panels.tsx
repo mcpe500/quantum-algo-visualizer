@@ -1,6 +1,7 @@
 import { ChevronRight } from 'lucide-react';
 import { GraphVisualization } from '../../charts/GraphVisualization';
 import { DetailCard } from '../../../shared/components/DetailCard';
+import { ReadingGuideCard as SharedReadingGuideCard } from '../../../shared/components/ReadingGuideCard';
 import type {
   QAOAAnimationCheckpoint,
   QAOAAnimationPayload,
@@ -97,11 +98,11 @@ export function PhaseStepper({
 
 export function ReadingGuideCard({ step }: { step: QAOAAnimationStep }) {
   return (
-    <div className="rounded-xl border border-slate-200 bg-white p-4">
-      <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Reading Guide</p>
-      <p className="mt-1 text-[15px] font-semibold text-slate-900">{getStepHeadline(step)}</p>
-      <p className="mt-2 text-[12px] leading-relaxed text-slate-600">{getStepExplanation(step)}</p>
-    </div>
+    <SharedReadingGuideCard
+      title="Reading Guide"
+      headline={getStepHeadline(step)}
+      explanation={getStepExplanation(step)}
+    />
   );
 }
 

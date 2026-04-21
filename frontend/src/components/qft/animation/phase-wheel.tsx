@@ -1,4 +1,4 @@
-import { radiansToDegrees, normalizeAngle } from './helpers';
+import { radiansToDegrees, normalizeAngle } from '../../../shared/utils/animation-helpers';
 
 interface PhaseWheelProps {
   accumulatedPhase: number;
