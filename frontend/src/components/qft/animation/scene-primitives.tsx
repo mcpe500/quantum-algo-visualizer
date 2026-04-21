@@ -1,9 +1,63 @@
 import { Line, OrbitControls, Text } from '@react-three/drei';
 import { useMemo } from 'react';
-import type { QFTAnimationPartition, QFTAnimationPayload } from '../../../types/qft';
+import type { QFTAnimationPartition, QFTAnimationPayload, QFTQubitAnimationSummary } from '../../../types/qft';
 import { PHASE_COLOR, SCENE_PHASE_LABEL, PHASE_LABEL } from './constants';
 import { getColumnLayout, getLaneYs } from '../../../shared/utils/animation-helpers';
-import { HadamardGate, CameraRig, PhaseBand, LabeledSphereGate, QubitOrb } from '../../../shared/components';
+import { HadamardGate, CameraRig, PhaseBand, LabeledBoxGate, BlochQubitNode } from '../../../shared/components';
+
+function clamp(value: number, min: number, max: number) {
+  return Math.min(max, Math.max(min, value));
+}
+
+function isFiniteNumber(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value);
+}
+
+function getSummaryP0(summary: QFTQubitAnimationSummary) {
+  if (isFiniteNumber(summary.p_zero)) return clamp(summary.p_zero, 0, 1);
+  if (isFiniteNumber(summary.p_one)) return clamp(1 - summary.p_one, 0, 1);
+  if (isFiniteNumber(summary.bz)) return clamp((summary.bz + 1) / 2, 0, 1);
+  return null;
+}
+
+function buildBlochStateFromSummary(summary: QFTQubitAnimationSummary) {
+  let bx: number | null = null;
+  let by: number | null = null;
+  let bz: number | null = null;
+
+  if (isFiniteNumber(summary.bx) && isFiniteNumber(summary.by) && isFiniteNumber(summary.bz)) {
+    bx = summary.bx;
+    by = summary.by;
+    bz = summary.bz;
+  } else if (isFiniteNumber(summary.theta) && isFiniteNumber(summary.phi)) {
+    bx = Math.sin(summary.theta) * Math.cos(summary.phi);
+    by = Math.sin(summary.theta) * Math.sin(summary.phi);
+    const bzTheta = Math.cos(summary.theta);
+    const p0 = getSummaryP0(summary);
+    const bzProb = p0 === null ? bzTheta : clamp(2 * p0 - 1, -1, 1);
+    bz = Math.abs(bzTheta - bzProb) > 0.2 ? bzProb : bzTheta;
+  }
+
+  if (bx === null || by === null || bz === null) return null;
+
+  const magnitude = Math.hypot(bx, by, bz);
+  if (magnitude > 1.000001) {
+    bx /= magnitude;
+    by /= magnitude;
+    bz /= magnitude;
+  }
+
+  return {
+    bx: clamp(bx, -1, 1),
+    by: clamp(by, -1, 1),
+    bz: clamp(bz, -1, 1),
+  };
+}
+
+function phaseToBodyColor(phase: number) {
+  const hue = (((phase + Math.PI) / (2 * Math.PI)) * 360) % 360;
+  return `hsl(${Math.round(hue)}, 70%, 55%)`;
+}
 
 interface SignalBarProps {
   x: number;
@@ -46,6 +100,10 @@ export function QFTStoryScene({
   const laneLabels = useMemo(() => Array.from({ length: data.n_qubits }, (_, index) => `q${index}`), [data.n_qubits]);
   const { startX, endX, gap, columnXs } = useMemo(() => getColumnLayout(data.timeline.length), [data.timeline.length]);
   const cameraDistance = data.timeline.length > 24 ? 25 : 22;
+  const usesZeroBasedPartitions = useMemo(
+    () => data.partitions.some((partition) => partition.start === 0 || partition.end === data.timeline.length),
+    [data.partitions, data.timeline.length],
+  );
 
   const signalBars = useMemo(() => {
     const maxAmp = Math.max(...data.input_signal.map(Math.abs)) || 1;
@@ -56,11 +114,39 @@ export function QFTStoryScene({
     }));
   }, [data.input_signal]);
 
+  const qubitVisualState = useMemo(() => {
+    const summaries = activeStep.qubit_summaries ?? [];
+
+    return summaries.flatMap((summary) => {
+      if (summary.qubit < 0 || summary.qubit >= data.n_qubits) return [];
+
+      const p0 = getSummaryP0(summary);
+      const blochVector = buildBlochStateFromSummary(summary);
+      if (p0 === null || blochVector === null) return [];
+
+      return [{
+        qubit: summary.qubit,
+        p0,
+        bodyColor: summary.bodyColor
+          ?? summary.body_color
+          ?? (isFiniteNumber(summary.phase) ? phaseToBodyColor(summary.phase) : undefined),
+        coherence: isFiniteNumber(summary.coherence)
+          ? clamp(summary.coherence, 0, 1)
+          : (isFiniteNumber(summary.radius) ? clamp(summary.radius, 0, 1) : undefined),
+        blochState: {
+          ...blochVector,
+          label: summary.label ?? (p0 >= 0.85 ? '|0>' : p0 <= 0.15 ? '|1>' : '|psi>'),
+        },
+      }];
+    });
+  }, [activeStep.qubit_summaries, data.n_qubits]);
+
   const topY = laneYs[0] + 0.52;
   const bottomY = laneYs[laneYs.length - 1] - 0.52;
 
   const signalAreaX = startX - 5;
   const signalBarSpacing = 0.4;
+  const gateSize = clamp(gap * 0.56, 0.28, 0.56);
 
   return (
     <>
@@ -80,7 +166,7 @@ export function QFTStoryScene({
       />
 
       {data.partitions.map((partition: QFTAnimationPartition) => {
-        const startIndex = Math.max(partition.start - 1, 0);
+        const startIndex = Math.max(usesZeroBasedPartitions ? partition.start : partition.start - 1, 0);
         const endIndex = Math.min(partition.end - 1, columnXs.length - 1);
         if (startIndex < 0 || endIndex < startIndex) return null;
         const bandStart = columnXs[startIndex] - Math.max(gap * 0.5, 0.35);
@@ -128,37 +214,82 @@ export function QFTStoryScene({
       </group>
 
       {data.timeline.map((step, index) => {
-        if (step.phase === 'init') return null;
         const x = columnXs[index];
         const isActive = index === currentStep;
 
-        if (step.phase === 'hadamard' && step.target_qubit !== undefined) {
+        if (step.phase === 'init') {
+          return (
+            <group key={`gate-${step.step}`}>
+              {laneYs.map((y, qubitIndex) => (
+                <LabeledBoxGate
+                  key={`gate-${step.step}-enc-${qubitIndex}`}
+                  x={x}
+                  y={y}
+                  label="ENC"
+                  color={PHASE_COLOR.init}
+                  size={gateSize}
+                  isActive={isActive}
+                />
+              ))}
+            </group>
+          );
+        }
+
+        if (step.phase === 'hadamard' && step.target_qubit !== undefined && laneYs[step.target_qubit] !== undefined) {
           return (
             <HadamardGate
               key={`gate-${step.step}`}
               x={x}
               y={laneYs[step.target_qubit]}
               isActive={isActive}
+              size={gateSize}
             />
           );
         }
 
         if (step.phase === 'phase_cascade' && step.target_qubit !== undefined && step.control_qubit !== undefined) {
+          const controlY = laneYs[step.control_qubit];
+          const targetY = laneYs[step.target_qubit];
+          if (controlY === undefined || targetY === undefined) return null;
+
           return (
             <group key={`gate-${step.step}`}>
-              <LabeledSphereGate x={x} y={laneYs[step.target_qubit]} label={`C${step.control_qubit}`} color={PHASE_COLOR.phase_cascade} isActive={isActive} />
-              <Line points={[[x, laneYs[step.control_qubit], 0.1], [x, laneYs[step.target_qubit], 0.1]]} color={PHASE_COLOR.phase_cascade} lineWidth={1.5} />
+              <LabeledBoxGate x={x} y={controlY} label="C" color={PHASE_COLOR.phase_cascade} size={gateSize} isActive={isActive} />
+              <LabeledBoxGate x={x} y={targetY} label="CP" color={PHASE_COLOR.phase_cascade} size={gateSize} isActive={isActive} />
+              <Line points={[[x, controlY, 0.1], [x, targetY, 0.1]]} color={PHASE_COLOR.phase_cascade} lineWidth={1.5} />
             </group>
           );
         }
 
         if (step.phase === 'swap' && step.swap_pair) {
           const [a, b] = step.swap_pair;
+          const aY = laneYs[a];
+          const bY = laneYs[b];
+          if (aY === undefined || bY === undefined) return null;
+
           return (
             <group key={`gate-${step.step}`}>
-              <LabeledSphereGate x={x} y={laneYs[a]} label="S" color={PHASE_COLOR.swap} isActive={isActive} />
-              <LabeledSphereGate x={x} y={laneYs[b]} label="S" color={PHASE_COLOR.swap} isActive={isActive} />
-              <Line points={[[x, laneYs[a], 0.1], [x, laneYs[b], 0.1]]} color={PHASE_COLOR.swap} lineWidth={2} />
+              <LabeledBoxGate x={x} y={aY} label="SWAP" color={PHASE_COLOR.swap} size={gateSize} isActive={isActive} />
+              <LabeledBoxGate x={x} y={bY} label="SWAP" color={PHASE_COLOR.swap} size={gateSize} isActive={isActive} />
+              <Line points={[[x, aY, 0.1], [x, bY, 0.1]]} color={PHASE_COLOR.swap} lineWidth={2} />
+            </group>
+          );
+        }
+
+        if (step.phase === 'measurement') {
+          return (
+            <group key={`gate-${step.step}`}>
+              {laneYs.map((y, qubitIndex) => (
+                <LabeledBoxGate
+                  key={`gate-${step.step}-m-${qubitIndex}`}
+                  x={x}
+                  y={y}
+                  label="M"
+                  color={PHASE_COLOR.measurement}
+                  size={gateSize}
+                  isActive={isActive}
+                />
+              ))}
             </group>
           );
         }
@@ -166,16 +297,17 @@ export function QFTStoryScene({
         return null;
       })}
 
-      {laneYs.map((y, index) => {
-        const phase = activeStep.qubit_phases?.[index] || 0;
+      {qubitVisualState.map((qubit) => {
         return (
-          <QubitOrb
-            key={`orb-${index}`}
-            variant="phase"
-            x={columnXs[currentStep]}
-            y={y}
-            phase={phase}
-            isActive={activeStep.target_qubit === index || activeStep.phase === 'measurement'}
+          <BlochQubitNode
+            key={`orb-${qubit.qubit}`}
+            targetX={columnXs[currentStep]}
+            y={laneYs[qubit.qubit]}
+            phaseColor={PHASE_COLOR[activeStep.phase] || '#2563eb'}
+            blochState={qubit.blochState}
+            p0={qubit.p0}
+            bodyColor={qubit.bodyColor}
+            coherence={qubit.coherence}
           />
         );
       })}

@@ -3,7 +3,7 @@ import type { QFTAnimationStep } from '../../../types/qft';
 export function getStepHeadline(step: QFTAnimationStep): string {
   switch (step.phase) {
     case 'init':
-      return 'Signal Initialization';
+      return 'Amplitude Encoding';
     case 'phase_cascade':
       return 'Controlled Phase Rotation';
     case 'hadamard':
@@ -20,14 +20,14 @@ export function getStepHeadline(step: QFTAnimationStep): string {
 export function getStepExplanation(step: QFTAnimationStep): string {
   switch (step.phase) {
     case 'init':
-      return 'Amplitude sinyal klasik di-encode ke statevector kuantum. Setiap elemen sinyal aⱼ menjadi amplitude dari basis state |j⟩. Total ada 2^n state kuantum untuk n qubit.';
+      return 'Sampel sinyal dari dataset dinormalisasi lalu di-encode ke amplitude statevector. Jadi frame awal QFT bukan register |0...0>, melainkan state kuantum yang sudah membawa isi sinyal asli.';
     case 'phase_cascade':
       if (step.rotation_angle !== undefined) {
         return `Controlled rotation CR_{${step.control_qubit !== undefined && step.target_qubit !== undefined ? step.control_qubit - step.target_qubit : '?'}} menambahkan phase π/2^{${step.control_qubit !== undefined && step.target_qubit !== undefined ? step.control_qubit - step.target_qubit : '?'}} pada qubit target q${step.target_qubit} dikendalikan oleh q${step.control_qubit}. Phase accumulator: ${formatRadians(step.rotation_angle)}.`;
       }
       return 'Controlled phase gates menambahkan rotation pada qubit target berdasarkan state qubit control. Ini adalah operasi fundamental QFT untuk akumulasi phase.';
     case 'hadamard':
-      return 'Hadamard gate membuka superposisi pada qubit target. Qubit berputar 90° mengelilingi sumbu-Y, mentransformasi basis komputasi ke basis Fourier.';
+      return 'Hadamard pada qubit target mengubah akumulasi fase menjadi interferensi yang relevan untuk basis Fourier. Inilah tahap yang membantu pola frekuensi muncul pada state akhir.';
     case 'swap':
       return 'SWAP gates memperbaiki bit-reversed ordering. Output QFT secara alami dalam urutan bit-reversed; SWAP diperlukan untuk mendapatkan urutan frekuensi natural.';
     case 'measurement':

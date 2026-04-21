@@ -3,7 +3,7 @@ import { useMemo } from 'react';
 import type { QAOAAnimationPayload, QAOAAnimationStep } from '../../../types/qaoa';
 import { PHASE_COLOR } from './constants';
 import { getPartitionFromBitstring } from './helpers';
-import { HadamardGate, CameraRig, LabeledDiscGate, QubitOrb } from '../../../shared/components';
+import { HadamardGate, CameraRig, LabeledBoxGate, BlochQubitNode } from '../../../shared/components';
 
 function getGraphPositions(count: number, centerX: number, centerY: number, radius: number) {
   return Array.from({ length: count }, (_, index) => ({
@@ -54,6 +54,26 @@ export function QAOAStoryScene({
   const inputPositions = useMemo(() => getGraphPositions(data.n_nodes, -8, 0, data.n_nodes <= 3 ? 1.9 : 2.2), [data.n_nodes]);
   const resultPositions = useMemo(() => getGraphPositions(data.n_nodes, 8, 0, data.n_nodes <= 3 ? 1.9 : 2.2), [data.n_nodes]);
   const activePartition = getPartitionFromBitstring(activeStep.candidate_bitstring, data.n_nodes);
+  const blochQubits = useMemo(() => {
+    const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
+    return activeStep.qubit_summaries.flatMap((summary) => {
+      if (summary.qubit < 0 || summary.qubit >= data.n_nodes) return [];
+      if (!Number.isFinite(summary.theta) || !Number.isFinite(summary.phi) || !Number.isFinite(summary.p_zero)) return [];
+
+      const p0 = clamp(summary.p_zero, 0, 1);
+      const bx = Math.sin(summary.theta) * Math.cos(summary.phi);
+      const by = Math.sin(summary.theta) * Math.sin(summary.phi);
+      const bzTheta = Math.cos(summary.theta);
+      const bzProb = clamp(2 * p0 - 1, -1, 1);
+      const bz = Math.abs(bzTheta - bzProb) > 0.2 ? bzProb : bzTheta;
+      const label = p0 >= 0.85 ? '|0>' : p0 <= 0.15 ? '|1>' : '|psi>';
+      return [{
+        summary,
+        p0,
+        blochState: { bx, by, bz, label },
+      }];
+    });
+  }, [activeStep.qubit_summaries, data.n_nodes]);
   const orbX = activeStep.phase === 'optimizer'
     ? -2.7
     : activeStep.phase === 'superposition'
@@ -65,6 +85,7 @@ export function QAOAStoryScene({
           : activeStep.phase === 'measurement'
             ? 3.9
             : 5;
+  const gateSize = 0.42;
 
   return (
     <>
@@ -151,7 +172,7 @@ export function QAOAStoryScene({
 
       {activeStep.phase === 'superposition' &&
         laneYs.map((y, index) => (
-          <HadamardGate key={`h-${index}`} x={-1.2} y={y} isActive />
+          <HadamardGate key={`h-${index}`} x={-1.2} y={y} isActive size={gateSize} />
         ))}
 
       {activeStep.phase === 'cost' && activeStep.edge && (
@@ -161,18 +182,18 @@ export function QAOAStoryScene({
             color={PHASE_COLOR.cost}
             lineWidth={2}
           />
-          <LabeledDiscGate x={0.4} y={laneYs[activeStep.edge[0]]} label="C" color={PHASE_COLOR.cost} isActive />
-          <LabeledDiscGate x={0.4} y={laneYs[activeStep.edge[1]]} label="ZZ" color={PHASE_COLOR.cost} isActive />
+          <LabeledBoxGate x={0.4} y={laneYs[activeStep.edge[0]]} label="C" color={PHASE_COLOR.cost} size={gateSize} isActive />
+          <LabeledBoxGate x={0.4} y={laneYs[activeStep.edge[1]]} label="ZZ" color={PHASE_COLOR.cost} size={gateSize} isActive />
         </>
       )}
 
       {activeStep.phase === 'mixer' && activeStep.target_qubit !== undefined && (
-        <LabeledDiscGate x={2.1} y={laneYs[activeStep.target_qubit]} label="Rx" color={PHASE_COLOR.mixer} isActive />
+        <LabeledBoxGate x={2.1} y={laneYs[activeStep.target_qubit]} label="RX" color={PHASE_COLOR.mixer} size={gateSize} isActive />
       )}
 
       {(activeStep.phase === 'measurement' || activeStep.phase === 'update') &&
         laneYs.map((y, index) => (
-          <LabeledDiscGate key={`m-${index}`} x={3.9} y={y} label="M" color={PHASE_COLOR.measurement} isActive />
+          <LabeledBoxGate key={`m-${index}`} x={3.9} y={y} label="M" color={PHASE_COLOR.measurement} size={gateSize} isActive />
         ))}
 
       {activeStep.phase === 'optimizer' && (
@@ -181,14 +202,14 @@ export function QAOAStoryScene({
         </Text>
       )}
 
-      {activeStep.qubit_summaries.map((summary) => (
-        <QubitOrb
+      {blochQubits.map(({ summary, blochState, p0 }) => (
+        <BlochQubitNode
           key={`orb-${summary.qubit}`}
-          variant="probability"
-          x={orbX}
+          targetX={orbX}
           y={laneYs[summary.qubit]}
-          pOne={summary.p_one}
-          isActive={activeStep.target_qubit === summary.qubit || activeStep.phase === 'superposition'}
+          phaseColor={PHASE_COLOR[activeStep.phase] || '#2563eb'}
+          blochState={blochState}
+          p0={p0}
         />
       ))}
     </>
