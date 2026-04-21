@@ -1,30 +1,18 @@
 import { useMemo } from 'react';
+import { deriveNodesFromMatrix } from '../../utils/qaoaGraph';
 
 interface AdjacencyMatrixGridProps {
-  nodes: number[];
-  edges: [number, number][];
+  adjacencyMatrix: number[][];
   cellSize?: number;
 }
 
-function buildAdjacencyMatrix(nodes: number[], edges: [number, number][]): number[][] {
-  const n = nodes.length;
-  const matrix: number[][] = Array(n)
-    .fill(null)
-    .map(() => Array(n).fill(0));
-  for (const [u, v] of edges) {
-    matrix[u][v] = 1;
-    matrix[v][u] = 1;
-  }
-  return matrix;
-}
-
 export function AdjacencyMatrixGrid({
-  nodes,
-  edges,
+  adjacencyMatrix,
   cellSize = 72,
 }: AdjacencyMatrixGridProps) {
-  const matrix = useMemo(() => buildAdjacencyMatrix(nodes, edges), [nodes, edges]);
-  const n = nodes.length;
+  const matrix = adjacencyMatrix;
+  const nodes = useMemo(() => deriveNodesFromMatrix(matrix), [matrix]);
+  const n = matrix.length;
 
   return (
     <div className="inline-block">
@@ -35,10 +23,8 @@ export function AdjacencyMatrixGrid({
           gridTemplateRows: `auto repeat(${n}, ${cellSize}px)`,
         }}
       >
-        {/* Top-left corner cell */}
         <div className="w-8 h-8" />
 
-        {/* Column headers */}
         {nodes.map((node) => (
           <div
             key={`col-${node}`}
@@ -48,17 +34,12 @@ export function AdjacencyMatrixGrid({
           </div>
         ))}
 
-        {/* Rows with headers */}
         {nodes.map((rowNode, i) => (
           <div key={rowNode} className="contents">
-            {/* Row header */}
-            <div
-              className="grid w-8 h-full place-items-center pr-2"
-            >
+            <div className="grid w-8 h-full place-items-center pr-2">
               <span className="block translate-y-[-0.02em] text-center text-sm font-bold text-slate-500 leading-none tabular-nums">{rowNode}</span>
             </div>
 
-            {/* Matrix cells for row i */}
             {nodes.map((_, j) => {
               const isDiagonal = i === j;
               const val = matrix[i][j];

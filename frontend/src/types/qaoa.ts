@@ -1,6 +1,7 @@
 export interface QAOAGraph {
-  nodes: number[];
-  edges: [number, number][];
+  adjacency_matrix: number[][];
+  nodes?: number[];
+  edges?: [number, number][];
 }
 
 export interface QAOACase {
@@ -72,6 +73,7 @@ export interface QAOABenchmarkResult {
   n_edges: number;
   edges: [number, number][];
   nodes: number[];
+  adjacency_matrix: number[][];
   p_layers: number;
   shots: number;
   exact: QAOAExactResult;
@@ -198,6 +200,7 @@ export interface QAOAAnimationPayload {
   n_edges: number;
   nodes: number[];
   edges: [number, number][];
+  adjacency_matrix: number[][];
   p_layers: number;
   shots: number;
   hamiltonian: {

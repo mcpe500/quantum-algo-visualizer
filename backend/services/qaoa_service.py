@@ -50,63 +50,60 @@ def _edge_from_raw(raw_edge):
         return None
 
 
+def _validate_adjacency_matrix(raw_matrix):
+    if not isinstance(raw_matrix, list) or not raw_matrix:
+        raise ValueError("adjacency_matrix must be a non-empty list")
+
+    n = len(raw_matrix)
+    matrix = []
+
+    for i, row in enumerate(raw_matrix):
+        if not isinstance(row, list) or len(row) != n:
+            raise ValueError(f"adjacency_matrix row {i} must have length {n} (square matrix required)")
+        clean_row = []
+        for j, val in enumerate(row):
+            try:
+                v = int(val)
+            except (TypeError, ValueError):
+                raise ValueError(f"adjacency_matrix[{i}][{j}] must be an integer")
+            if v not in (0, 1):
+                raise ValueError(f"adjacency_matrix[{i}][{j}] must be 0 or 1, got {v}")
+            clean_row.append(v)
+        matrix.append(clean_row)
+
+    for i in range(n):
+        if matrix[i][i] != 0:
+            raise ValueError(f"adjacency_matrix diagonal must be 0 (got {matrix[i][i]} at [{i}][{i}])")
+
+    for i in range(n):
+        for j in range(i + 1, n):
+            if matrix[i][j] != matrix[j][i]:
+                raise ValueError(f"adjacency_matrix must be symmetric: [{i}][{j}]={matrix[i][j]} != [{j}][{i}]={matrix[j][i]}")
+
+    return matrix
+
+
 def _normalize_problem(case):
     graph = case.get('graph', {}) or {}
-    raw_nodes = graph.get('nodes', []) or []
-    raw_edges = graph.get('edges', []) or []
+    raw_matrix = graph.get('adjacency_matrix')
 
-    node_labels = []
-    for node in raw_nodes:
-        try:
-            node_labels.append(int(node))
-        except (TypeError, ValueError):
-            continue
+    if raw_matrix is None:
+        raise ValueError("graph.adjacency_matrix is required in dataset JSON")
 
-    edge_data = []
-    for edge in raw_edges:
-        parsed = _edge_from_raw(edge)
-        if parsed is not None:
-            edge_data.append(parsed)
-
-    if not node_labels:
-        discovered = sorted({n for u, v, _ in edge_data for n in (u, v)})
-        node_labels = discovered
-
-    if not node_labels:
-        hinted = case.get('n_nodes', 2)
-        try:
-            hinted = int(hinted)
-        except (TypeError, ValueError):
-            hinted = 2
-        node_labels = list(range(max(1, hinted)))
-
-    unique_nodes = []
-    seen = set()
-    for label in node_labels:
-        if label not in seen:
-            unique_nodes.append(label)
-            seen.add(label)
-
-    index_map = {label: i for i, label in enumerate(unique_nodes)}
-
-    normalized_edges = []
-    for u_label, v_label, weight in edge_data:
-        if u_label not in index_map:
-            index_map[u_label] = len(index_map)
-            unique_nodes.append(u_label)
-        if v_label not in index_map:
-            index_map[v_label] = len(index_map)
-            unique_nodes.append(v_label)
-
-        u = index_map[u_label]
-        v = index_map[v_label]
-        if u == v:
-            continue
-        normalized_edges.append((u, v, float(weight)))
-
-    n_nodes = len(unique_nodes)
+    adjacency_matrix = _validate_adjacency_matrix(raw_matrix)
+    n_nodes = len(adjacency_matrix)
     nodes = list(range(n_nodes))
-    edges = [[int(u), int(v)] for u, v, _ in normalized_edges]
+
+    edges = []
+    edges_weighted = []
+    for i in range(n_nodes):
+        for j in range(i + 1, n_nodes):
+            if adjacency_matrix[i][j] == 1:
+                edges.append([i, j])
+                edges_weighted.append((i, j, 1.0))
+
+    n_edges = len(edges)
+
     p_layers = case.get('p_layers', 1)
     try:
         p_layers = int(p_layers)
@@ -118,8 +115,9 @@ def _normalize_problem(case):
         'n_nodes': n_nodes,
         'nodes': nodes,
         'edges': edges,
-        'edges_weighted': normalized_edges,
-        'n_edges': len(normalized_edges),
+        'edges_weighted': edges_weighted,
+        'adjacency_matrix': adjacency_matrix,
+        'n_edges': n_edges,
         'p_layers': p_layers,
         'problem': case.get('problem', 'maxcut'),
         'description': case.get('description', ''),
@@ -833,6 +831,7 @@ def run_qaoa_payload(case_id, shots):
         'n_edges': int(problem['n_edges']),
         'edges': problem['edges'],
         'nodes': problem['nodes'],
+        'adjacency_matrix': problem['adjacency_matrix'],
         'p_layers': int(problem['p_layers']),
         'shots': int(shots),
         'exact': {
@@ -924,6 +923,7 @@ def get_qaoa_animation_payload(case_id, shots=1024):
         'n_edges': int(problem['n_edges']),
         'nodes': problem['nodes'],
         'edges': problem['edges'],
+        'adjacency_matrix': problem['adjacency_matrix'],
         'p_layers': int(problem['p_layers']),
         'shots': int(shots),
         'hamiltonian': {
@@ -1055,6 +1055,7 @@ def get_qaoa_classical_payload(case_id):
         'n_edges': int(problem['n_edges']),
         'nodes': problem['nodes'],
         'edges': problem['edges'],
+        'adjacency_matrix': problem['adjacency_matrix'],
         'exact': {
             'optimal_cut': _cast_cut(exact_cut),
             'optimal_partition': exact_partition,
@@ -1090,3 +1091,16 @@ def get_qaoa_circuit_image_payload(case_id, gamma=0.5, beta=0.3):
         }
     except Exception as exc:
         return {'error': f'Failed to generate circuit image: {exc}'}
+
+
+def enrich_case_graph(case):
+    if not case:
+        return case
+    problem = _normalize_problem(case)
+    enriched = dict(case)
+    graph = dict(enriched.get('graph', {}) or {})
+    graph['nodes'] = problem['nodes']
+    graph['edges'] = problem['edges']
+    graph['adjacency_matrix'] = problem['adjacency_matrix']
+    enriched['graph'] = graph
+    return enriched

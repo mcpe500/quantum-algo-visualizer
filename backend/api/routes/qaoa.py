@@ -9,18 +9,20 @@ from services.qaoa_service import (
     get_qaoa_classical_payload,
     get_qaoa_trace_payload,
     run_qaoa_payload,
+    enrich_case_graph,
 )
 
 @api_bp.route('/qaoa/cases', methods=['GET'])
 def qaoa_cases():
-    return jsonify({'cases': get_qaoa_cases()})
+    cases = get_qaoa_cases()
+    return jsonify({'cases': [enrich_case_graph(c) for c in cases]})
 
 @api_bp.route('/qaoa/dataset/<case_id>', methods=['GET'])
 def qaoa_dataset(case_id):
     case = get_qaoa_case_or_none(case_id)
     if not case:
         return jsonify({'error': f'Case {case_id} not found'}), 404
-    return jsonify(case)
+    return jsonify(enrich_case_graph(case))
 
 @api_bp.route('/qaoa/benchmark', methods=['POST'])
 def qaoa_run():

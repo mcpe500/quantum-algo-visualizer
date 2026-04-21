@@ -1,13 +1,20 @@
+import { useMemo } from 'react';
+import { deriveGraphFromMatrix } from '../../utils/qaoaGraph';
+
 interface MiniGraphProps {
-  nodes: number[];
-  edges: [number, number][];
+  adjacencyMatrix: number[][];
 }
 
 const MINI_SIZE = 120;
 const MINI_RADIUS = 45;
 const MINI_NODE_RADIUS = 14;
 
-export function MiniGraph({ nodes, edges }: MiniGraphProps) {
+export function MiniGraph({ adjacencyMatrix }: MiniGraphProps) {
+  const { nodes, edges } = useMemo(
+    () => deriveGraphFromMatrix(adjacencyMatrix),
+    [adjacencyMatrix]
+  );
+
   const cx = MINI_SIZE / 2;
   const cy = MINI_SIZE / 2;
   const r = MINI_RADIUS;
@@ -23,7 +30,6 @@ export function MiniGraph({ nodes, edges }: MiniGraphProps) {
         viewBox={`0 0 ${MINI_SIZE} ${MINI_SIZE}`}
         className="w-28 h-28"
       >
-        {/* Edges */}
         {edges.map(([i, j], idx) => (
           <line
             key={idx}
@@ -36,7 +42,6 @@ export function MiniGraph({ nodes, edges }: MiniGraphProps) {
           />
         ))}
 
-        {/* Nodes */}
         {nodes.map((node, i) => (
           <g key={i}>
             <circle

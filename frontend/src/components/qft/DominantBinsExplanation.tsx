@@ -143,7 +143,7 @@ export function DominantBinsExplanation({
         <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
           {dominantBins.map((bin, idx) => {
             const magnitude = dominantMagnitudes[idx];
-            const isMirror = dominantBins.some((b, i) => 
+            const isMirror = dominantBins.some((_b, i) => 
               i !== idx && Math.abs(magnitude - dominantMagnitudes[i]) < 0.01
             );
             
