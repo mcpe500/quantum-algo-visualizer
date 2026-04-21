@@ -122,10 +122,28 @@ export interface QFTAnimationPartition {
   end: number;
 }
 
+export interface QFTQubitAnimationSummary {
+  qubit: number;
+  p_zero: number;
+  p_one?: number;
+  theta?: number;
+  phi?: number;
+  phase?: number;
+  bx?: number;
+  by?: number;
+  bz?: number;
+  radius?: number;
+  label?: string;
+  coherence?: number;
+  body_color?: string;
+  bodyColor?: string;
+}
+
 export interface QFTAnimationStep extends QFTAnimationSnapshot {
   step: number;
   statevector: ComplexNumber[];
   qubit_phases: number[];
+  qubit_summaries?: QFTQubitAnimationSummary[];
   target_qubit?: number;
   control_qubit?: number;
   rotation_angle?: number;

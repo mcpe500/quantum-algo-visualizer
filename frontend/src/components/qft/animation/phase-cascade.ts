@@ -48,13 +48,6 @@ export function buildPhaseCascadeModel(
       detail: `Initialize qubit ${j} with signal amplitude`,
     });
 
-    subSteps.push({
-      phase: 'hadamard',
-      gate: 'H',
-      angle: 0,
-      detail: 'Create superposition (rotation around Y-axis by 90°)',
-    });
-
     for (let k = j + 1; k < n; k++) {
       const angle = Math.PI / Math.pow(2, k - j);
       accumulatedPhase += angle;
@@ -66,6 +59,13 @@ export function buildPhaseCascadeModel(
         detail: `Controlled rotation by π/2^${k - j} = ${((angle * 180) / Math.PI).toFixed(1)}°`,
       });
     }
+
+    subSteps.push({
+      phase: 'hadamard',
+      gate: 'H',
+      angle: 0,
+      detail: 'Convert accumulated phase into Fourier-basis interference',
+    });
 
     if (j < n / 2) {
       subSteps.push({
@@ -83,7 +83,7 @@ export function buildPhaseCascadeModel(
     rows.push({
       qubitIndex: j,
       stepNumber: j + 1,
-      intro: `Qubit ${j} undergoes ${subSteps.length} operations with total phase accumulation of ${((accumulatedPhase * 180) / Math.PI).toFixed(1)}°`,
+      intro: `Qubit ${j} menyerap akumulasi fase dari kontrol di atasnya, lalu Hadamard mengubah fase itu menjadi pola interferensi. Total fase relatif: ${((accumulatedPhase * 180) / Math.PI).toFixed(1)}°.`,
       subSteps,
       accumulatedPhase,
       gateSequence,

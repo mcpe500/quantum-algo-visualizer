@@ -9,6 +9,8 @@ export interface LabeledDiscGateProps {
   radius?: number;
   height?: number;
   segments?: number;
+  size?: number;
+  depth?: number;
   zIndex?: number;
 }
 
@@ -19,24 +21,28 @@ export function LabeledDiscGate({
   color,
   isActive,
   radius = 0.2,
-  height = 0.08,
-  segments = 24,
-  zIndex = 0,
+  size,
+  depth = 0.24,
+  zIndex = 0.08,
 }: LabeledDiscGateProps) {
+  const resolvedSize = size ?? radius * 2;
+
   return (
     <group position={[x, y, zIndex]}>
       <mesh>
-        <cylinderGeometry args={[radius, radius, height, segments]} />
+        <boxGeometry args={[resolvedSize, resolvedSize, depth]} />
         <meshStandardMaterial
           color={color}
-          emissive={isActive ? color : '#000000'}
-          emissiveIntensity={isActive ? 0.35 : 0}
+          transparent
+          opacity={isActive ? 0.9 : 0.5}
+          roughness={0.18}
+          metalness={0.18}
         />
       </mesh>
       <Text
-        position={[0, 0, height / 2 + 0.08]}
-        fontSize={0.11}
-        color="#ffffff"
+        position={[0, 0, depth / 2 + 0.01]}
+        fontSize={resolvedSize * 0.32}
+        color={isActive ? '#0F172A' : '#475569'}
         anchorX="center"
         anchorY="middle"
       >

@@ -8,6 +8,8 @@ export interface LabeledSphereGateProps {
   isActive: boolean;
   radius?: number;
   segments?: number;
+  size?: number;
+  depth?: number;
   zIndex?: number;
 }
 
@@ -18,25 +20,28 @@ export function LabeledSphereGate({
   color,
   isActive,
   radius = 0.2,
-  segments = 16,
-  zIndex = 0,
+  size,
+  depth = 0.24,
+  zIndex = 0.08,
 }: LabeledSphereGateProps) {
+  const resolvedSize = size ?? radius * 2;
+
   return (
     <group position={[x, y, zIndex]}>
       <mesh>
-        <sphereGeometry
-          args={[isActive ? radius * 1.1 : radius * 0.9, segments, segments]}
-        />
+        <boxGeometry args={[resolvedSize, resolvedSize, depth]} />
         <meshStandardMaterial
           color={color}
-          emissive={isActive ? color : '#000000'}
-          emissiveIntensity={isActive ? 0.4 : 0}
+          transparent
+          opacity={isActive ? 0.9 : 0.5}
+          roughness={0.18}
+          metalness={0.18}
         />
       </mesh>
       <Text
-        position={[0, 0, 0.26]}
-        fontSize={0.12}
-        color={isActive ? '#ffffff' : '#64748b'}
+        position={[0, 0, depth / 2 + 0.01]}
+        fontSize={resolvedSize * 0.32}
+        color={isActive ? '#0F172A' : '#475569'}
         anchorX="center"
         anchorY="middle"
       >

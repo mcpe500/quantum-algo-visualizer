@@ -53,8 +53,8 @@ export function StageColumn({
         if (marker === 'H') return <HadamardGate key={`${step.step}-${index}-H`} x={x} y={y} isActive={active} size={plateSize} />;
         if (marker === 'X') return <LabeledBoxGate key={`${step.step}-${index}-X`} x={x} y={y} label="X" color="#E11D48" size={plateSize} isActive={active} />;
         if (marker === 'M') return <LabeledBoxGate key={`${step.step}-${index}-M`} x={x} y={y} label="M" color="#475569" size={plateSize} isActive={active || isFinalMeasure} />;
-        if (marker === '●') return <ControlDot key={`${step.step}-${index}-dot`} x={x} y={y} isActive={active} />;
-        if (marker === '⊕') return <TargetMarker key={`${step.step}-${index}-target`} x={x} y={y} isActive={active} />;
+        if (marker === '●') return <ControlDot key={`${step.step}-${index}-dot`} x={x} y={y} isActive={active} size={plateSize} />;
+        if (marker === '⊕') return <TargetMarker key={`${step.step}-${index}-target`} x={x} y={y} isActive={active} size={plateSize} />;
         return null;
       })}
     </group>

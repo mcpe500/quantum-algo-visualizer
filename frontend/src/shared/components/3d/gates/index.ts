@@ -15,3 +15,6 @@ export type { TargetMarkerProps } from './TargetMarker';
 
 export { QubitOrb } from './QubitOrb';
 export type { QubitOrbProps, QubitOrbPhaseProps, QubitOrbProbabilityProps } from './QubitOrb';
+
+export { BlochQubitNode } from './BlochQubitNode';
+export type { BlochQubitNodeProps } from './BlochQubitNode';

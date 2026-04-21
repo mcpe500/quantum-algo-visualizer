@@ -5,9 +5,10 @@ import math
 import time
 import numpy as np
 from qiskit import QuantumCircuit, QuantumRegister, ClassicalRegister
+from qiskit.circuit.library import Initialize
 from qiskit_aer import AerSimulator
 from qiskit.visualization import circuit_drawer
-from qiskit.quantum_info import Statevector, Operator
+from qiskit.quantum_info import DensityMatrix, Statevector, partial_trace
 
 from api.shared.plotting import figure_to_base64
 from services.common import list_cases, load_case
@@ -147,6 +148,71 @@ def _normalize_amplitudes(signal_data):
     return amplitudes / norm
 
 
+def _statevector_probabilities(statevector):
+    sv = statevector.data if hasattr(statevector, 'data') else statevector
+    return [float(abs(value) ** 2) for value in sv]
+
+
+def _state_labels(n_qubits):
+    return [f'|{index:0{n_qubits}b}>' for index in range(2 ** n_qubits)]
+
+
+def _label_from_qubit_summary(x, y, z, radius):
+    if abs(z - 1.0) < 0.08:
+        return '|0>'
+    if abs(z + 1.0) < 0.08:
+        return '|1>'
+    if radius < 0.35:
+        return 'mixed'
+    if abs(x - 1.0) < 0.08:
+        return '|+>'
+    if abs(x + 1.0) < 0.08:
+        return '|->'
+    if abs(y - 1.0) < 0.08:
+        return '|+i>'
+    if abs(y + 1.0) < 0.08:
+        return '|-i>'
+    return '|psi>'
+
+
+def _phase_to_color(phase):
+    hue = int((((phase + math.pi) / (2 * math.pi)) * 360) % 360)
+    return f'hsl({hue}, 70%, 55%)'
+
+
+def _extract_qubit_summaries(statevector, n_qubits):
+    density = DensityMatrix(statevector)
+    qubit_summaries = []
+
+    for qubit in range(n_qubits):
+        traced = [index for index in range(n_qubits) if index != qubit]
+        reduced = partial_trace(density, traced).data if traced else density.data
+        p_zero = float(np.real(reduced[0, 0]))
+        p_one = float(np.real(reduced[1, 1]))
+        coherence = reduced[0, 1]
+        x = float(np.clip(2 * np.real(coherence), -1.0, 1.0))
+        y = float(np.clip(2 * np.imag(coherence), -1.0, 1.0))
+        z = float(np.clip(p_zero - p_one, -1.0, 1.0))
+        radius = float(np.clip(math.sqrt((x * x) + (y * y) + (z * z)), 0.0, 1.0))
+        phase = float(math.atan2(y, x)) if abs(x) > 1e-9 or abs(y) > 1e-9 else 0.0
+
+        qubit_summaries.append({
+            'qubit': qubit,
+            'p_zero': round(max(0.0, min(1.0, p_zero)), 6),
+            'p_one': round(max(0.0, min(1.0, p_one)), 6),
+            'bx': round(x, 6),
+            'by': round(y, 6),
+            'bz': round(z, 6),
+            'radius': round(radius, 6),
+            'coherence': round(radius, 6),
+            'phase': round(phase, 6),
+            'body_color': _phase_to_color(phase),
+            'label': _label_from_qubit_summary(x, y, z, radius),
+        })
+
+    return qubit_summaries
+
+
 def _extract_qubit_phases(statevector, n_qubits):
     """Extract accumulated phase angle φ untuk setiap qubit dari statevector.
 
@@ -185,7 +251,23 @@ def _extract_qubit_phases(statevector, n_qubits):
 
 def _sv_to_dict_list(sv):
     """Convert statevector to list of {re, im} dicts for JSON serialization."""
-    return [{'re': round(c.real, 6), 'im': round(c.imag, 6)} for c in sv.data]
+    return [{'re': round(c.real, 12), 'im': round(c.imag, 12)} for c in sv.data]
+
+
+def _build_timeline_step(step, phase, operation, description, statevector, n_qubits, **extra):
+    qubit_summaries = _extract_qubit_summaries(statevector, n_qubits)
+    return {
+        'step': int(step),
+        'phase': phase,
+        'operation': operation,
+        'description': description,
+        'statevector': _sv_to_dict_list(statevector),
+        'qubit_summaries': qubit_summaries,
+        'qubit_phases': [summary['phase'] for summary in qubit_summaries],
+        'probabilities': _statevector_probabilities(statevector),
+        'labels': _state_labels(n_qubits),
+        **extra,
+    }
 
 
 def build_qft_animation_timeline(signal_data, n_qubits):
@@ -201,6 +283,75 @@ def build_qft_animation_timeline(signal_data, n_qubits):
     normalized = _normalize_amplitudes(padded_signal)
     
     sv = Statevector(normalized)
+
+    timeline.append(_build_timeline_step(
+        steps_count,
+        'init',
+        'Amplitude Encoding from Dataset',
+        f'Amplitudo sinyal dari dataset dinormalisasi lalu di-encode ke state kuantum |psi> = sum_j a_j |j>. Semua nilai pada langkah ini langsung diturunkan dari {len(padded_signal)} sampel sinyal setelah padding.',
+        sv,
+        n_qubits,
+    ))
+    steps_count += 1
+
+    for j in range(n_qubits - 1, -1, -1):
+        for k in range(n_qubits - 1, j, -1):
+            angle = math.pi / (2 ** (k - j))
+            step_circuit = QuantumCircuit(n_qubits)
+            step_circuit.cp(angle, k, j)
+            sv = sv.evolve(step_circuit)
+            timeline.append(_build_timeline_step(
+                steps_count,
+                'phase_cascade',
+                f'CP({angle:.6f}) q{k}->q{j}',
+                f'Controlled-phase dengan sudut {angle:.6f} rad menambahkan fase relatif pada q{j} ketika q{k} aktif. Urutan operasi ini identik dengan sirkuit QFT Qiskit yang dipakai untuk benchmark.',
+                sv,
+                n_qubits,
+                target_qubit=j,
+                control_qubit=k,
+                rotation_angle=angle,
+            ))
+            steps_count += 1
+
+        step_circuit = QuantumCircuit(n_qubits)
+        step_circuit.h(j)
+        sv = sv.evolve(step_circuit)
+        timeline.append(_build_timeline_step(
+            steps_count,
+            'hadamard',
+            f'H on qubit {j}',
+            'Hadamard pada qubit target mengubah akumulasi fase menjadi pola interferensi yang dapat dibaca pada basis Fourier.',
+            sv,
+            n_qubits,
+            target_qubit=j,
+        ))
+        steps_count += 1
+
+    for i in range(n_qubits // 2):
+        swap_pair = (i, n_qubits - 1 - i)
+        step_circuit = QuantumCircuit(n_qubits)
+        step_circuit.swap(*swap_pair)
+        sv = sv.evolve(step_circuit)
+        timeline.append(_build_timeline_step(
+            steps_count,
+            'swap',
+            f'SWAP qubit {swap_pair[0]} <-> qubit {swap_pair[1]}',
+            'SWAP network mengoreksi urutan bit-reversed sehingga state akhir dapat dibaca sebagai indeks frekuensi natural.',
+            sv,
+            n_qubits,
+            swap_pair=swap_pair,
+        ))
+        steps_count += 1
+
+    timeline.append(_build_timeline_step(
+        steps_count,
+        'measurement',
+        'Measure all qubits',
+        'State akhir siap diukur dengan 1024 shots pada benchmark. Probabilitas ideal pada langkah ini menjadi referensi visual sebelum sampling measurement.',
+        sv,
+        n_qubits,
+    ))
+    return timeline
     
     timeline.append({
         'step': steps_count,
@@ -342,7 +493,6 @@ def run_qft_from_signal(signal_data, shots=1024):
     cr = ClassicalRegister(n_qubits, 'c')
     qc = QuantumCircuit(qr, cr, name=f'QFT_n{n_qubits}_signal')
 
-    from qiskit.circuit.library import Initialize
     qc.append(Initialize(normalized), qr)
 
     _apply_qft_layers(qc, qr, n_qubits)

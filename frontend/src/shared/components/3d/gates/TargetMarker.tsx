@@ -1,11 +1,14 @@
-import { Line } from '@react-three/drei';
+import { Text } from '@react-three/drei';
 
 export interface TargetMarkerProps {
   x: number;
   y: number;
   isActive: boolean;
   color?: string;
+  label?: string;
   radius?: number;
+  size?: number;
+  depth?: number;
   zIndex?: number;
 }
 
@@ -14,29 +17,35 @@ export function TargetMarker({
   y,
   isActive,
   color = '#D97706',
+  label = 'X',
   radius = 0.22,
+  size,
+  depth = 0.24,
   zIndex = 0.1,
 }: TargetMarkerProps) {
+  const resolvedSize = size ?? radius * 2;
+
   return (
     <group position={[x, y, zIndex]}>
-      <mesh rotation={[Math.PI / 2, 0, 0]}>
-        <torusGeometry args={[radius, 0.02, 12, 48]} />
+      <mesh>
+        <boxGeometry args={[resolvedSize, resolvedSize, depth]} />
         <meshStandardMaterial
           color={color}
-          emissive={color}
-          emissiveIntensity={isActive ? 0.32 : 0.08}
+          transparent
+          opacity={isActive ? 0.9 : 0.5}
+          roughness={0.18}
+          metalness={0.18}
         />
       </mesh>
-      <Line
-        points={[[0, -radius + 0.04, 0.04], [0, radius - 0.04, 0.04]]}
-        color={color}
-        lineWidth={1.2}
-      />
-      <Line
-        points={[[-radius + 0.04, 0, 0.04], [radius - 0.04, 0, 0.04]]}
-        color={color}
-        lineWidth={1.2}
-      />
+      <Text
+        position={[0, 0, depth / 2 + 0.01]}
+        fontSize={resolvedSize * 0.32}
+        color={isActive ? '#0F172A' : '#475569'}
+        anchorX="center"
+        anchorY="middle"
+      >
+        {label}
+      </Text>
     </group>
   );
 }
