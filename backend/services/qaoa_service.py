@@ -14,12 +14,47 @@ from api.shared.plotting import figure_to_base64
 from services.common import list_cases, load_case
 
 
+DEFAULT_QAOA_OPTIMIZER_SEED = 42
+DEFAULT_QAOA_SIMULATOR_SEED = 42
+DEFAULT_QAOA_MAX_ITER = 120
+DEFAULT_QAOA_AGGREGATE_SEED_START = 0
+DEFAULT_QAOA_AGGREGATE_SEED_COUNT = 8
+
+
 def get_qaoa_case_or_none(case_id):
     return load_case('qaoa', case_id)
 
 
 def get_qaoa_cases():
     return list_cases('qaoa', 'QAOA-')
+
+
+def _coerce_int(value, default_value, minimum=None):
+    try:
+        coerced = int(value)
+    except (TypeError, ValueError):
+        coerced = int(default_value)
+    if minimum is not None:
+        coerced = max(int(minimum), coerced)
+    return coerced
+
+
+def _series_stats(values):
+    if not values:
+        return {
+            'mean': 0.0,
+            'std': 0.0,
+            'min': 0.0,
+            'max': 0.0,
+        }
+
+    array = np.asarray(values, dtype=float)
+    return {
+        'mean': float(np.mean(array)),
+        'std': float(np.std(array)),
+        'min': float(np.min(array)),
+        'max': float(np.max(array)),
+    }
 
 
 def _qubit_index(qubit):
@@ -190,7 +225,7 @@ def build_qaoa_circuit_no_measure(problem, gamma, beta):
 
         for q0, q1, weight in edges_weighted:
             qc.cx(q0, q1)
-            qc.rz(2.0 * g * weight, q1)
+            qc.rz(-1.0 * g * weight, q1)
             qc.cx(q0, q1)
 
         for i in range(n_nodes):
@@ -220,7 +255,7 @@ def create_qaoa_circuit(problem, gamma, beta):
 
         for q0, q1, weight in edges_weighted:
             qc.cx(qr[q0], qr[q1])
-            qc.rz(2.0 * g * weight, qr[q1])
+            qc.rz(-1.0 * g * weight, qr[q1])
             qc.cx(qr[q0], qr[q1])
 
         for i in range(n_nodes):
@@ -259,11 +294,11 @@ def compute_exact_maxcut(problem):
     return float(best_cut), [int(v) for v in best_partition]
 
 
-def run_simulated_annealing(problem, n_iter=500):
+def run_simulated_annealing(problem, n_iter=500, seed=DEFAULT_QAOA_OPTIMIZER_SEED):
     n_nodes = problem['n_nodes']
 
-    np.random.seed(42)
-    current = [int(v) for v in np.random.randint(0, 2, n_nodes)]
+    rng = np.random.default_rng(_coerce_int(seed, DEFAULT_QAOA_OPTIMIZER_SEED))
+    current = [int(v) for v in rng.integers(0, 2, n_nodes)]
 
     def score(partition):
         bitstring = ''.join(str(partition[n_nodes - 1 - i]) for i in range(n_nodes))
@@ -278,13 +313,13 @@ def run_simulated_annealing(problem, n_iter=500):
     history = []
 
     for _ in range(n_iter):
-        index = int(np.random.randint(0, n_nodes))
+        index = int(rng.integers(0, n_nodes))
         candidate = current[:]
         candidate[index] = 1 - candidate[index]
         candidate_score = score(candidate)
 
         delta = candidate_score - current_score
-        if delta > 0 or np.random.rand() < np.exp(delta / max(temperature, 1e-9)):
+        if delta > 0 or rng.random() < np.exp(delta / max(temperature, 1e-9)):
             current = candidate
             current_score = candidate_score
 
@@ -300,9 +335,11 @@ def run_simulated_annealing(problem, n_iter=500):
     return float(best_score), [int(v) for v in best_partition], downsampled
 
 
-def run_qaoa_internal(problem, shots=1024, max_iter=100):
+def _optimize_qaoa(problem, max_iter=DEFAULT_QAOA_MAX_ITER, optimizer_seed=DEFAULT_QAOA_OPTIMIZER_SEED):
     n_nodes = problem['n_nodes']
     p_layers = problem['p_layers']
+    optimizer_seed = _coerce_int(optimizer_seed, DEFAULT_QAOA_OPTIMIZER_SEED)
+    max_iter = _coerce_int(max_iter, DEFAULT_QAOA_MAX_ITER, minimum=1)
 
     hamiltonian = build_cost_hamiltonian_op(n_nodes, problem['edges_weighted'])
     expectation_history = []
@@ -323,58 +360,196 @@ def run_qaoa_internal(problem, shots=1024, max_iter=100):
         })
         return -expected_cut
 
-    np.random.seed(42)
-    x0 = np.random.uniform(0, np.pi / 2, 2 * p_layers)
+    rng = np.random.default_rng(optimizer_seed)
+    x0 = rng.uniform(0.0, np.pi, 2 * p_layers)
     result = minimize(
         neg_expectation,
         x0,
         method='COBYLA',
-        options={'maxiter': int(max_iter), 'rhobeg': 0.5},
+        options={'maxiter': max_iter},
     )
 
     optimal_gamma = [float(v) for v in result.x[:p_layers]]
     optimal_beta = [float(v) for v in result.x[p_layers:]]
     expected_cut = float(-result.fun)
-
-    final_qc = create_qaoa_circuit(problem, optimal_gamma, optimal_beta)
-    simulator = AerSimulator()
-    sim_result = simulator.run(final_qc, shots=int(shots)).result()
-    counts = sim_result.get_counts(final_qc)
-
-    total = max(1, sum(counts.values()))
-    cut_distribution = []
-    best_cut = float('-inf')
-    best_bitstring = '0' * n_nodes
-
-    for bitstring, count in counts.items():
-        cut_value = bitstring_objective(problem, bitstring)
-        cut_distribution.append({
-            'bitstring': str(bitstring),
-            'count': int(count),
-            'probability': float(count / total),
-            'cut': float(cut_value),
-        })
-        if cut_value > best_cut:
-            best_cut = cut_value
-            best_bitstring = str(bitstring)
-
-    cut_distribution.sort(key=lambda item: item['probability'], reverse=True)
-    cut_distribution = cut_distribution[:10]
-
     no_measure_qc = build_qaoa_circuit_no_measure(problem, optimal_gamma, optimal_beta)
 
     return {
-        'best_cut': float(best_cut),
-        'best_bitstring': best_bitstring,
+        'optimizer_seed': int(optimizer_seed),
+        'optimizer_method': 'COBYLA',
+        'max_iter': int(max_iter),
+        'initial_gamma': [float(v) for v in x0[:p_layers]],
+        'initial_beta': [float(v) for v in x0[p_layers:]],
+        'optimal_gamma': optimal_gamma,
+        'optimal_beta': optimal_beta,
         'expected_cut': expected_cut,
         'circuit_depth': int(no_measure_qc.depth()),
         'gate_count': int(len(no_measure_qc.data)),
-        'optimal_gamma': optimal_gamma,
-        'optimal_beta': optimal_beta,
-        'cut_distribution': cut_distribution,
         'expected_cut_history': [float(v) for v in expectation_history[:200]],
         'evaluation_history': evaluation_history,
         'iterations': int(result.nfev),
+        'optimizer_success': bool(result.success),
+        'optimizer_message': str(result.message),
+    }
+
+
+def _counts_to_cut_buckets(problem, counts):
+    total = max(1, sum(int(count) for count in counts.values()))
+    buckets = {}
+
+    for bitstring, count in counts.items():
+        count_int = int(count)
+        cut_value = _cast_cut(bitstring_objective(problem, bitstring))
+        bucket_key = float(cut_value)
+        bucket = buckets.setdefault(bucket_key, {
+            'cut': cut_value,
+            'count': 0,
+            'probability': 0.0,
+        })
+        bucket['count'] += count_int
+
+    result = []
+    for bucket in buckets.values():
+        bucket['probability'] = float(bucket['count'] / total)
+        result.append(bucket)
+
+    result.sort(key=lambda item: (-float(item['cut']), -item['probability']))
+    return result
+
+
+def _sample_qaoa_measurements(problem, gamma, beta, shots=1024, simulator_seed=DEFAULT_QAOA_SIMULATOR_SEED):
+    n_nodes = problem['n_nodes']
+    simulator_seed = _coerce_int(simulator_seed, DEFAULT_QAOA_SIMULATOR_SEED)
+    shots = _coerce_int(shots, 1024, minimum=1)
+
+    final_qc = create_qaoa_circuit(problem, gamma, beta)
+    simulator = AerSimulator(seed_simulator=simulator_seed)
+    sim_result = simulator.run(final_qc, shots=shots, seed_simulator=simulator_seed).result()
+    raw_counts = sim_result.get_counts(final_qc)
+    counts = {str(bitstring): int(count) for bitstring, count in raw_counts.items()}
+
+    distribution_full = []
+    for bitstring, count in counts.items():
+        cut_value = bitstring_objective(problem, bitstring)
+        distribution_full.append({
+            'bitstring': str(bitstring),
+            'count': int(count),
+            'probability': float(count / shots),
+            'cut': float(cut_value),
+        })
+
+    distribution_full.sort(key=lambda item: (-item['probability'], -float(item['cut']), item['bitstring']))
+    cut_buckets = _counts_to_cut_buckets(problem, counts)
+
+    dominant = distribution_full[0] if distribution_full else {
+        'bitstring': '0' * n_nodes,
+        'count': 0,
+        'probability': 0.0,
+        'cut': 0.0,
+    }
+    best = max(
+        distribution_full,
+        key=lambda item: (float(item['cut']), item['probability'], item['bitstring']),
+        default=dominant,
+    )
+
+    return {
+        'simulator_seed': int(simulator_seed),
+        'shots': int(shots),
+        'counts': counts,
+        'cut_distribution': distribution_full[:10],
+        'cut_distribution_full': distribution_full,
+        'cut_buckets': cut_buckets,
+        'dominant_bitstring': str(dominant['bitstring']),
+        'dominant_cut': float(dominant['cut']),
+        'dominant_probability': float(dominant['probability']),
+        'best_bitstring': str(best['bitstring']),
+        'best_cut': float(best['cut']),
+    }
+
+
+def run_qaoa_internal(
+    problem,
+    shots=1024,
+    max_iter=DEFAULT_QAOA_MAX_ITER,
+    optimizer_seed=DEFAULT_QAOA_OPTIMIZER_SEED,
+    simulator_seed=DEFAULT_QAOA_SIMULATOR_SEED,
+):
+    optimization = _optimize_qaoa(
+        problem,
+        max_iter=max_iter,
+        optimizer_seed=optimizer_seed,
+    )
+    measurements = _sample_qaoa_measurements(
+        problem,
+        optimization['optimal_gamma'],
+        optimization['optimal_beta'],
+        shots=shots,
+        simulator_seed=simulator_seed,
+    )
+
+    return {
+        **optimization,
+        **measurements,
+    }
+
+
+def get_qaoa_aggregate_payload(
+    case_id,
+    seed_start=DEFAULT_QAOA_AGGREGATE_SEED_START,
+    seed_count=DEFAULT_QAOA_AGGREGATE_SEED_COUNT,
+    max_iter=DEFAULT_QAOA_MAX_ITER,
+):
+    case = get_qaoa_case_or_none(case_id)
+    if not case:
+        return None
+
+    problem = _get_problem_from_case(case)
+    exact_cut, _ = compute_exact_maxcut(problem)
+    denom = exact_cut if abs(exact_cut) > 1e-12 else 1.0
+
+    seed_start = _coerce_int(seed_start, DEFAULT_QAOA_AGGREGATE_SEED_START, minimum=0)
+    seed_count = _coerce_int(seed_count, DEFAULT_QAOA_AGGREGATE_SEED_COUNT, minimum=1)
+    max_iter = _coerce_int(max_iter, DEFAULT_QAOA_MAX_ITER, minimum=1)
+    seeds = list(range(seed_start, seed_start + seed_count))
+
+    records = []
+    for seed in seeds:
+        optimization = _optimize_qaoa(problem, max_iter=max_iter, optimizer_seed=seed)
+        expected_cut = float(optimization['expected_cut'])
+        records.append({
+            'seed': int(seed),
+            'expected_cut': expected_cut,
+            'expected_cut_ratio': float(expected_cut / denom),
+            'iterations': int(optimization['iterations']),
+            'optimal_gamma': optimization['optimal_gamma'],
+            'optimal_beta': optimization['optimal_beta'],
+            'optimizer_success': bool(optimization['optimizer_success']),
+        })
+
+    expected_values = [record['expected_cut'] for record in records]
+    ratio_values = [record['expected_cut_ratio'] for record in records]
+    iteration_values = [record['iterations'] for record in records]
+    success_rate = float(np.mean([1.0 if record['optimizer_success'] else 0.0 for record in records])) if records else 0.0
+
+    best_record = max(records, key=lambda item: item['expected_cut'], default=None)
+    worst_record = min(records, key=lambda item: item['expected_cut'], default=None)
+
+    return {
+        'case_id': case_id,
+        'seed_start': int(seed_start),
+        'seed_count': int(seed_count),
+        'seeds': [int(seed) for seed in seeds],
+        'optimizer_method': 'COBYLA',
+        'optimizer_maxiter': int(max_iter),
+        'objective': 'statevector_expected_cut',
+        'expected_cut_stats': _series_stats(expected_values),
+        'expected_cut_ratio_stats': _series_stats(ratio_values),
+        'iteration_stats': _series_stats(iteration_values),
+        'success_rate': success_rate,
+        'best_seed_record': best_record,
+        'worst_seed_record': worst_record,
+        'records': records,
     }
 
 
@@ -420,7 +595,7 @@ def build_qaoa_steps(problem, gamma, beta):
             markers = {j: '-' for j in range(n_nodes)}
             markers[q1] = 'Rz'
             append_stage(
-                f'Rz(2*gamma*{weight:.3f}) on q{q1} ({layer_label}, gamma={g:.4f})',
+                f'Rz(-gamma*{weight:.3f}) on q{q1} ({layer_label}, gamma={g:.4f})',
                 markers,
                 'cost',
             )
@@ -736,7 +911,7 @@ def _build_qaoa_checkpoint_timeline(problem, checkpoint, shots, start_step):
             q0, q1, weight = edge
             edge_qc = QuantumCircuit(n_nodes)
             edge_qc.cx(q0, q1)
-            edge_qc.rz(2.0 * gamma * weight, q1)
+            edge_qc.rz(-1.0 * gamma * weight, q1)
             edge_qc.cx(q0, q1)
             sv = sv.evolve(edge_qc)
             timeline.append(_snapshot_step(
@@ -745,7 +920,7 @@ def _build_qaoa_checkpoint_timeline(problem, checkpoint, shots, start_step):
                 sv,
                 distribution,
                 f'Cost unitary ZZ on edge ({q0}, {q1})',
-                f'Term Hamiltonian Ising untuk edge ({q0}, {q1}) diterapkan melalui CX-Rz-CX dengan sudut 2γw = {(2.0 * gamma * weight):.3f} rad.',
+                f'Term Hamiltonian Ising untuk edge ({q0}, {q1}) diterapkan melalui CX-Rz-CX dengan sudut -γw = {(-1.0 * gamma * weight):.3f} rad.',
                 phase='cost',
                 layer=int(layer + 1),
                 edge=[int(q0), int(q1)],
@@ -799,7 +974,88 @@ def _build_qaoa_checkpoint_timeline(problem, checkpoint, shots, start_step):
     return timeline, step + 1, measurement
 
 
-def run_qaoa_payload(case_id, shots):
+def _build_qaoa_quantum_payload(problem, exact_cut, qaoa, execution_time_ms):
+    denom = exact_cut if abs(exact_cut) > 1e-12 else 1.0
+    best_sampled_cut = float(qaoa['best_cut'])
+    dominant_cut = float(qaoa['dominant_cut'])
+    expected_cut = float(qaoa['expected_cut'])
+    optimal_probability = 0.0
+    for bucket in qaoa['cut_buckets']:
+        if abs(float(bucket['cut']) - float(exact_cut)) < 1e-9:
+            optimal_probability = float(bucket['probability'])
+            break
+
+    return {
+        'method': 'QAOA',
+        'best_cut': _cast_cut(best_sampled_cut),
+        'best_bitstring': qaoa['best_bitstring'],
+        'best_sampled_ratio': round(float(best_sampled_cut / denom), 4),
+        'dominant_bitstring': qaoa['dominant_bitstring'],
+        'dominant_cut': _cast_cut(dominant_cut),
+        'dominant_probability': float(qaoa['dominant_probability']),
+        'expected_cut': expected_cut,
+        'expected_cut_ratio': round(float(expected_cut / denom), 4),
+        'approx_ratio': round(float(expected_cut / denom), 4),
+        'optimal_solution_probability': optimal_probability,
+        'circuit_depth': int(qaoa['circuit_depth']),
+        'gate_count': int(qaoa['gate_count']),
+        'p_layers': int(problem['p_layers']),
+        'n_qubits': int(problem['n_nodes']),
+        'time_complexity': f'O({problem["p_layers"]} * {problem["n_edges"]} * shots)',
+        'initial_gamma': [float(v) for v in qaoa['initial_gamma']],
+        'initial_beta': [float(v) for v in qaoa['initial_beta']],
+        'optimal_gamma': qaoa['optimal_gamma'],
+        'optimal_beta': qaoa['optimal_beta'],
+        'cut_distribution': _cast_distribution(qaoa['cut_distribution']),
+        'cut_buckets': qaoa['cut_buckets'],
+        'counts': qaoa['counts'],
+        'expected_cut_history': [float(v) for v in qaoa['expected_cut_history']],
+        'iterations': int(qaoa['iterations']),
+        'run_config': {
+            'optimizer_method': qaoa['optimizer_method'],
+            'optimizer_seed': int(qaoa['optimizer_seed']),
+            'simulator_seed': int(qaoa['simulator_seed']),
+            'optimizer_maxiter': int(qaoa['max_iter']),
+            'objective': 'statevector_expected_cut',
+            'shots': int(qaoa['shots']),
+        },
+        'execution_time_ms': round(execution_time_ms, 4),
+    }
+
+
+def _build_qaoa_comparison_payload(exact_cut, sa_cut, qaoa):
+    denom = exact_cut if abs(exact_cut) > 1e-12 else 1.0
+    sa_ratio = float(sa_cut / denom)
+    qaoa_best_ratio = float(qaoa['best_cut'] / denom)
+    qaoa_expected_ratio = float(qaoa['expected_cut'] / denom)
+    return {
+        'exact_cut': _cast_cut(exact_cut),
+        'sa_cut': _cast_cut(sa_cut),
+        'qaoa_cut': _cast_cut(qaoa['best_cut']),
+        'sa_approx_ratio': round(sa_ratio, 4),
+        'qaoa_approx_ratio': round(qaoa_best_ratio, 4),
+        'qaoa_expected_cut': float(qaoa['expected_cut']),
+        'qaoa_expected_cut_ratio': round(qaoa_expected_ratio, 4),
+        'note': (
+            f'SA mencapai {sa_ratio * 100:.1f}% dari optimum eksak. '
+            f'QAOA representative run menghasilkan best sampled cut {qaoa["best_cut"]:.0f} '
+            f'({qaoa_best_ratio * 100:.1f}%) dan expected cut {qaoa["expected_cut"]:.3f} '
+            f'({qaoa_expected_ratio * 100:.1f}%).'
+        ),
+    }
+
+
+def run_qaoa_payload(
+    case_id,
+    shots,
+    optimizer_seed=DEFAULT_QAOA_OPTIMIZER_SEED,
+    simulator_seed=DEFAULT_QAOA_SIMULATOR_SEED,
+    max_iter=DEFAULT_QAOA_MAX_ITER,
+    include_aggregate=True,
+    aggregate_seed_start=DEFAULT_QAOA_AGGREGATE_SEED_START,
+    aggregate_seed_count=DEFAULT_QAOA_AGGREGATE_SEED_COUNT,
+    aggregate_max_iter=DEFAULT_QAOA_MAX_ITER,
+):
     case = get_qaoa_case_or_none(case_id)
     if not case:
         return None
@@ -811,17 +1067,32 @@ def run_qaoa_payload(case_id, shots):
     exact_time_ms = (time.perf_counter() - t_exact) * 1000.0
 
     t_sa = time.perf_counter()
-    sa_cut, sa_partition, sa_history = run_simulated_annealing(problem)
+    sa_cut, sa_partition, sa_history = run_simulated_annealing(problem, seed=DEFAULT_QAOA_OPTIMIZER_SEED)
     sa_time_ms = (time.perf_counter() - t_sa) * 1000.0
 
     t_qaoa = time.perf_counter()
-    qaoa = run_qaoa_internal(problem, shots=int(shots))
+    qaoa = run_qaoa_internal(
+        problem,
+        shots=int(shots),
+        max_iter=max_iter,
+        optimizer_seed=optimizer_seed,
+        simulator_seed=simulator_seed,
+    )
     qaoa_time_ms = (time.perf_counter() - t_qaoa) * 1000.0
 
-    qaoa_cut = float(qaoa['best_cut'])
     denom = exact_cut if abs(exact_cut) > 1e-12 else 1.0
     sa_ratio = float(sa_cut / denom)
-    qaoa_ratio = float(qaoa_cut / denom)
+    aggregate_payload = None
+    if include_aggregate:
+        aggregate_payload = get_qaoa_aggregate_payload(
+            case_id,
+            seed_start=aggregate_seed_start,
+            seed_count=aggregate_seed_count,
+            max_iter=aggregate_max_iter,
+        )
+
+    quantum_payload = _build_qaoa_quantum_payload(problem, exact_cut, qaoa, qaoa_time_ms)
+    comparison_payload = _build_qaoa_comparison_payload(exact_cut, sa_cut, qaoa)
 
     return {
         'case_id': case_id,
@@ -849,36 +1120,19 @@ def run_qaoa_payload(case_id, shots):
             'approx_ratio': round(sa_ratio, 4),
             'cut_history': [_cast_cut(v) for v in sa_history],
         },
-        'quantum': {
-            'method': 'QAOA',
-            'best_cut': _cast_cut(qaoa_cut),
-            'best_bitstring': qaoa['best_bitstring'],
-            'expected_cut': float(qaoa['expected_cut']),
-            'circuit_depth': int(qaoa['circuit_depth']),
-            'gate_count': int(qaoa['gate_count']),
-            'p_layers': int(problem['p_layers']),
-            'n_qubits': int(problem['n_nodes']),
-            'time_complexity': f'O({problem["p_layers"]} * {problem["n_edges"]} * shots)',
-            'optimal_gamma': qaoa['optimal_gamma'],
-            'optimal_beta': qaoa['optimal_beta'],
-            'cut_distribution': _cast_distribution(qaoa['cut_distribution']),
-            'expected_cut_history': [float(v) for v in qaoa['expected_cut_history']],
-            'iterations': int(qaoa['iterations']),
-            'approx_ratio': round(qaoa_ratio, 4),
-            'execution_time_ms': round(qaoa_time_ms, 4),
-        },
-        'comparison': {
-            'exact_cut': _cast_cut(exact_cut),
-            'sa_cut': _cast_cut(sa_cut),
-            'qaoa_cut': _cast_cut(qaoa_cut),
-            'sa_approx_ratio': round(sa_ratio, 4),
-            'qaoa_approx_ratio': round(qaoa_ratio, 4),
-            'note': f'SA={sa_ratio * 100:.1f}% and QAOA={qaoa_ratio * 100:.1f}% of exact optimum.',
-        },
+        'quantum': quantum_payload,
+        'comparison': comparison_payload,
+        'aggregate': aggregate_payload,
     }
 
 
-def get_qaoa_animation_payload(case_id, shots=1024):
+def get_qaoa_animation_payload(
+    case_id,
+    shots=1024,
+    optimizer_seed=DEFAULT_QAOA_OPTIMIZER_SEED,
+    simulator_seed=DEFAULT_QAOA_SIMULATOR_SEED,
+    max_iter=DEFAULT_QAOA_MAX_ITER,
+):
     case = get_qaoa_case_or_none(case_id)
     if not case:
         return None
@@ -886,13 +1140,17 @@ def get_qaoa_animation_payload(case_id, shots=1024):
     problem = _get_problem_from_case(case)
 
     exact_cut, exact_partition = compute_exact_maxcut(problem)
-    sa_cut, sa_partition, sa_history = run_simulated_annealing(problem)
-    qaoa = run_qaoa_internal(problem, shots=int(shots))
+    sa_cut, sa_partition, sa_history = run_simulated_annealing(problem, seed=DEFAULT_QAOA_OPTIMIZER_SEED)
+    qaoa = run_qaoa_internal(
+        problem,
+        shots=int(shots),
+        max_iter=max_iter,
+        optimizer_seed=optimizer_seed,
+        simulator_seed=simulator_seed,
+    )
 
-    qaoa_cut = float(qaoa['best_cut'])
     denom = exact_cut if abs(exact_cut) > 1e-12 else 1.0
     sa_ratio = float(sa_cut / denom)
-    qaoa_ratio = float(qaoa_cut / denom)
 
     checkpoints = _build_qaoa_animation_checkpoints(qaoa.get('evaluation_history', []))
 
@@ -956,32 +1214,8 @@ def get_qaoa_animation_payload(case_id, shots=1024):
             'approx_ratio': round(sa_ratio, 4),
             'cut_history': [_cast_cut(v) for v in sa_history],
         },
-        'quantum': {
-            'method': 'QAOA',
-            'best_cut': _cast_cut(qaoa_cut),
-            'best_bitstring': qaoa['best_bitstring'],
-            'expected_cut': float(qaoa['expected_cut']),
-            'circuit_depth': int(qaoa['circuit_depth']),
-            'gate_count': int(qaoa['gate_count']),
-            'p_layers': int(problem['p_layers']),
-            'n_qubits': int(problem['n_nodes']),
-            'time_complexity': f'O({problem["p_layers"]} * {problem["n_edges"]} * shots)',
-            'optimal_gamma': qaoa['optimal_gamma'],
-            'optimal_beta': qaoa['optimal_beta'],
-            'cut_distribution': _cast_distribution(qaoa['cut_distribution']),
-            'expected_cut_history': [float(v) for v in qaoa['expected_cut_history']],
-            'iterations': int(qaoa['iterations']),
-            'approx_ratio': round(qaoa_ratio, 4),
-            'execution_time_ms': 0.0,
-        },
-        'comparison': {
-            'exact_cut': _cast_cut(exact_cut),
-            'sa_cut': _cast_cut(sa_cut),
-            'qaoa_cut': _cast_cut(qaoa_cut),
-            'sa_approx_ratio': round(sa_ratio, 4),
-            'qaoa_approx_ratio': round(qaoa_ratio, 4),
-            'note': f'SA={sa_ratio * 100:.1f}% dan QAOA={qaoa_ratio * 100:.1f}% dari optimum eksak.',
-        },
+        'quantum': _build_qaoa_quantum_payload(problem, exact_cut, qaoa, 0.0),
+        'comparison': _build_qaoa_comparison_payload(exact_cut, sa_cut, qaoa),
     }
 
 

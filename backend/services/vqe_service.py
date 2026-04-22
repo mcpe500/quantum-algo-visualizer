@@ -1,6 +1,7 @@
 import matplotlib
 matplotlib.use('Agg')
 
+import math
 import time
 import numpy as np
 from scipy.optimize import minimize
@@ -8,6 +9,8 @@ from qiskit import QuantumCircuit, QuantumRegister, ClassicalRegister
 from qiskit.circuit import ParameterVector
 from qiskit.quantum_info import SparsePauliOp, Statevector
 from qiskit.visualization import circuit_drawer
+from qiskit_aer import AerSimulator
+from qiskit.primitives import BackendEstimatorV2
 
 from api.shared.plotting import figure_to_base64
 from services.common import list_cases, load_case_canonical
@@ -220,6 +223,28 @@ def run_vqe_payload(case_id, shots):
     accuracy = max(0.0, min(100.0, (1.0 - energy_error / denom) * 100.0))
     n_params = n_qubits * n_layers
 
+    shot_eval = None
+    try:
+        qc_eval, params_eval = build_ansatz_no_measure(n_qubits, ansatz_type, n_layers)
+        backend = AerSimulator()
+        estimator = BackendEstimatorV2(backend=backend)
+        precision = 1.0 / math.sqrt(int(shots))
+        pub = (qc_eval, hamiltonian_op, vqe_result['optimal_parameters'], precision)
+        job = estimator.run([pub])
+        est_result = job.result()
+        shot_energy = float(est_result[0].data.evs)
+        shot_std = float(est_result[0].data.stds)
+        actual_shots = int(est_result[0].metadata.get('shots', int(shots)))
+        shot_error = abs(shot_energy - fci_energy)
+        shot_eval = {
+            'energy': shot_energy,
+            'std': shot_std,
+            'shots': actual_shots,
+            'energy_error': float(shot_error),
+        }
+    except Exception:
+        pass
+
     return {
         'case_id': case_id,
         'molecule': case.get('molecule', 'Unknown'),
@@ -249,6 +274,7 @@ def run_vqe_payload(case_id, shots):
             'execution_time_ms': round(vqe_time_ms, 4),
             'energy_error': float(energy_error),
             'accuracy': round(float(accuracy), 4),
+            'shot_evaluation': shot_eval,
         },
         'comparison': {
             'fci_energy': fci_energy,

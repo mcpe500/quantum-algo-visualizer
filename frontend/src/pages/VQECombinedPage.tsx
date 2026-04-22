@@ -4,6 +4,8 @@ import { AlgorithmPageShell } from '../shared/components/AlgorithmPageShell';
 import { VQEClassicTab, VQEQuantumTab } from '../components/vqe';
 import { CAPTURE_IDS } from '../constants/app';
 
+const SHOTS_OPTIONS = [1024, 2048, 4096, 8192];
+
 export default function VQECombinedPage() {
   const {
     selectedCaseId,
@@ -14,8 +16,10 @@ export default function VQECombinedPage() {
     isLoading,
     error,
     activeTab,
+    shots,
     setSelectedCaseId,
     setActiveTab,
+    setShots,
     handleRun,
     handleDownload,
   } = useVQE();
@@ -42,6 +46,17 @@ export default function VQECombinedPage() {
       onTabChange={(tab) => setActiveTab(tab as 'classic' | 'quantum')}
       captureId={CAPTURE_IDS.vqe}
       emptyMessage={'Pilih kasus dan klik "Jalankan" untuk memulai benchmarking VQE.'}
+      extraControls={
+        <select
+          value={shots}
+          onChange={(e) => setShots(Number(e.target.value))}
+          className="px-4 py-2 border-2 border-dashed border-gray-300 rounded-lg text-sm text-gray-700 bg-white hover:border-gray-400 transition-all cursor-pointer font-mono"
+        >
+          {SHOTS_OPTIONS.map((s) => (
+            <option key={s} value={s}>{s} shots</option>
+          ))}
+        </select>
+      }
       classicTab={benchmarkResult ? <VQEClassicTab result={benchmarkResult} /> : null}
       quantumTab={benchmarkResult ? (
         <VQEQuantumTab result={benchmarkResult} circuitImage={circuitImage} trace={trace} />

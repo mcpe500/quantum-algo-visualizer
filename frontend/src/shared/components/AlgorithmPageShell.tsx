@@ -30,6 +30,7 @@ export interface AlgorithmPageShellProps {
   animationTab?: ReactNode;
   emptyMessage?: string;
   captureId?: string;
+  extraControls?: ReactNode;
 }
 
 export function AlgorithmPageShell({
@@ -53,6 +54,7 @@ export function AlgorithmPageShell({
   animationTab,
   emptyMessage = 'Pilih kasus dan klik "Jalankan" untuk memulai.',
   captureId,
+  extraControls,
 }: AlgorithmPageShellProps) {
   const tabClass = (tabId: string) =>
     activeTab === tabId
@@ -98,6 +100,8 @@ export function AlgorithmPageShell({
               <option key={id} value={id}>{id}</option>
             ))}
           </select>
+
+          {extraControls}
 
           <button
             onClick={() => void onRun()}

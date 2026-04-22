@@ -95,6 +95,49 @@ export function VQEQuantumTab({ result, circuitImage, trace }: VQEQuantumTabProp
         />
       </SectionCard>
 
+      {result.quantum.shot_evaluation && (
+        <SectionCard title="Shot-Based Evaluation">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+              <div className="text-xs text-blue-600 uppercase tracking-wide mb-1">
+                Shot Energy ({result.quantum.shot_evaluation.shots.toLocaleString()} shots)
+              </div>
+              <div className="text-2xl font-mono font-bold text-blue-900">
+                {result.quantum.shot_evaluation.energy.toFixed(6)} Ha
+              </div>
+              <div className="text-xs text-blue-500 mt-1">
+                std: {result.quantum.shot_evaluation.std.toFixed(6)}
+              </div>
+            </div>
+            <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+              <div className="text-xs text-red-600 uppercase tracking-wide mb-1">
+                Shot Error |E_shot − FCI|
+              </div>
+              <div className="text-2xl font-mono font-bold text-red-800">
+                {result.quantum.shot_evaluation.energy_error.toFixed(6)} Ha
+              </div>
+            </div>
+            <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+              <div className="text-xs text-gray-600 uppercase tracking-wide mb-1">
+                Exact vs Shot
+              </div>
+              <div className="text-sm font-mono text-gray-800 mt-1">
+                <div>Exact: {result.quantum.energy.toFixed(6)}</div>
+                <div>Shot:  {result.quantum.shot_evaluation.energy.toFixed(6)}</div>
+                <div>Delta: {Math.abs(result.quantum.energy - result.quantum.shot_evaluation.energy).toFixed(6)}</div>
+              </div>
+            </div>
+          </div>
+          <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
+            <p className="text-sm text-amber-800">
+              <strong>Note:</strong> Optimasi VQE menggunakan Statevector (eksak) untuk konvergensi yang stabil.
+              Evaluasi shot-based dilakukan pada parameter optimal dengan {result.quantum.shot_evaluation.shots.toLocaleString()} shots
+              untuk mensimulasikan pengukuran pada quantum hardware nyata.
+            </p>
+          </div>
+        </SectionCard>
+      )}
+
       {trace && (
         <TraceTable
           stages={trace.stages}

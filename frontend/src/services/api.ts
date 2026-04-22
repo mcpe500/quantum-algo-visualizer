@@ -28,6 +28,7 @@ import type {
   QAOATrace,
   QAOABenchmarkParams,
   QAOACircuitImage,
+  QAOAAggregateResult,
 } from "../types/qaoa";
 
 // Re-export some types so other modules can import them from services/api
@@ -257,8 +258,12 @@ export const qaoaApi = {
     return res.json();
   },
 
-  async getCircuitImage(caseId: string): Promise<QAOACircuitImage> {
-    const res = await fetch(`${API_BASE}/qaoa/circuit-image/${caseId}`);
+  async getCircuitImage(caseId: string, gamma?: number[] | number, beta?: number[] | number): Promise<QAOACircuitImage> {
+    const params = new URLSearchParams();
+    if (gamma !== undefined) params.set("gamma", Array.isArray(gamma) ? gamma.join(",") : String(gamma));
+    if (beta !== undefined) params.set("beta", Array.isArray(beta) ? beta.join(",") : String(beta));
+    const suffix = params.toString() ? `?${params.toString()}` : "";
+    const res = await fetch(`${API_BASE}/qaoa/circuit-image/${caseId}${suffix}`);
     if (!res.ok) throw new Error("Circuit image not found");
     return res.json();
   },
@@ -269,8 +274,12 @@ export const qaoaApi = {
     return res.json();
   },
 
-  async getTrace(caseId: string): Promise<QAOATrace> {
-    const res = await fetch(`${API_BASE}/qaoa/trace/${caseId}`);
+  async getTrace(caseId: string, gamma?: number[] | number, beta?: number[] | number): Promise<QAOATrace> {
+    const params = new URLSearchParams();
+    if (gamma !== undefined) params.set("gamma", Array.isArray(gamma) ? gamma.join(",") : String(gamma));
+    if (beta !== undefined) params.set("beta", Array.isArray(beta) ? beta.join(",") : String(beta));
+    const suffix = params.toString() ? `?${params.toString()}` : "";
+    const res = await fetch(`${API_BASE}/qaoa/trace/${caseId}${suffix}`);
     if (!res.ok) throw new Error("Trace not found");
     return res.json();
   },
@@ -278,6 +287,17 @@ export const qaoaApi = {
   async getAnimation(caseId: string, shots = 1024): Promise<QAOAAnimationPayload> {
     const res = await fetch(`${API_BASE}/qaoa/animation/${caseId}?shots=${shots}`);
     if (!res.ok) throw new Error("Animation data not found");
+    return res.json();
+  },
+
+  async getAggregate(caseId: string, seedCount = 8, seedStart = 0, maxiter = 120): Promise<QAOAAggregateResult> {
+    const params = new URLSearchParams({
+      seed_count: String(seedCount),
+      seed_start: String(seedStart),
+      maxiter: String(maxiter),
+    });
+    const res = await fetch(`${API_BASE}/qaoa/aggregate/${caseId}?${params.toString()}`);
+    if (!res.ok) throw new Error("QAOA aggregate data not found");
     return res.json();
   },
 };

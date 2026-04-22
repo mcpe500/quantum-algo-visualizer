@@ -90,7 +90,7 @@ function getExportNarration(mode: ExportOverlayMode, data: QAOAAnimationPayload,
     return {
       headline: 'Parameter terbaik dipilih sebagai solusi akhir',
       detail: `Bitstring dominan ${step.candidate_bitstring ?? '-'} menghasilkan cut ${step.cut_value ?? data.quantum.best_cut}. Nilai ini dibandingkan dengan exact optimum dan Simulated Annealing.`,
-      accent: `Best so far: ${step.best_so_far.toFixed(3)} | Approx ratio: ${data.quantum.approx_ratio.toFixed(3)}`,
+      accent: `Best so far: ${step.best_so_far.toFixed(3)} | Expected ratio: ${(data.quantum.expected_cut_ratio ?? data.quantum.approx_ratio).toFixed(3)}`,
     };
   }
 
