@@ -19,6 +19,56 @@ export interface QAOACutPoint {
   cut: number;
 }
 
+export interface QAOACutBucket {
+  cut: number;
+  count: number;
+  probability: number;
+}
+
+export interface QAOARunConfig {
+  optimizer_method: string;
+  optimizer_seed: number;
+  simulator_seed: number;
+  optimizer_maxiter: number;
+  objective: string;
+  shots: number;
+}
+
+export interface QAOAAggregateStats {
+  mean: number;
+  std: number;
+  min: number;
+  max: number;
+}
+
+export interface QAOAAggregateRecord {
+  seed: number;
+  expected_cut: number;
+  expected_cut_ratio: number;
+  iterations: number;
+  optimal_gamma: number[];
+  optimal_beta: number[];
+  optimizer_success: boolean;
+}
+
+export interface QAOAAggregateResult {
+  timestamp?: string;
+  case_id: string;
+  seed_start: number;
+  seed_count: number;
+  seeds: number[];
+  optimizer_method: string;
+  optimizer_maxiter: number;
+  objective: string;
+  expected_cut_stats: QAOAAggregateStats;
+  expected_cut_ratio_stats: QAOAAggregateStats;
+  iteration_stats: QAOAAggregateStats;
+  success_rate: number;
+  best_seed_record: QAOAAggregateRecord | null;
+  worst_seed_record: QAOAAggregateRecord | null;
+  records: QAOAAggregateRecord[];
+}
+
 export interface QAOAExactResult {
   method: string;
   optimal_cut: number;
@@ -40,18 +90,29 @@ export interface QAOAQuantumResult {
   method: string;
   best_cut: number;
   best_bitstring: string;
+  best_sampled_ratio: number;
+  dominant_bitstring: string;
+  dominant_cut: number;
+  dominant_probability: number;
   expected_cut: number;
+  expected_cut_ratio: number;
   circuit_depth: number;
   gate_count: number;
   p_layers: number;
   n_qubits: number;
   time_complexity: string;
+  initial_gamma: number[];
+  initial_beta: number[];
   optimal_gamma: number[];
   optimal_beta: number[];
   cut_distribution: QAOACutPoint[];
+  cut_buckets: QAOACutBucket[];
+  counts: Record<string, number>;
   expected_cut_history: number[];
   iterations: number;
   approx_ratio: number;
+  optimal_solution_probability: number;
+  run_config: QAOARunConfig;
   execution_time_ms: number;
 }
 
@@ -61,6 +122,8 @@ export interface QAOAComparison {
   qaoa_cut: number;
   sa_approx_ratio: number;
   qaoa_approx_ratio: number;
+  qaoa_expected_cut: number;
+  qaoa_expected_cut_ratio: number;
   note: string;
 }
 
@@ -80,6 +143,7 @@ export interface QAOABenchmarkResult {
   classical: QAOAClassicalResult;
   quantum: QAOAQuantumResult;
   comparison: QAOAComparison;
+  aggregate?: QAOAAggregateResult | null;
 }
 
 export interface QAOATraceStage {
@@ -108,6 +172,13 @@ export interface QAOATrace {
 export interface QAOABenchmarkParams {
   case_id: string;
   shots: number;
+  optimizer_seed?: number;
+  simulator_seed?: number;
+  maxiter?: number;
+  include_aggregate?: boolean;
+  aggregate_seed_start?: number;
+  aggregate_seed_count?: number;
+  aggregate_maxiter?: number;
 }
 
 export interface QAOACircuitImage {

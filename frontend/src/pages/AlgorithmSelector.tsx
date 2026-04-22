@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { Cpu, Waves, Zap, GitBranch, Globe } from 'lucide-react';
+import { Cpu, Waves, Zap, GitBranch, Globe, Layers, BookOpen } from 'lucide-react';
 import { PAGE_BACKGROUND_CLASS } from '../constants/ui';
 
 const algorithms = [
@@ -65,7 +65,22 @@ function AlgorithmSelector() {
           })}
         </div>
 
-        <div className="mt-8 pt-8 border-t border-gray-200">
+        <div className="mt-8 pt-8 border-t border-gray-200 grid grid-cols-1 md:grid-cols-2 gap-6">
+          <Link
+            to="/hardware"
+            className="block p-6 bg-amber-50 border-2 border-amber-200 rounded-xl hover:border-amber-400 hover:shadow-lg transition-all group"
+          >
+            <div className="flex items-center gap-4">
+              <div className="p-3 bg-amber-100 rounded-lg group-hover:bg-amber-200 transition-colors">
+                <Layers className="w-8 h-8 text-amber-600" />
+              </div>
+              <div>
+                <h2 className="text-lg font-semibold text-gray-900">Quantum Hardware</h2>
+                <p className="text-sm text-gray-500">Eksplorasi 7 modalitas hardware quantum computing dengan visualisasi 3D</p>
+              </div>
+            </div>
+          </Link>
+
           <Link
             to="/playground"
             className="block p-6 bg-indigo-50 border-2 border-indigo-200 rounded-xl hover:border-indigo-400 hover:shadow-lg transition-all group"
@@ -77,6 +92,21 @@ function AlgorithmSelector() {
               <div>
                 <h2 className="text-lg font-semibold text-gray-900">Qubit Playground</h2>
                 <p className="text-sm text-gray-500">Main-main dengan qubit dan gerbang kuantum secara interaktif</p>
+              </div>
+            </div>
+          </Link>
+
+          <Link
+            to="/formulas"
+            className="block p-6 bg-teal-50 border-2 border-teal-200 rounded-xl hover:border-teal-400 hover:shadow-lg transition-all group"
+          >
+            <div className="flex items-center gap-4">
+              <div className="p-3 bg-teal-100 rounded-lg group-hover:bg-teal-200 transition-colors">
+                <BookOpen className="w-8 h-8 text-teal-600" />
+              </div>
+              <div>
+                <h2 className="text-lg font-semibold text-gray-900">Formula Studio</h2>
+                <p className="text-sm text-gray-500">Eksplorasi rumus dan persamaan quantum computing</p>
               </div>
             </div>
           </Link>

@@ -9,6 +9,10 @@ import VQEDatasetPage from "./pages/VQEDatasetPage";
 import QAOACombinedPage from "./pages/QAOACombinedPage";
 import QAOADatasetPage from "./pages/QAOADatasetPage";
 import QubitPlaygroundPage from "./pages/QubitPlaygroundPage";
+import HardwareSelector from "./pages/HardwareSelector";
+import HardwareDetailPage from "./pages/HardwareDetailPage";
+import HardwareComparisonPage from "./pages/HardwareComparisonPage";
+import FormulaStudioPage from './components/formula-studio/FormulaStudioPage';
 
 function App() {
   return (
@@ -24,6 +28,10 @@ function App() {
         <Route path="/qaoa" element={<QAOACombinedPage />} />
         <Route path="/qaoa/dataset" element={<QAOADatasetPage />} />
         <Route path="/playground" element={<QubitPlaygroundPage />} />
+        <Route path="/hardware" element={<HardwareSelector />} />
+        <Route path="/hardware/:id" element={<HardwareDetailPage />} />
+        <Route path="/hardware/compare" element={<HardwareComparisonPage />} />
+        <Route path="/formulas" element={<FormulaStudioPage />} />
       </Routes>
     </BrowserRouter>
   );

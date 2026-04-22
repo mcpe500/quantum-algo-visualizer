@@ -33,17 +33,20 @@ export function QAOAQuantumTab({ result, circuitImage, trace }: QAOAQuantumTabPr
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
           <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
-            <div className="text-xs text-purple-600 uppercase tracking-wide mb-1">QAOA Best Cut</div>
+            <div className="text-xs text-purple-600 uppercase tracking-wide mb-1">Best Sampled Cut</div>
             <div className="text-3xl font-mono font-bold text-purple-900">{result.quantum.best_cut}</div>
             <div className="text-xs text-purple-700 mt-1">bitstring: {result.quantum.best_bitstring}</div>
+            <div className="text-xs text-purple-700 mt-1">ratio: {result.quantum.best_sampled_ratio.toFixed(3)}</div>
           </div>
           <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
             <div className="text-xs text-gray-500 uppercase tracking-wide mb-1">Expected Cut</div>
             <div className="text-3xl font-mono font-bold text-gray-900">{result.quantum.expected_cut.toFixed(3)}</div>
+            <div className="text-xs text-gray-600 mt-1">optimal mass: {(result.quantum.optimal_solution_probability * 100).toFixed(1)}%</div>
           </div>
           <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-            <div className="text-xs text-green-600 uppercase tracking-wide mb-1">Approx. Ratio</div>
-            <div className="text-3xl font-mono font-bold text-green-800">{result.quantum.approx_ratio.toFixed(3)}</div>
+            <div className="text-xs text-green-600 uppercase tracking-wide mb-1">Expected-Cut Ratio</div>
+            <div className="text-3xl font-mono font-bold text-green-800">{result.quantum.expected_cut_ratio.toFixed(3)}</div>
+            <div className="text-xs text-green-700 mt-1">dominant: {result.quantum.dominant_bitstring} ({(result.quantum.dominant_probability * 100).toFixed(1)}%)</div>
           </div>
         </div>
 
@@ -61,7 +64,39 @@ export function QAOAQuantumTab({ result, circuitImage, trace }: QAOAQuantumTabPr
           <span className="px-3 py-1 bg-gray-100 text-gray-700 text-xs font-mono rounded-full">
             {result.quantum.iterations} iterations
           </span>
+          <span className="px-3 py-1 bg-slate-100 text-slate-700 text-xs font-mono rounded-full">
+            seed(opt/sim): {result.quantum.run_config.optimizer_seed}/{result.quantum.run_config.simulator_seed}
+          </span>
         </div>
+
+        {result.aggregate && (
+          <div className="mb-6 rounded-xl border border-slate-200 bg-slate-50 p-4">
+            <div className="text-sm font-semibold text-slate-800 mb-3">Aggregate Multi-Seed Summary</div>
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-3 mb-3">
+              <div className="rounded-lg bg-white border border-slate-200 p-3">
+                <div className="text-[11px] uppercase tracking-wide text-slate-500 mb-1">Seeds</div>
+                <div className="text-xl font-mono font-bold text-slate-900">{result.aggregate.seed_count}</div>
+              </div>
+              <div className="rounded-lg bg-white border border-slate-200 p-3">
+                <div className="text-[11px] uppercase tracking-wide text-slate-500 mb-1">Mean Ratio</div>
+                <div className="text-xl font-mono font-bold text-slate-900">{result.aggregate.expected_cut_ratio_stats.mean.toFixed(3)}</div>
+              </div>
+              <div className="rounded-lg bg-white border border-slate-200 p-3">
+                <div className="text-[11px] uppercase tracking-wide text-slate-500 mb-1">Std Ratio</div>
+                <div className="text-xl font-mono font-bold text-slate-900">{result.aggregate.expected_cut_ratio_stats.std.toFixed(3)}</div>
+              </div>
+              <div className="rounded-lg bg-white border border-slate-200 p-3">
+                <div className="text-[11px] uppercase tracking-wide text-slate-500 mb-1">Range</div>
+                <div className="text-sm font-mono font-bold text-slate-900">
+                  {result.aggregate.expected_cut_ratio_stats.min.toFixed(3)} - {result.aggregate.expected_cut_ratio_stats.max.toFixed(3)}
+                </div>
+              </div>
+            </div>
+            <p className="text-xs text-slate-600">
+              Statistik agregat dihitung dari seed {result.aggregate.seed_start} sampai {result.aggregate.seed_start + result.aggregate.seed_count - 1} menggunakan objective statevector expected cut.
+            </p>
+          </div>
+        )}
 
         {result.quantum.expected_cut_history.length > 0 && (
           <div className="mb-6">
@@ -80,7 +115,7 @@ export function QAOAQuantumTab({ result, circuitImage, trace }: QAOAQuantumTabPr
           <div className="mb-6">
             <CutDistributionChart
               data={result.quantum.cut_distribution}
-              title="Measurement Probability Distribution (top bitstrings)"
+              title="Measurement Probability Distribution (representative run)"
             />
           </div>
         )}
@@ -113,9 +148,10 @@ export function QAOAQuantumTab({ result, circuitImage, trace }: QAOAQuantumTabPr
             <div className="text-sm text-blue-700 mt-1">ratio: {result.comparison.sa_approx_ratio.toFixed(3)}</div>
           </div>
           <div className="bg-purple-50 p-4 rounded-lg">
-            <div className="text-xs text-purple-600 uppercase tracking-wide mb-1">QAOA (Quantum)</div>
+            <div className="text-xs text-purple-600 uppercase tracking-wide mb-1">QAOA (Best Sampled)</div>
             <div className="text-2xl font-mono font-bold text-purple-900">Cut = {result.comparison.qaoa_cut}</div>
             <div className="text-sm text-purple-700 mt-1">ratio: {result.comparison.qaoa_approx_ratio.toFixed(3)}</div>
+            <div className="text-sm text-purple-700 mt-1">expected ratio: {result.comparison.qaoa_expected_cut_ratio.toFixed(3)}</div>
           </div>
         </div>
         <div className={SURFACE_CLASSES.subtleCard}>

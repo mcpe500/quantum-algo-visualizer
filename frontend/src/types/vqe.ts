@@ -21,6 +21,13 @@ export interface VQEClassicalResult {
   note: string;
 }
 
+export interface ShotEvaluation {
+  energy: number;
+  std: number;
+  shots: number;
+  energy_error: number;
+}
+
 export interface VQEQuantumResult {
   method: string;
   energy: number;
@@ -33,6 +40,7 @@ export interface VQEQuantumResult {
   execution_time_ms: number;
   energy_error: number;
   accuracy: number;
+  shot_evaluation: ShotEvaluation | null;
 }
 
 export interface VQEComparison {

@@ -19,8 +19,10 @@ export interface UseVQEReturn {
   isLoading: boolean;
   error: string | null;
   activeTab: 'classic' | 'quantum';
+  shots: number;
   setSelectedCaseId: (id: string) => void;
   setActiveTab: (tab: 'classic' | 'quantum') => void;
+  setShots: (shots: number) => void;
   handleRun: () => Promise<void>;
   handleDownload: () => Promise<void>;
 }
@@ -34,6 +36,7 @@ export function useVQE(): UseVQEReturn {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'classic' | 'quantum'>('classic');
+  const [shots, setShots] = useState(DEFAULT_SHOTS);
 
   // Load cases on mount
   useEffect(() => {
@@ -86,7 +89,7 @@ export function useVQE(): UseVQEReturn {
     setIsLoading(true);
     setError(null);
     try {
-      const params: VQEBenchmarkParams = { case_id: selectedCaseId, shots: DEFAULT_SHOTS };
+      const params: VQEBenchmarkParams = { case_id: selectedCaseId, shots };
       const data = await vqeApi.runBenchmark(params);
       setBenchmarkResult(data);
       await loadCircuitImage(selectedCaseId);
@@ -96,7 +99,7 @@ export function useVQE(): UseVQEReturn {
     } finally {
       setIsLoading(false);
     }
-  }, [selectedCaseId, loadCircuitImage, loadTrace]);
+  }, [selectedCaseId, shots, loadCircuitImage, loadTrace]);
 
   const handleDownload = useCallback(async () => {
     await downloadElementAsPNG(CAPTURE_IDS.vqe, `vqe_${selectedCaseId}.png`);
@@ -111,8 +114,10 @@ export function useVQE(): UseVQEReturn {
     isLoading,
     error,
     activeTab,
+    shots,
     setSelectedCaseId,
     setActiveTab,
+    setShots,
     handleRun,
     handleDownload,
   };

@@ -64,18 +64,18 @@ export function useQAOA(): UseQAOAReturn {
     };
   }, []);
 
-  const loadCircuitImage = useCallback(async (caseId: string) => {
+  const loadCircuitImage = useCallback(async (caseId: string, gamma?: number[], beta?: number[]) => {
     try {
-      const data = await qaoaApi.getCircuitImage(caseId);
+      const data = await qaoaApi.getCircuitImage(caseId, gamma, beta);
       setCircuitImage(data);
     } catch {
       setCircuitImage(null);
     }
   }, []);
 
-  const loadTrace = useCallback(async (caseId: string) => {
+  const loadTrace = useCallback(async (caseId: string, gamma?: number[], beta?: number[]) => {
     try {
-      const data = await qaoaApi.getTrace(caseId);
+      const data = await qaoaApi.getTrace(caseId, gamma, beta);
       setTrace(data);
     } catch {
       setTrace(null);
@@ -109,11 +109,15 @@ export function useQAOA(): UseQAOAReturn {
     setIsLoading(true);
     setError(null);
     try {
-      const params: QAOABenchmarkParams = { case_id: selectedCaseId, shots: DEFAULT_SHOTS };
+      const params: QAOABenchmarkParams = {
+        case_id: selectedCaseId,
+        shots: DEFAULT_SHOTS,
+        include_aggregate: true,
+      };
       const data = await qaoaApi.runBenchmark(params);
       setBenchmarkResult(data);
-      await loadCircuitImage(selectedCaseId);
-      await loadTrace(selectedCaseId);
+      await loadCircuitImage(selectedCaseId, data.quantum.optimal_gamma, data.quantum.optimal_beta);
+      await loadTrace(selectedCaseId, data.quantum.optimal_gamma, data.quantum.optimal_beta);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Benchmark failed');
     } finally {
