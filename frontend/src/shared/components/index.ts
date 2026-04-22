@@ -7,3 +7,4 @@ export type { AlgorithmPageShellProps } from './AlgorithmPageShell';
 export { HadamardGate, HADAMARD_COLOR, CameraRig, PhaseBand } from './3d';
 export type { HadamardGateProps, CameraRigProps, PhaseBandProps } from './3d';
 export * from './3d';
+export { PlaybackControls, type PlaybackControlsProps } from './animation';
