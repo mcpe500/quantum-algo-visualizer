@@ -33,6 +33,7 @@ export default function VQECombinedPage() {
       hasResult={!!benchmarkResult}
       error={error}
       loadingMessage="Menjalankan VQE... proses optimisasi mungkin memerlukan beberapa detik."
+      datasetLink="/vqe/dataset"
       tabs={[
         { id: 'classic', label: 'Klasik', icon: BookOpen },
         { id: 'quantum', label: 'Kuantum', icon: Cpu },
