@@ -1,6 +1,7 @@
 import type { FormulaDefinition } from './types';
+import { FORMULA_COMPUTATION_MAP } from './computation';
 
-export const FORMULA_REGISTRY: FormulaDefinition[] = [
+const BASE_FORMULA_REGISTRY: FormulaDefinition[] = [
 
   // ============================================================================
   // GATES
@@ -795,3 +796,8 @@ export const FORMULA_REGISTRY: FormulaDefinition[] = [
   }
 
 ];
+
+export const FORMULA_REGISTRY: FormulaDefinition[] = BASE_FORMULA_REGISTRY.map((formula) => ({
+  ...formula,
+  computation: FORMULA_COMPUTATION_MAP[formula.id] ?? formula.computation,
+}));
