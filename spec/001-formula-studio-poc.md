@@ -1,264 +1,295 @@
 # SPEC 001: Formula Studio - Quantum Algorithm Formula Visualization
 
-## Status: PHASE 0 COMPLETE + CRITIC REVIEW PASSED
+## Status: PHASE 0 COMPLETE + CRITIC REVIEW PASSED + PHASE 2 ARCHITECTURE COMPLETE
 
 **Tanggal:** 2026-04-23
 **Author:** Claude Code (Fleet Swarm)
 **Project:** quantum-algo-visualizer
-**Version:** 1.1 (post-review fixes)
+**Version:** 2.0 (Studio Tab Architecture)
 
 ---
 
-## 1. Concept & Vision
+## 2.1 Studio Tab - Architecture & Design Decisions
 
-Formula Studio adalah halaman baru di quantum-algo-visualizer yang menyediakan visualisasi interaktif untuk semua rumus matematika dari skripsi TA. Berbeda dengan pendekatan embed rumus di setiap page algoritma, Formula Studio menggunakan pola STUDIO - halaman mandiri dengan 3 tab (Explore, Studio, Stories) yang memungkinkan eksplorasi, penulisan persamaan, dan navigasi naratif melalui hubungan antar rumus.
+### Purpose
+Studio Tab provides a drag-drop canvas workspace where users place formula nodes and connect them with labeled edges to visualize mathematical relationships between quantum algorithm concepts.
 
-Tujuan: membantu pembaca skripsi memahami latar belakang matematika dari 4 algoritma (Deutsch-Jozsa, QFT, VQE, QAOA) dengan visualisasi interaktif yang bisa di-screenshot untuk dokumen TA.
+### Canvas State Model
 
----
+```typescript
+// Canvas node: formula instance placed on canvas with position
+interface CanvasNodeData {
+  id: string;              // unique instance id (uuid)
+  formulaId: string;      // reference to FORMULA_REGISTRY id
+  position: { x: number; y: number };
+  width: number;          // default 280
+  height: number;         // calculated from content
+}
 
-## 2. Design Language
+// Canvas connection: directed edge between two nodes
+interface CanvasConnection {
+  id: string;             // uuid
+  fromId: string;         // source node id
+  toId: string;           // target node id
+  relationType: RelationType;  // 'implements', 'derived-from', etc.
+  label: string;          // human-readable label
+}
 
-### Aesthetic Direction
-Dark theme studio aesthetic - gelap, profesional, cocok untuk konten akademik. Menggunakan warna cyan/amber sebagai aksen untuk membedakan kategori rumus.
+// Full canvas state
+interface CanvasState {
+  nodes: CanvasNodeData[];
+  connections: CanvasConnection[];
+  selectedNodeId: string | null;
+  selectedConnectionId: string | null;
+  panOffset: { x: number; y: number };
+  zoom: number;           // 1.0 = 100%
+}
 
-### Color Palette
-- **Background:** slate-900 (#0f172a), slate-800 (#1e293b)
-- **Text:** slate-100 (#f1f5f9), slate-300 (#cbd5e1), slate-400 (#94a3b8)
-- **Category Accents:**
-  - Gates: amber-500 (#f59e0b)
-  - QFT/FFT: purple-500 (#a855f7)
-  - VQE: green-500 (#22c55e)
-  - QAOA: orange-500 (#f97316)
-  - DJ: blue-500 (#3b82f6)
-  - Basics: cyan-500 (#06b6d4)
-  - Complexity: violet-500 (#8b5cf6)
-
-### Typography
-- **Headers:** Inter, font-weight 600-700
-- **Body:** Inter, font-weight 400
-- **Formulas:** KaTeX default fonts (KaTeX_Main, KaTeX_Math, KaTeX_AMS)
-- **Code/Tags:** JetBrains Mono / monospace
-
-### Spatial System
-- 8px grid system
-- Padding standard: 16px, 24px
-- Card radius: 8px (rounded-lg)
-- Border width: 1px
-
-### Motion Philosophy
-- Transitions: 200ms ease for hover states
-- Category accordion: 150ms expand/collapse
-- No animation on formula render (KaTeX is synchronous)
-
----
-
-## 3. Layout & Structure
-
-### Page Structure
-```
-┌──────────────────────────────────────────────────────────┐
-│ HEADER: Logo + "Formula Studio" + Tab Switcher            │
-├──────────────────────────────────────────────────────────┤
-│ CONTENT (3 tabs):                                        │
-│                                                          │
-│ [Explore Tab]                                            │
-│ ┌────────────┬──────────────────────┬────────────────┐  │
-│ │ Category   │ Formula Grid         │ Detail Panel   │  │
-│ │ Tree       │ (cards)              │ (selected)     │  │
-│ │ (200px)    │                      │ (40%)          │  │
-│ └────────────┴──────────────────────┴────────────────┘  │
-│                                                          │
-│ [Studio Tab] - Placeholder (Coming Soon)                │
-│ [Stories Tab] - Placeholder (Coming Soon)              │
-│                                                          │
-└──────────────────────────────────────────────────────────┘
+// Relation types from FormulaRelation
+type RelationType = 'quantum-version' | 'implements' | 'derives' | 'compares' 
+  | 'generalizes' | 'same-concept' | 'related' | 'equivalent' | 'derived-from' 
+  | 'specializes' | 'contrast-with' | 'discretized' | 'encoded-in' | 'quantized' 
+  | 'uses' | 'algorithm' | 'target' | 'computed-by' | 'result' | 'used-in';
 ```
 
-### Responsive Strategy
-- Desktop-first (minimum 1024px viewport assumed)
-- Sidebar collapses on smaller screens (optional enhancement)
-- Grid columns: 1-4 based on viewport width
+### Component Hierarchy
 
----
-
-## 4. Features & Interactions
-
-### Phase 0 - COMPLETE
-
-#### 4.1 Formula Display (KaTeX)
-- LaTeX rendering via `katex` library
-- Two modes: inline (FormulaDisplayMini) and display (FormulaDisplay)
-- Dark theme optimized (light text on dark bg)
-- Error handling: `throwOnError: false` for malformed LaTeX
-
-#### 4.2 Formula Registry
-- 42 formulas across 8 categories
-- Each formula has: id, latex, title, category, tags, chapter[], description, variables[], relatedFormulas[]
-- Bilingual tags (Indonesian + English) for search
-- Cross-references between related formulas
-
-#### 4.3 Explore Tab
-- **Search Bar:** Fuzzy search via fuse.js with synonym expansion
-  - Synonyms: 'keadaan' = 'state', 'gerbang' = 'gate', etc.
-  - Searches: title, tags, latex content
-  - Debounced 200ms, shows top 10 results
-- **Category Tree:** Accordion sidebar with category counts
-  - 8 categories: Basics, Gates, DJ, QFT, VQE, QAOA, SA, Complexity
-  - Single-select filtering
-- **Formula Grid:** Card grid with category-colored borders
-  - Shows title, mini LaTeX preview, chapter badges, tags
-  - Click to select
-- **Detail Panel:** Right sidebar showing:
-  - Full LaTeX render (display mode)
-  - Variable definitions
-  - Description (Indonesian)
-  - Related formulas (clickable navigation)
-  - Chapter references
-  - Actions: Screenshot (html-to-image), Copy LaTeX, Step-by-Step (placeholder)
-
-#### 4.4 Screenshot Support
-- Uses `html-to-image` (not html2canvas) for better KaTeX font compatibility
-- Exports as PNG with 2x pixel ratio for quality
-- Downloads as `{formula-id}-formula.png`
-
-### Phase 2-4 - TODO (Studio, Stories, Step-by-Step)
-
-#### 4.5 Studio Tab (Planned)
-- Drag-drop canvas for formula nodes
-- SVG connection lines between related formulas
-- Connection labels: "quantum version of", "implements", etc.
-- Canvas toolbar: Clear, Auto-layout, Screenshot
-
-#### 4.6 Stories Tab (Planned)
-- Pre-built narratives: DJ Story, QFT Story, VQE Story, QAOA Story, Gate Story
-- Timeline component showing formula sequence
-- Play button for auto-advance
-- Connecting text explaining transitions
-
-#### 4.7 Step-by-Step Computation (Planned)
-- VQE energy: Σ cₗ⟨Pₗ⟩ step-by-step
-- DFT sum: Σ x[j]·e^(-2πijk/N) step-by-step
-- Gate matrix multiplication visualization
-- Max-Cut cost computation
-- SA acceptance probability curve
-
----
-
-## 5. Component Inventory
-
-### Core Components (COMPLETE)
-
-| Component | File | Description |
-|-----------|------|-------------|
-| `FormulaStudioPage` | `FormulaStudioPage.tsx` | Main page with tab navigation |
-| `FormulaExplorer` | `explore/FormulaExplorer.tsx` | Explore tab layout |
-| `FormulaSearchBar` | `explore/FormulaSearchBar.tsx` | Smart fuzzy search |
-| `FormulaCategoryTree` | `explore/FormulaCategoryTree.tsx` | Category accordion sidebar |
-| `FormulaGridCard` | `explore/FormulaGridCard.tsx` | Formula preview card |
-| `FormulaDetailPanel` | `shared/FormulaDetailPanel.tsx` | Selected formula detail view |
-| `FormulaDisplay` | `shared/FormulaDisplay.tsx` | Full KaTeX renderer |
-| `FormulaDisplayMini` | `shared/FormulaDisplayMini.tsx` | Mini KaTeX preview |
-| `types` | `types.ts` | TypeScript interfaces |
-| `registry` | `registry.ts` | 42 formula definitions |
-
-### Planned Components
-
-| Component | File | Description |
-|-----------|------|-------------|
-| `FormulaStudioCanvas` | `studio/FormulaStudioCanvas.tsx` | Drag-drop canvas |
-| `FormulaNode` | `studio/FormulaNode.tsx` | Draggable formula card |
-| `ConnectionLine` | `studio/ConnectionLine.tsx` | SVG bezier connection |
-| `CanvasToolbar` | `studio/CanvasToolbar.tsx` | Canvas controls |
-| `FormulaStories` | `stories/FormulaStories.tsx` | Stories tab layout |
-| `StoryTimeline` | `stories/StoryTimeline.tsx` | Timeline component |
-| `narratives` | `stories/narratives.ts` | Pre-built story data |
-| `FormulaStepper` | `shared/FormulaStepper.tsx` | Step-by-step modal |
-
----
-
-## 6. Technical Approach
-
-### Stack
-- **Framework:** React 19 + TypeScript
-- **Build:** Vite + tsc
-- **Styling:** Tailwind CSS (existing project pattern)
-- **Math Rendering:** KaTeX 0.16.45
-- **Screenshot:** html-to-image 1.11.13
-- **Search:** fuse.js 7.3.0
-- **Drag-Drop:** @dnd-kit/core 6.3.1 + @dnd-kit/sortable 10.0.0 (for future)
-
-### Key Files
 ```
-frontend/src/
-├── App.tsx                           # Route: /formulas
-└── components/formula-studio/
-    ├── FormulaStudioPage.tsx         # Main page
-    ├── types.ts                      # Type definitions
-    ├── registry.ts                   # 42 formula definitions
-    ├── explore/
-    │   ├── FormulaExplorer.tsx       # Explore layout
-    │   ├── FormulaSearchBar.tsx      # Fuzzy search
-    │   ├── FormulaCategoryTree.tsx   # Category accordion
-    │   └── FormulaGridCard.tsx       # Card component
-    ├── studio/                       # (TODO) Drag-drop canvas
-    ├── stories/                      # (TODO) Pre-built narratives
-    └── shared/
-        ├── FormulaDisplay.tsx        # KaTeX renderer
-        ├── FormulaDisplayMini.tsx    # Mini preview
-        └── FormulaDetailPanel.tsx    # Detail view
+StudioCanvas (main container)
+├── CanvasToolbar
+│   ├── Clear button (remove all nodes)
+│   ├── Screenshot button (capture canvas as PNG)
+│   ├── Auto-layout button (force-directed arrangement)
+│   ├── Zoom controls (+/- and fit)
+│   └── Connection mode toggle (draw connections by clicking)
+├── CanvasArea (scrollable, pannable)
+│   ├── ConnectionLines (SVG layer - renders bezier curves)
+│   │   └── ConnectionLine (single bezier path with arrowhead + label)
+│   ├── FormulaNode (draggable) x N
+│   │   ├── Node header (title + category badge)
+│   │   ├── Formula content (KaTeX render)
+│   │   ├── Connection anchors (left/right circles for edge endpoints)
+│   │   └── Delete button (× on hover)
+│   └── DroppableCanvasBackground (drop zone for palette items)
+└── NodePalette (left sidebar, 200px)
+    ├── Search filter
+    ├── Category accordion (same as Explore)
+    └── Draggable formula cards (drag to canvas to add)
 ```
 
-### API/Data Flow
-- No backend API - all data is static (registry.ts)
-- Formula selection triggers state update → detail panel re-renders
-- Screenshot uses html-to-image to capture DOM element
+### State Management Approach
+
+**Local state in StudioCanvas with useReducer:**
+
+```typescript
+type CanvasAction =
+  | { type: 'ADD_NODE'; formulaId: string; position: { x: number; y: number } }
+  | { type: 'MOVE_NODE'; nodeId: string; position: { x: number; y: number } }
+  | { type: 'DELETE_NODE'; nodeId: string }
+  | { type: 'SELECT_NODE'; nodeId: string | null }
+  | { type: 'ADD_CONNECTION'; fromId: string; toId: string; relationType: string; label: string }
+  | { type: 'DELETE_CONNECTION'; connectionId: string }
+  | { type: 'CLEAR_CANVAS' }
+  | { type: 'LOAD_CANVAS'; state: CanvasState }
+  | { type: 'SET_PAN'; offset: { x: number; y: number } }
+  | { type: 'SET_ZOOM'; zoom: number };
+```
+
+**Persistence:** Canvas state serialized to `localStorage` key `formula-studio-canvas-{timestamp}` on every change. Load on mount if exists.
+
+### Drag-and-Drop Implementation
+
+**@dnd-kit Usage Pattern:**
+
+1. **Palette items:** Use `useDraggable` from `@dnd-kit/core` with `data: { type: 'palette-item', formulaId }`
+2. **Canvas background:** Use `useDroppable` from `@dnd-kit/core` with `id: 'canvas-drop-zone'`
+3. **Canvas nodes:** Use `useDraggable` from `@dnd-kit/core` with `data: { type: 'canvas-node', nodeId }`
+4. **DragOverlay:** Wrap in `DndContext` with `DragOverlay` portal for smooth drag preview
+
+**Flow:**
+- Drag from palette → drop on canvas → `ADD_NODE` action with drop coordinates
+- Drag existing node → `MOVE_NODE` action with new coordinates
+- Connection mode: click source node → click target node → `ADD_CONNECTION`
+
+### SVG Connection Rendering
+
+**Bezier Curve Calculation:**
+- Source point: right anchor of source node (node.x + node.width, node.y + node.height/2)
+- Target point: left anchor of target node (node.x, node.y + node.height/2)
+- Control points: cubic bezier with horizontal offset ~50% of horizontal distance
+- Arrowhead: small triangle marker at target point
+
+**Path Formula:**
+```typescript
+const dx = targetX - sourceX;
+const dy = targetY - sourceY;
+const cpOffset = Math.max(50, Math.abs(dx) * 0.4);
+const path = `M ${sourceX} ${sourceY} C ${sourceX + cpOffset} ${sourceY}, ${targetX - cpOffset} ${targetY}, ${targetX} ${targetY}`;
+```
+
+**Connection Styles by RelationType:**
+- 'quantum-version', 'derived-from', 'implements': solid cyan arrow
+- 'contrast-with', 'compares': dashed orange arrow
+- 'related', 'same-concept': dotted gray line
+- 'uses', 'algorithm': solid purple arrow
+- Default: solid slate line
+
+### Canvas Interactions
+
+| Action | Behavior |
+|--------|----------|
+| Drag palette item to canvas | Creates new node at drop position |
+| Drag existing node | Updates position, connections follow |
+| Click node (connection mode off) | Selects node, shows detail panel |
+| Click node (connection mode on) | If no source selected, set as source (highlight); if source selected, create connection to this target |
+| Double-click node | Opens quick edit (label, color) |
+| Delete key on selected node | Removes node and its connections |
+| Delete key on selected connection | Removes connection |
+| Scroll wheel | Zoom in/out (0.5x to 2x) |
+| Middle mouse drag | Pan canvas |
+| Click canvas background | Deselect all |
+
+### Performance Considerations
+
+1. **Virtualization:** If >50 nodes, implement windowing (only render visible nodes)
+2. **Connection recalculation:** Memoize path calculations, only recalc on node move
+3. **SVG layer:** Single SVG element with all connections, not one per connection
+4. **State updates:** Use React.memo for FormulaNode, bail out if position unchanged
+
+### File Structure
+
+```
+frontend/src/components/formula-studio/studio/
+├── index.ts                                  # barrel export
+├── StudioCanvas.tsx                          # main canvas container
+├── canvas-types.ts                           # canvas-specific types (NOTE: renamed from StudioCanvas.types.ts to fix Vite dev-server resolution)
+├── useCanvasReducer.ts                       # reducer + actions
+├── canvasUtils.ts                           # bezier math, collision detection
+├── CanvasToolbar.tsx                        # top toolbar
+├── CanvasArea.tsx                           # stub (unused, replaced by StudioCanvas inline)
+├── FormulaNode.tsx                          # draggable node card
+├── ConnectionLines.tsx                       # SVG overlay for connections
+├── ConnectionLine.tsx                       # single bezier connection
+├── NodePalette.tsx                          # left sidebar with draggable formulas
+└── NodePaletteItem.tsx                      # individual draggable item
+```
+
+### Dependencies Required
+
+- `@dnd-kit/core` - already installed
+- `@dnd-kit/utilities` - already installed (comes with core)
+- `uuid` - for generating node/connection IDs (or use `crypto.randomUUID()`)
+- `html-to-image` - already installed (for screenshot)
+
+### Key Implementation Notes
+
+1. **No additional npm packages** - all required libraries are already present
+2. **Reuse FormulaDisplay** for node content rendering
+3. **Reuse CATEGORY_COLORS** for node border colors
+4. **Connection anchor circles** rendered as part of FormulaNode, positioned at left/right edges
+5. **Canvas coordinates** in pixels, origin (0,0) at top-left of canvas area
+6. **Coordinate system:** No transform matrix initially; pan/zoom just changes CSS transform on canvas container
 
 ---
 
-## 7. Dependencies Added
+## 2.2 Studio Tab - Interaction Details
 
-| Package | Version | Purpose |
-|---------|---------|---------|
-| `katex` | 0.16.45 | LaTeX rendering |
-| `@types/katex` | 0.16.8 | TypeScript types |
-| `react-katex` | 3.1.0 | React wrapper (not used, direct import) |
-| `html-to-image` | 1.11.13 | Screenshot (replaces html2canvas) |
-| `@dnd-kit/core` | 6.3.1 | Drag-drop (for Studio) |
-| `@dnd-kit/sortable` | 10.0.0 | Drag-drop (for Studio) |
-| `fuse.js` | 7.3.0 | Fuzzy search |
+### Node Palette Behavior
 
----
+- Accordion categories matching Explore tab
+- Each formula shown as mini card (title + small KaTeX preview)
+- Drag to canvas to add node
+- Search filter at top to find formulas quickly
+- Visual feedback on drag: card becomes semi-transparent ghost
 
-## 8. Critic Review Findings (v1.1)
+### Connection Drawing Flow
 
-### Issues Fixed from Review:
-| Issue | Severity | Status |
-|-------|----------|--------|
-| CR_k gate matrix wrong (e^{iπ/2^k} → e^{2πi/2^k}) | CRITICAL | ✅ Fixed |
-| FormulaSearchBar.tsx dead code (218 lines, never imported) | HIGH | ✅ Deleted |
-| FormulaDisplay/Mini duplication | HIGH | ✅ Merged into single component |
-| Step-by-Step button dead (no onClick) | HIGH | ✅ Added alert placeholder |
-| Copy button no feedback | MEDIUM | ✅ Shows "Copied!" for 2s |
-| Screenshot button no loading state | MEDIUM | ✅ Added isCapturing state |
-| Chinese text in phase-gate-s description | LOW | ✅ Removed |
-| Russian text in eigenvalue-equation description | LOW | ✅ Removed |
-| "Kehidupan" → "Kehadaan" grammar | LOW | ✅ Fixed |
-| Trailing spaces in tags | LOW | ✅ Fixed |
-| Inconsistent categoryColors (2 places) | MEDIUM | ✅ Unified in colors.ts |
+1. User clicks "Connect" button in toolbar (or presses 'C')
+2. Toolbar shows "Click source node..." instruction
+3. Source node highlighted with pulsing border
+4. User clicks source node → border changes to "Click target..."
+5. User clicks target node → connection created with default "related" type
+6. User can right-click connection to change type/label
+7. Press Escape to cancel connection mode
 
-### Known Limitations (Deferred):
-- Stories Tab: TODO (Phase 3)
-- Studio Tab: TODO (Phase 2)
-- Step-by-Step computation: TODO (Phase 4)
-- Formula numbering/sectioning for academic references
-- Caption template for screenshot
+### Auto-Layout Algorithm
+
+Simple force-directed layout:
+- Nodes repel each other (inverse square)
+- Connections act as springs (attract connected nodes)
+- Run for 100 iterations on button click
+- Stop early if movement < 0.5px
+
+### Screenshot Export
+
+- Uses `html-to-image` to capture the CanvasArea DOM element
+- Includes all nodes and connections
+- White background for print clarity (not dark theme)
+- Downloads as `formula-canvas-{timestamp}.png`
 
 ---
 
-## 9. Next Steps (Priority Order)
+## 2.3 Component Specifications
 
-1. **Phase 2:** Implement Studio Tab (drag-drop canvas with formula nodes and connections)
-2. **Phase 3:** Implement Stories Tab (pre-built algorithm narratives)
-3. **Phase 4:** Implement Step-by-Step computation widgets (VQE energy, DFT sum)
-4. **Phase 5:** Polish + integration testing + screenshot verification
+### FormulaNode Props
+
+```typescript
+interface FormulaNodeProps {
+  node: CanvasNodeData;
+  formula: FormulaDefinition;
+  isSelected: boolean;
+  isConnectionSource: boolean;
+  onSelect: (nodeId: string) => void;
+  onDelete: (nodeId: string) => void;
+  onConnectionStart: (nodeId: string) => void;
+  onConnectionEnd: (nodeId: string) => void;
+  connectionMode: 'idle' | 'selecting-source' | 'selecting-target';
+}
+```
+
+### ConnectionLine Props
+
+```typescript
+interface ConnectionLineProps {
+  connection: CanvasConnection;
+  sourceNode: CanvasNodeData;
+  targetNode: CanvasNodeData;
+  isSelected: boolean;
+  onSelect: (connectionId: string) => void;
+  onDelete: (connectionId: string) => void;
+}
+```
+
+### CanvasState Default
+
+```typescript
+const INITIAL_CANVAS_STATE: CanvasState = {
+  nodes: [],
+  connections: [],
+  selectedNodeId: null,
+  selectedConnectionId: null,
+  panOffset: { x: 0, y: 0 },
+  zoom: 1.0,
+};
+```
+
+---
+
+## 2.4 Implementation Order
+
+1. **studio/canvas-types.ts** - Define canvas types extending existing types (renamed from StudioCanvas.types.ts)
+2. **studio/useCanvasReducer.ts** - Canvas state reducer with all actions
+3. **studio/canvasUtils.ts** - Bezier math, auto-layout
+4. **studio/FormulaNode.tsx** - Draggable node component
+5. **studio/ConnectionLine.tsx** - Single SVG bezier with arrowhead
+6. **studio/ConnectionLines.tsx** - SVG layer managing all connections
+7. **studio/NodePaletteItem.tsx** - Draggable palette item
+8. **studio/NodePalette.tsx** - Left sidebar with accordion categories
+9. **studio/CanvasToolbar.tsx** - Top toolbar with controls
+10. **studio/CanvasBackground.tsx** - Droppable canvas area
+11. **studio/CanvasArea.tsx** - Scrollable container with nodes + connections
+12. **studio/useCanvasPersistence.ts** - localStorage sync
+13. **studio/StudioCanvas.tsx** - Main container wiring all together
+14. **Update FormulaStudioPage.tsx** - Replace placeholder with StudioCanvas
+15. **Update studio/index.ts** - Export new components
+16. **Update SPEC** - Document Phase 2 completion

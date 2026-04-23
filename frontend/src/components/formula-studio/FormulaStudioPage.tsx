@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { LayoutGrid, FlaskConical, BookOpen } from 'lucide-react';
 import { FormulaExplorer } from './explore';
+import { StudioCanvas } from './studio';
 import { FormulaDetailPanel } from './shared/FormulaDetailPanel';
 import type { FormulaDefinition } from './types';
 import { FORMULA_REGISTRY } from './registry';
@@ -55,10 +56,10 @@ const FormulaStudioPage: React.FC = () => {
           </div>
         );
       case 'studio':
-        return renderPlaceholder(
-          FlaskConical,
-          'Coming Soon',
-          'The formula canvas workspace is under development. Soon you will be able to build and connect formulas visually.'
+        return (
+          <div className="h-full">
+            <StudioCanvas />
+          </div>
         );
       case 'stories':
         return renderPlaceholder(

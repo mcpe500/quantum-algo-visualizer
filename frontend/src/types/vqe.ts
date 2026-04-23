@@ -28,8 +28,17 @@ export interface ShotEvaluation {
   energy_error: number;
 }
 
+export interface VQEIterationSnapshot {
+  iteration: number;
+  energy: number;
+  parameters: number[];
+  circuit_image: string;
+}
+
 export interface VQEQuantumResult {
   method: string;
+  optimizer_name: string;
+  measurement_method: string;
   energy: number;
   iterations: number;
   circuit_depth: number;
@@ -41,6 +50,7 @@ export interface VQEQuantumResult {
   energy_error: number;
   accuracy: number;
   shot_evaluation: ShotEvaluation | null;
+  iteration_snapshots: VQEIterationSnapshot[];
 }
 
 export interface VQEComparison {
