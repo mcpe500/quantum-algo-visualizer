@@ -4,6 +4,16 @@
 
 Quantum algorithm visualization system for Tugas Akhir. Currently implements Deutsch-Jozsa (DJ), Quantum Fourier Transform (QFT), with VQE and QAOA planned. All algorithms follow data-driven architecture with dynamic case discovery from JSON datasets.
 
+## Academic Manuscript Guardrails (TA/Buku)
+
+When writing thesis/book chapters (not internal engineering docs):
+
+1. **Do not write filesystem paths** in narrative text (no `scripts/datasets/...`, no backend/frontend paths).
+2. **Do not cite technical filenames** as primary references in body text (no `*.json`, `*.py`, `*.md`, etc.).
+3. **Use case-code references** and academic descriptions instead (e.g., `DJ-01`, `QFT-02`, `VQE-01`, `QAOA-02`).
+4. File/path details belong to internal dev docs or appendices, not core manuscript narrative.
+5. **Exception:** Markdown image tags may keep paths for rendering (`![...](...)`), as long as path strings are not discussed as narrative content.
+
 ## Algorithm Status
 
 | Algorithm | Status | Classical Comparator |

@@ -1,9 +1,10 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { FormulaDefinition } from '../types';
 import { FormulaDisplay } from './FormulaDisplay';
 import { CATEGORY_COLORS_DETAIL } from './colors';
 import { toPng } from 'html-to-image';
 import { X, Camera, Copy, Play, BookOpen } from 'lucide-react';
+import { StepByStepPanel } from './StepByStepPanel';
 
 interface FormulaDetailPanelProps {
   formula: FormulaDefinition | null;
@@ -15,6 +16,11 @@ export function FormulaDetailPanel({ formula, onClose, onNavigate }: FormulaDeta
   const formulaRef = useRef<HTMLDivElement>(null);
   const [isCapturing, setIsCapturing] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [showStepper, setShowStepper] = useState(false);
+
+  useEffect(() => {
+    setShowStepper(false);
+  }, [formula?.id]);
 
   const handleScreenshot = async () => {
     if (!formulaRef.current || isCapturing) return;
@@ -154,7 +160,7 @@ export function FormulaDetailPanel({ formula, onClose, onNavigate }: FormulaDeta
           <div className="flex gap-2 pt-2">
             {formula.computation && (
               <button
-                onClick={() => alert('Step-by-step computation will be available in Phase 4.')}
+                onClick={() => setShowStepper(true)}
                 className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg bg-cyan-500/10 hover:bg-cyan-500/20 border border-cyan-500/30 text-cyan-400 text-sm font-medium transition-colors"
               >
                 <Play className="w-4 h-4" />
@@ -178,6 +184,13 @@ export function FormulaDetailPanel({ formula, onClose, onNavigate }: FormulaDeta
           </div>
         </div>
       </div>
+
+      {showStepper && formula.computation && (
+        <StepByStepPanel
+          formula={formula}
+          onClose={() => setShowStepper(false)}
+        />
+      )}
     </div>
   );
 }
