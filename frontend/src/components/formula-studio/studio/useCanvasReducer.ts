@@ -34,6 +34,21 @@ export function canvasReducer(state: CanvasState, action: CanvasAction): CanvasS
       };
     }
 
+    case 'UPDATE_NODE_CONTENT': {
+      return {
+        ...state,
+        nodes: state.nodes.map((node) =>
+          node.id === action.nodeId
+            ? {
+                ...node,
+                customTitle: action.customTitle ?? node.customTitle,
+                customLatex: action.customLatex ?? node.customLatex,
+              }
+            : node
+        ),
+      };
+    }
+
     case 'UPDATE_NODE_SIZE': {
       return {
         ...state,

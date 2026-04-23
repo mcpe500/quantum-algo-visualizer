@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { LayoutGrid, FlaskConical, BookOpen } from 'lucide-react';
 import { FormulaExplorer } from './explore';
 import { StudioCanvas } from './studio';
+import { StoriesTab } from './stories';
 import { FormulaDetailPanel } from './shared/FormulaDetailPanel';
 import type { FormulaDefinition } from './types';
 import { FORMULA_REGISTRY } from './registry';
@@ -21,16 +22,6 @@ const FormulaStudioPage: React.FC = () => {
   const handleSelectFormula = (formula: FormulaDefinition) => {
     setSelectedFormula(formula);
   };
-
-  const renderPlaceholder = (IconComponent: React.ComponentType<{className?: string}>, title: string, description: string) => (
-    <div className="h-full flex flex-col items-center justify-center text-slate-400">
-      <div className="mb-6 p-6 rounded-full bg-slate-800/50 border border-slate-700/50">
-        <IconComponent className="w-12 h-12 text-slate-500" />
-      </div>
-      <h3 className="text-xl font-semibold text-slate-300 mb-2">{title}</h3>
-      <p className="text-sm text-slate-500 max-w-md text-center">{description}</p>
-    </div>
-  );
 
   const renderContent = () => {
     switch (activeTab) {
@@ -62,10 +53,13 @@ const FormulaStudioPage: React.FC = () => {
           </div>
         );
       case 'stories':
-        return renderPlaceholder(
-          BookOpen,
-          'Coming Soon',
-          'Algorithm narratives and step-by-step explanations are being prepared. This section will guide you through quantum algorithms interactively.'
+        return (
+          <StoriesTab
+            onSelectFormula={(formula) => {
+              setSelectedFormula(formula);
+              setActiveTab('explore');
+            }}
+          />
         );
       default:
         return null;

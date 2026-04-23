@@ -444,6 +444,24 @@ const BASE_FORMULA_REGISTRY: FormulaDefinition[] = [
       { targetId: 'crk-gate-matrix', type: 'used-in', label: 'jumlah' }
     ]
   },
+  {
+    id: 'qft-circuit-construction',
+    latex: 'QFT_n = H_1 CR_2 CR_3 \cdots SWAP',
+    title: 'QFT Circuit Construction',
+    category: 'qft',
+    tags: ['qft', 'circuit', 'construction', 'swap', 'crk'],
+    chapter: ['3'],
+    description: 'Sirkuit QFT dibangun dari rangkaian gerbang Hadamard, controlled rotation CR_k, dan SWAP untuk membalik urutan qubit output.',
+    variables: [
+      { symbol: 'H_i', name: 'Hadamard Layer', description: 'Hadamard pada qubit ke-i' },
+      { symbol: 'CR_k', name: 'Controlled Rotation', description: 'Rotasi fase terkontrol orde-k' },
+    ],
+    relatedFormulas: [
+      { targetId: 'h-gate-matrix', type: 'uses', label: 'menggunakan' },
+      { targetId: 'crk-gate-matrix', type: 'uses', label: 'komponen rotasi' },
+      { targetId: 'swap-gate-matrix', type: 'uses', label: 'reordering qubit' },
+    ],
+  },
 
   // ============================================================================
   // VQE
@@ -642,6 +660,24 @@ const BASE_FORMULA_REGISTRY: FormulaDefinition[] = [
     ]
   },
   {
+    id: 'complexity-quantum',
+    latex: 'O(\\mathrm{poly}(n))',
+    title: 'Quantum Complexity (General)',
+    category: 'complexity',
+    tags: ['quantum', 'complexity', 'polynomial', 'speedup'],
+    chapter: ['3', '4'],
+    description: 'Banyak algoritma kuantum penting menunjukkan kompleksitas polinomial terhadap ukuran input, memberikan percepatan signifikan terhadap pendekatan klasik eksponensial pada kasus tertentu.',
+    variables: [
+      { symbol: 'n', name: 'Input Size', description: 'Ukuran masalah (jumlah qubit/variabel)' },
+      { symbol: 'poly(n)', name: 'Polynomial Bound', description: 'Batas kompleksitas polinomial' },
+    ],
+    relatedFormulas: [
+      { targetId: 'complexity-classical', type: 'contrast-with', label: 'dibandingkan dengan' },
+      { targetId: 'qft-gate-complexity', type: 'implements', label: 'contoh' },
+      { targetId: 'dj-classical-bound', type: 'related', label: 'motivasi speedup' },
+    ],
+  },
+  {
     id: 'fft-complexity',
     latex: 'O(N \\log N)',
     title: 'FFT Complexity',
@@ -801,3 +837,35 @@ export const FORMULA_REGISTRY: FormulaDefinition[] = BASE_FORMULA_REGISTRY.map((
   ...formula,
   computation: FORMULA_COMPUTATION_MAP[formula.id] ?? formula.computation,
 }));
+
+export interface FormulaRegistryIssue {
+  type: 'missing-related-target';
+  sourceId: string;
+  targetId: string;
+}
+
+export const FORMULA_REGISTRY_ISSUES: FormulaRegistryIssue[] = (() => {
+  const ids = new Set(FORMULA_REGISTRY.map((formula) => formula.id));
+  const issues: FormulaRegistryIssue[] = [];
+
+  for (const formula of FORMULA_REGISTRY) {
+    for (const rel of formula.relatedFormulas) {
+      if (!ids.has(rel.targetId)) {
+        issues.push({
+          type: 'missing-related-target',
+          sourceId: formula.id,
+          targetId: rel.targetId,
+        });
+      }
+    }
+  }
+
+  return issues;
+})();
+
+if (typeof import.meta !== 'undefined' && import.meta.env?.DEV && FORMULA_REGISTRY_ISSUES.length > 0) {
+  const summary = FORMULA_REGISTRY_ISSUES
+    .map((issue) => `${issue.sourceId} -> ${issue.targetId}`)
+    .join(', ');
+  console.warn(`[FormulaRegistry] Found ${FORMULA_REGISTRY_ISSUES.length} integrity issues: ${summary}`);
+}

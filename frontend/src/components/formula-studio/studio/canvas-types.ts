@@ -6,6 +6,8 @@ export interface CanvasNodeData {
   position: { x: number; y: number };
   width: number;
   height: number;
+  customTitle?: string;
+  customLatex?: string;
 }
 
 export interface CanvasConnection {
@@ -30,6 +32,7 @@ export type ConnectionMode = 'idle' | 'selecting-source' | 'selecting-target';
 export type CanvasAction =
   | { type: 'ADD_NODE'; formulaId: string; position: { x: number; y: number } }
   | { type: 'MOVE_NODE'; nodeId: string; position: { x: number; y: number } }
+  | { type: 'UPDATE_NODE_CONTENT'; nodeId: string; customTitle?: string; customLatex?: string }
   | { type: 'UPDATE_NODE_SIZE'; nodeId: string; width: number; height: number }
   | { type: 'DELETE_NODE'; nodeId: string }
   | { type: 'SELECT_NODE'; nodeId: string | null }
