@@ -84,14 +84,14 @@ def run_vqe_internal(hamiltonian_op, n_qubits, ansatz_type, n_layers, max_iter=1
     n_params = n_qubits * n_layers
     qc, params = build_ansatz_no_measure(n_qubits, ansatz_type, n_layers)
 
-    energy_history = []
+    history = []
 
     def energy_fn(values):
         param_dict = {params[i]: float(values[i]) for i in range(n_params)}
         qc_bound = qc.assign_parameters(param_dict)
         state = Statevector(qc_bound)
         energy = float(state.expectation_value(hamiltonian_op).real)
-        energy_history.append(energy)
+        history.append({'params': values.copy().tolist(), 'energy': energy})
         return energy
 
     np.random.seed(42)
@@ -108,12 +108,35 @@ def run_vqe_internal(hamiltonian_op, n_qubits, ansatz_type, n_layers, max_iter=1
 
     return {
         'energy': float(result.fun),
-        'convergence_history': [float(v) for v in energy_history[:200]],
+        'history': history,
+        'convergence_history': [float(v['energy']) for v in history[:200]],
         'optimal_parameters': [float(v) for v in result.x],
         'iterations': int(result.nfev),
         'circuit_depth': int(qc_final.depth()),
         'gate_count': int(len(qc_final.data)),
     }
+
+
+def _select_checkpoints(history, n=5):
+    if not history:
+        return []
+    m = len(history)
+    if m <= n:
+        return list(range(m))
+    return [min(m - 1, int(i * (m - 1) / (n - 1))) for i in range(n)]
+
+
+def _generate_snapshot_circuit_image(n_qubits, ansatz_type, n_layers, theta_values):
+    qc, params = build_ansatz_circuit(n_qubits, ansatz_type, n_layers)
+    if len(theta_values) != len(params):
+        return None
+    bound = qc.assign_parameters({params[i]: float(theta_values[i]) for i in range(len(params))})
+    fig = circuit_drawer(bound, output='mpl')
+    try:
+        return figure_to_base64(fig)
+    finally:
+        import matplotlib.pyplot as plt
+        plt.close(fig)
 
 
 def build_ansatz_trace(n_qubits, ansatz_type, n_layers):
@@ -223,6 +246,24 @@ def run_vqe_payload(case_id, shots):
     accuracy = max(0.0, min(100.0, (1.0 - energy_error / denom) * 100.0))
     n_params = n_qubits * n_layers
 
+    snapshots = []
+    checkpoints = _select_checkpoints(vqe_result.get('history', []))
+    for idx in checkpoints:
+        try:
+            entry = vqe_result['history'][idx]
+            img_b64 = _generate_snapshot_circuit_image(
+                n_qubits, ansatz_type, n_layers, entry['params']
+            )
+            if img_b64:
+                snapshots.append({
+                    'iteration': idx,
+                    'energy': entry['energy'],
+                    'parameters': [float(v) for v in entry['params']],
+                    'circuit_image': img_b64,
+                })
+        except Exception:
+            continue
+
     shot_eval = None
     try:
         qc_eval, params_eval = build_ansatz_no_measure(n_qubits, ansatz_type, n_layers)
@@ -264,6 +305,8 @@ def run_vqe_payload(case_id, shots):
         },
         'quantum': {
             'method': 'VQE (Variational Quantum Eigensolver)',
+            'optimizer_name': 'COBYLA',
+            'measurement_method': 'Statevector (exact)',
             'energy': vqe_energy,
             'iterations': int(vqe_result['iterations']),
             'circuit_depth': int(vqe_result['circuit_depth']),
@@ -275,6 +318,7 @@ def run_vqe_payload(case_id, shots):
             'energy_error': float(energy_error),
             'accuracy': round(float(accuracy), 4),
             'shot_evaluation': shot_eval,
+            'iteration_snapshots': snapshots,
         },
         'comparison': {
             'fci_energy': fci_energy,

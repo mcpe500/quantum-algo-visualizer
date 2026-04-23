@@ -1,1 +1,12 @@
-// Studio module index
+export { StudioCanvas } from './StudioCanvas';
+export { CanvasToolbar } from './CanvasToolbar';
+export { NodePalette } from './NodePalette';
+export { NodePaletteItem } from './NodePaletteItem';
+export { FormulaNode } from './FormulaNode';
+export { ConnectionLines } from './ConnectionLines';
+export { ConnectionLine } from './ConnectionLine';
+export { ConnectionInspector } from './ConnectionInspector';
+export { NodeInspector } from './NodeInspector';
+export * from './canvas-types';
+export * from './useCanvasReducer';
+export * from './canvasUtils';
