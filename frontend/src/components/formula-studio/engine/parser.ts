@@ -4,8 +4,11 @@ import { tokenizeExpression, type Token } from './tokenizer';
 
 class Parser {
   private index = 0;
+  private readonly tokens: Token[];
 
-  constructor(private readonly tokens: Token[]) {}
+  constructor(tokens: Token[]) {
+    this.tokens = tokens;
+  }
 
   private current(): Token {
     return this.tokens[this.index] ?? this.tokens[this.tokens.length - 1];
@@ -45,41 +48,43 @@ class Parser {
   }
 
   private parseAdditive(): EngineResult<ExprNode> {
-    let leftResult = this.parseMultiplicative();
-    if (!leftResult.ok) return leftResult;
+    const first = this.parseMultiplicative();
+    if (!first.ok) return first;
+    let left = first.value;
 
     while (this.match('operator', '+') || this.match('operator', '-')) {
       const operator = this.consume().value as '+' | '-';
       const rightResult = this.parseMultiplicative();
       if (!rightResult.ok) return rightResult;
-      leftResult = ok({
+      left = {
         kind: 'BinaryExpression',
         operator,
-        left: leftResult.value,
+        left,
         right: rightResult.value,
-      });
+      };
     }
 
-    return leftResult;
+    return ok(left);
   }
 
   private parseMultiplicative(): EngineResult<ExprNode> {
-    let leftResult = this.parsePower();
-    if (!leftResult.ok) return leftResult;
+    const first = this.parsePower();
+    if (!first.ok) return first;
+    let left = first.value;
 
     while (this.match('operator', '*') || this.match('operator', '/')) {
       const operator = this.consume().value as '*' | '/';
       const rightResult = this.parsePower();
       if (!rightResult.ok) return rightResult;
-      leftResult = ok({
+      left = {
         kind: 'BinaryExpression',
         operator,
-        left: leftResult.value,
+        left,
         right: rightResult.value,
-      });
+      };
     }
 
-    return leftResult;
+    return ok(left);
   }
 
   private parsePower(): EngineResult<ExprNode> {

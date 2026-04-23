@@ -207,6 +207,18 @@ export const StudioCanvas: React.FC = () => {
     []
   );
 
+  const handleNodeUpdate = useCallback(
+    (nodeId: string, patch: { customTitle?: string; customLatex?: string }) => {
+      dispatch({
+        type: 'UPDATE_NODE_CONTENT',
+        nodeId,
+        customTitle: patch.customTitle,
+        customLatex: patch.customLatex,
+      });
+    },
+    []
+  );
+
   const handleConnectionStart = useCallback(
     (nodeId: string) => {
       if (connectionMode === 'idle') {
@@ -491,6 +503,7 @@ export const StudioCanvas: React.FC = () => {
             <NodeInspector
               node={selectedNode}
               formula={selectedNodeFormula}
+              onUpdate={handleNodeUpdate}
               onDelete={handleNodeDelete}
               onClose={() => dispatch({ type: 'SELECT_NODE', nodeId: null })}
             />

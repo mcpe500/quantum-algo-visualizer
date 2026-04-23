@@ -44,6 +44,8 @@ export const FormulaNode: React.FC<FormulaNodeProps> = ({
   const [isHovered, setIsHovered] = useState(false);
   const categoryColorClass = CATEGORY_COLORS[formula.category] || 'border-slate-500';
   const categoryBadgeClass = CATEGORY_BADGE_CLASSES[formula.category] || 'bg-slate-500/20 text-slate-300';
+  const displayTitle = node.customTitle || formula.title;
+  const displayLatex = node.customLatex || formula.latex;
 
   const handleClick = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -92,7 +94,7 @@ export const FormulaNode: React.FC<FormulaNodeProps> = ({
       <div className="p-3 border-b border-slate-700/50">
         <div className="flex items-start justify-between gap-2">
           <h4 className="text-sm font-medium text-slate-100 leading-tight flex-1">
-            {formula.title}
+            {displayTitle}
           </h4>
           {(isHovered || isSelected) && (
             <button
@@ -114,7 +116,7 @@ export const FormulaNode: React.FC<FormulaNodeProps> = ({
       <div className="p-3">
         <div className="flex justify-center">
           <FormulaDisplay
-            latex={formula.latex}
+            latex={displayLatex}
             size="mini"
             fontSize="0.85rem"
             color="#94a3b8"

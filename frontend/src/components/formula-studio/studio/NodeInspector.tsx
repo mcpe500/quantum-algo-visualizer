@@ -5,6 +5,7 @@ import type { FormulaDefinition } from '../types';
 interface NodeInspectorProps {
   node: CanvasNodeData | null;
   formula: FormulaDefinition | null;
+  onUpdate: (nodeId: string, patch: { customTitle?: string; customLatex?: string }) => void;
   onDelete: (nodeId: string) => void;
   onClose: () => void;
 }
@@ -12,6 +13,7 @@ interface NodeInspectorProps {
 export const NodeInspector: React.FC<NodeInspectorProps> = ({
   node,
   formula,
+  onUpdate,
   onDelete,
   onClose,
 }) => {
@@ -32,9 +34,28 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
 
       <div className="space-y-1">
         <div className="text-xs text-slate-500">Formula</div>
-        <div className="text-sm text-slate-100 font-medium">{formula.title}</div>
+        <div className="text-sm text-slate-100 font-medium">{node.customTitle || formula.title}</div>
         <div className="text-xs text-slate-400">{formula.id}</div>
       </div>
+
+      <label className="space-y-1">
+        <span className="text-xs text-slate-400">Custom Title</span>
+        <input
+          type="text"
+          value={node.customTitle ?? formula.title}
+          onChange={(e) => onUpdate(node.id, { customTitle: e.target.value })}
+          className="w-full px-2 py-1.5 bg-slate-800 border border-slate-700 rounded text-sm text-slate-100"
+        />
+      </label>
+
+      <label className="space-y-1">
+        <span className="text-xs text-slate-400">Custom LaTeX</span>
+        <textarea
+          value={node.customLatex ?? formula.latex}
+          onChange={(e) => onUpdate(node.id, { customLatex: e.target.value })}
+          className="w-full min-h-24 px-2 py-1.5 bg-slate-800 border border-slate-700 rounded text-xs font-mono text-slate-100"
+        />
+      </label>
 
       <div className="space-y-1 text-xs text-slate-400">
         <div>
