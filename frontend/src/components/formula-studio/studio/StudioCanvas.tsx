@@ -6,6 +6,7 @@ import { FORMULA_REGISTRY } from '../registry';
 import { canvasReducer } from './useCanvasReducer';
 import { calculateAutoLayout, getCanvasBounds } from './canvasUtils';
 import { CanvasToolbar } from './CanvasToolbar';
+import { CanvasStatusBar } from './CanvasStatusBar';
 import { NodePalette } from './NodePalette';
 import { FormulaNode } from './FormulaNode';
 import { InputNode } from './InputNode';
@@ -114,6 +115,7 @@ export const StudioCanvas: React.FC = () => {
   const [connectionMode, setConnectionMode] = React.useState<ConnectionMode>('idle');
   const [connectionSourceId, setConnectionSourceId] = React.useState<string | null>(null);
   const [isCapturing, setIsCapturing] = React.useState(false);
+  const [paletteCollapsed, setPaletteCollapsed] = React.useState(false);
   const canvasRef = useRef<HTMLDivElement>(null);
   const dropPointRef = useRef<{ x: number; y: number } | null>(null);
 
@@ -261,11 +263,15 @@ export const StudioCanvas: React.FC = () => {
   }, [connectionMode, connectionSourceId]);
 
   const handleConnectionEnd = useCallback((nodeId: string) => {
-    if (connectionMode === 'selecting-target' && connectionSourceId && connectionSourceId !== nodeId) {
+    const success = connectionMode === 'selecting-target' && connectionSourceId && connectionSourceId !== nodeId;
+
+    if (success) {
       dispatch({ type: 'ADD_CONNECTION', fromId: connectionSourceId, toId: nodeId, relationType: 'feeds-into', label: '→' });
+      // Reset to selecting-source for chaining connections
+      setConnectionMode('selecting-source');
+      setConnectionSourceId(null);
     }
-    setConnectionMode('selecting-source');
-    setConnectionSourceId(null);
+    // If failed (same node clicked, etc) - stay in selecting-target, don't reset
   }, [connectionMode, connectionSourceId]);
 
   const handleConnectionSelect = useCallback((connectionId: string) => {
@@ -366,6 +372,12 @@ export const StudioCanvas: React.FC = () => {
 
   /* ── render ── */
 
+  const selectedItemName = selectedConnection
+    ? 'Connection'
+    : selectedNode
+    ? (selectedNodeFormula?.title ?? selectedNode.kind)
+    : null;
+
   return (
     <DndContext sensors={sensors} onDragEnd={handleDragEnd}>
       <div className="flex flex-col h-full">
@@ -384,7 +396,11 @@ export const StudioCanvas: React.FC = () => {
         />
 
         <div className="flex flex-1 overflow-hidden">
-          <NodePalette formulas={FORMULA_REGISTRY} />
+          <NodePalette
+            formulas={FORMULA_REGISTRY}
+            collapsed={paletteCollapsed}
+            onToggleCollapse={() => setPaletteCollapsed((p) => !p)}
+          />
 
           <DroppableCanvas onDrop={handleCanvasDrop}>
             <div
@@ -469,12 +485,12 @@ export const StudioCanvas: React.FC = () => {
 
               {state.nodes.length === 0 && (
                 <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                  <div className="text-center space-y-2">
-                    <div className="text-slate-500 text-sm">Canvas kosong</div>
-                    <div className="text-slate-600 text-xs leading-relaxed">
-                      Klik <span className="text-teal-400 font-medium">Input</span> untuk mendefinisikan variabel<br/>
-                      Klik <span className="text-amber-400 font-medium">Ekspresi</span> untuk menulis formula<br/>
-                      atau drag formula dari panel kiri
+                  <div className="text-center space-y-3">
+                    <div className="text-slate-500 text-sm font-medium">Canvas kosong</div>
+                    <div className="text-slate-600 text-xs leading-relaxed space-y-1">
+                      <p>Klik <span className="text-teal-400 font-medium">Input</span> untuk mendefinisikan variabel</p>
+                      <p>Klik <span className="text-amber-400 font-medium">Ekspresi</span> untuk menulis formula</p>
+                      <p>atau drag formula dari panel kiri</p>
                     </div>
                   </div>
                 </div>
@@ -482,32 +498,59 @@ export const StudioCanvas: React.FC = () => {
             </div>
           </DroppableCanvas>
 
-          {selectedConnection && (
-            <ConnectionInspector
-              connection={selectedConnection}
-              onUpdate={handleConnectionUpdate}
-              onDelete={handleConnectionDelete}
-              onClose={() => dispatch({ type: 'SELECT_CONNECTION', connectionId: null })}
-            />
-          )}
-
-          {!selectedConnection && selectedNode && (
-            <NodeInspector
-              node={selectedNode}
-              formula={selectedNodeFormula}
-              computedResult={graphResults.get(selectedNode.id)}
-              varScope={varScope}
-              onUpdate={handleNodeUpdate}
-              onUpdateInputVar={handleUpdateInputVar}
-              onUpdateExpression={handleUpdateExpression}
-              onDelete={handleNodeDelete}
-              onClose={() => dispatch({ type: 'SELECT_NODE', nodeId: null })}
-            />
-          )}
+          {/* Right inspector — always present to prevent layout shift */}
+          <div className="shrink-0">
+            {selectedConnection ? (
+              <ConnectionInspector
+                connection={selectedConnection}
+                onUpdate={handleConnectionUpdate}
+                onDelete={handleConnectionDelete}
+                onClose={() => dispatch({ type: 'SELECT_CONNECTION', connectionId: null })}
+              />
+            ) : selectedNode ? (
+              <NodeInspector
+                node={selectedNode}
+                formula={selectedNodeFormula}
+                computedResult={graphResults.get(selectedNode.id)}
+                varScope={varScope}
+                onUpdate={handleNodeUpdate}
+                onUpdateInputVar={handleUpdateInputVar}
+                onUpdateExpression={handleUpdateExpression}
+                onDelete={handleNodeDelete}
+                onClose={() => dispatch({ type: 'SELECT_NODE', nodeId: null })}
+              />
+            ) : (
+              <aside className="w-96 shrink-0 border-l border-slate-700/50 bg-slate-900/80 flex flex-col gap-0 overflow-y-auto text-slate-100">
+                <div className="flex-1 flex flex-col items-center justify-center p-6 text-center space-y-3">
+                  <div className="w-12 h-12 rounded-xl bg-slate-800/60 border border-slate-700/50 flex items-center justify-center">
+                    <svg className="w-6 h-6 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 15l-2 5L9 9l11 4-5 2zm0 0l5 5M7.188 2.239l.777 2.897M5.136 7.965l-2.898-.777M13.95 4.05l-2.122 2.122m-5.657 5.656l-2.12 2.122" />
+                    </svg>
+                  </div>
+                  <div>
+                    <div className="text-sm font-medium text-slate-300">Tidak ada seleksi</div>
+                    <p className="text-xs text-slate-500 mt-1 leading-relaxed">
+                      Pilih node atau koneksi di canvas untuk melihat detail dan properti.
+                    </p>
+                  </div>
+                </div>
+              </aside>
+            )}
+          </div>
         </div>
 
+        <CanvasStatusBar
+          zoom={state.zoom}
+          nodeCount={state.nodes.length}
+          connectionCount={state.connections.length}
+          selectedItem={selectedItemName}
+          onZoomIn={handleZoomIn}
+          onZoomOut={handleZoomOut}
+          onFitView={handleFitView}
+        />
+
         {connectionMode !== 'idle' && (
-          <div className="absolute bottom-4 left-1/2 -translate-x-1/2 px-4 py-2 bg-cyan-500/20 border border-cyan-500/30 rounded-lg text-xs text-cyan-300 pointer-events-none">
+          <div className="absolute bottom-10 left-1/2 -translate-x-1/2 px-4 py-2 bg-cyan-500/20 border border-cyan-500/30 rounded-lg text-xs text-cyan-300 pointer-events-none">
             {connectionMode === 'selecting-source' ? 'Klik node sumber koneksi' : 'Klik node target koneksi'}
           </div>
         )}

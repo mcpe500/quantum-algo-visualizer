@@ -67,4 +67,48 @@ export const FORMULA_COMPUTATION_MAP: Record<string, ComputationConfig> = {
       { kind: 'evaluate', explanation: 'Hitung konstanta normalisasi C.' },
     ],
   }),
+
+  'oracle-unitary': createSymbolicComputationConfig({
+    requiresParams: ['x', 'y', 'f'],
+    initialExpression: 'mod(x+y*f, 2)',
+    stepsPlan: [
+      { kind: 'parse', explanation: 'Operasi oracle unitary: |x⟩|y⟩ → |x⟩|y ⊕ f(x)⟩.' },
+      { kind: 'substitute', explanation: 'Substitusi nilai x (input), y (ancilla), dan f(x) (output oracle).' },
+      { kind: 'simplify', explanation: 'Sederhanakan ekspresi modulo 2.' },
+      { kind: 'evaluate', explanation: 'Hitung output ancilla setelah operasi oracle.' },
+    ],
+  }),
+
+  'dj-phase-kickback': createSymbolicComputationConfig({
+    requiresParams: ['f'],
+    initialExpression: '2*f - 1',
+    stepsPlan: [
+      { kind: 'parse', explanation: 'Phase kickback: untuk f(x)=0 menghasilkan fase +1, f(x)=1 menghasilkan fase -1.' },
+      { kind: 'substitute', explanation: 'Substitusi nilai f(x) (output oracle, 0 atau 1).' },
+      { kind: 'simplify', explanation: 'Sederhanakan ekspresi 2f-1.' },
+      { kind: 'evaluate', explanation: 'Hitung eigenvalue fase: +1 atau -1.' },
+    ],
+  }),
+
+  'plus-minus-states': createSymbolicComputationConfig({
+    requiresParams: ['t'],
+    initialExpression: '1/sqrt(2)',
+    stepsPlan: [
+      { kind: 'parse', explanation: 'Amplitudo keadaan |+⟩ dan |−⟩ sama yaitu 1/√2.' },
+      { kind: 'substitute', explanation: 'Parameter t tidak mempengaruhi nilai amplitudo (0 atau 1 untuk jenis keadaan).' },
+      { kind: 'simplify', explanation: 'Nilai 1/√2 adalah konstanta normalisasi.' },
+      { kind: 'evaluate', explanation: 'Hitung nilai amplitudo: 0.7071...' },
+    ],
+  }),
+
+  'qft-twiddle-factor': createSymbolicComputationConfig({
+    requiresParams: ['j', 'k', 'n'],
+    initialExpression: 'exp(-6.28318530718*j*k / 2^n)',
+    stepsPlan: [
+      { kind: 'parse', explanation: 'Twiddle factor: ω^jk = e^(-2πijk/N) dengan N=2^n.' },
+      { kind: 'substitute', explanation: 'Substitusi indeks j, k, dan jumlah qubit n.' },
+      { kind: 'simplify', explanation: 'Hitung eksponen dengan 2π ≈ 6.28318530718.' },
+      { kind: 'evaluate', explanation: 'Hitung nilai fase twiddle factor.' },
+    ],
+  }),
 };

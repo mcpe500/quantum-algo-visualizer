@@ -12,6 +12,8 @@
 
 import type { CanvasNodeData } from './canvas-types';
 import { parseExpression, substituteSymbols, simplifyExpression, evaluateExpression, toInfix, toLatex } from '../engine';
+import { FORMULA_REGISTRY } from '../registry';
+import { FORMULA_COMPUTATION_MAP } from '../computation';
 
 export interface NodeResult {
   value?: number;
@@ -116,9 +118,44 @@ export function computeGraph(nodes: CanvasNodeData[]): Map<string, NodeResult> {
       }
 
     } else if (node.kind === 'formula') {
-      // Will be handled by the StudioCanvas using formula.computation directly
-      // We still provide the varScope result here for formula nodes that have computation configs
-      results.set(node.id, { value: undefined });
+      // Look up formula from registry
+      const formula = FORMULA_REGISTRY.find(f => f.id === node.formulaId);
+      const computation = formula?.computation ?? FORMULA_COMPUTATION_MAP[node.formulaId];
+
+      if (computation && computation.requiresParams.length > 0) {
+        // Check if all required params available in varScope
+        const missingParams = computation.requiresParams.filter(p => !(p in varScope));
+
+        if (missingParams.length === 0) {
+          try {
+            const paramValues: Record<string, number> = {};
+            for (const p of computation.requiresParams) {
+              paramValues[p] = varScope[p];
+            }
+            const steps = computation.steps(paramValues);
+            const finalStep = steps[steps.length - 1];
+
+            results.set(node.id, {
+              value: finalStep.result !== undefined ? Number(finalStep.result) : undefined,
+              valueDisplay: finalStep.result?.toString(),
+              simplified: formula?.latex ?? '',
+            });
+          } catch (err) {
+            results.set(node.id, { error: 'Kesalahan komputasi' });
+          }
+        } else {
+          results.set(node.id, {
+            error: `Parameter diperlukan: ${missingParams.join(', ')}`,
+            simplified: formula?.latex,
+          });
+        }
+      } else {
+        // No computation config - formula just shows LaTeX
+        results.set(node.id, {
+          value: undefined,
+          simplified: formula?.latex,
+        });
+      }
     }
   }
 

@@ -93,7 +93,7 @@ function InputInspector({
   const otherVars = Object.entries(varScope).filter(([k]) => k !== (node.varName ?? 'x'));
 
   return (
-    <aside className="w-72 border-l border-slate-700/50 bg-slate-900/80 flex flex-col gap-0 overflow-y-auto text-slate-100">
+    <aside className="w-96 shrink-0 border-l border-slate-700/50 bg-slate-900/80 flex flex-col gap-0 overflow-y-auto text-slate-100">
       <div className="sticky top-0 z-10 bg-slate-900/95 backdrop-blur-sm border-b border-teal-700/40 px-3 py-2.5 flex items-center justify-between">
         <div className="flex items-center gap-2">
           <Variable className="w-4 h-4 text-teal-400" />
@@ -208,7 +208,7 @@ function ExpressionInspector({
   const hasResult = computedResult?.value !== undefined && !computedResult?.error;
 
   return (
-    <aside className="w-72 border-l border-slate-700/50 bg-slate-900/80 flex flex-col gap-0 overflow-y-auto text-slate-100">
+    <aside className="w-96 shrink-0 border-l border-slate-700/50 bg-slate-900/80 flex flex-col gap-0 overflow-y-auto text-slate-100">
       <div className="sticky top-0 z-10 bg-slate-900/95 backdrop-blur-sm border-b border-amber-700/40 px-3 py-2.5 flex items-center justify-between">
         <div className="flex items-center gap-2">
           <FlaskRound className="w-4 h-4 text-amber-400" />
@@ -426,7 +426,7 @@ function FormulaInspector({
           <span className={`text-xs font-semibold px-2 py-0.5 rounded-full bg-${accent}-500/20 text-${accent}-400`}>{formula.category.toUpperCase()}</span>
           <span className="text-[10px] font-mono text-slate-500">{formula.id}</span>
         </div>
-        <div className="bg-slate-950/60 border border-slate-800/60 rounded-lg p-2.5 text-center min-h-10 flex items-center justify-center">
+        <div className="bg-slate-950/60 border border-slate-800/60 rounded-lg p-2.5 min-h-10 flex items-center overflow-x-auto">
           <FormulaDisplay latex={node.customLatex ?? formula.latex} displayMode fontSize="1rem" />
         </div>
         <p className="text-xs text-slate-400 leading-relaxed">{formula.description}</p>
@@ -505,7 +505,7 @@ function FormulaInspector({
                   </div>
                 )}
                 {finalStep.latex && (
-                  <div className="bg-slate-950/60 border border-slate-800/60 rounded-lg p-2 text-center">
+                  <div className="bg-slate-950/60 border border-slate-800/60 rounded-lg p-2 overflow-x-auto">
                     <FormulaDisplay latex={finalStep.latex} displayMode fontSize="0.95rem" />
                   </div>
                 )}
@@ -579,7 +579,7 @@ function FormulaInspector({
             </label>
             <div>
               <div className="text-[10px] text-slate-500 uppercase tracking-wider mb-1">Pratinjau</div>
-              <div className="bg-slate-950/60 border border-slate-800/60 rounded-lg p-2 min-h-10 flex items-center justify-center">
+              <div className="bg-slate-950/60 border border-slate-800/60 rounded-lg p-2 min-h-10 flex items-center overflow-x-auto">
                 {previewLatex.trim() ? <FormulaDisplay latex={previewLatex} displayMode fontSize="0.95rem" /> : <span className="text-slate-600 text-xs italic">Tidak ada LaTeX</span>}
               </div>
             </div>

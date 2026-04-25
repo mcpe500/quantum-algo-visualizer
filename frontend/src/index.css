@@ -8,8 +8,28 @@
   * {
     @apply border-slate-800;
   }
-  
+
   body {
     @apply bg-[#FAFAFA] text-gray-900 font-sans antialiased;
+  }
+}
+
+@layer components {
+  .formula-display {
+    max-width: 100%;
+    min-width: 0;
+  }
+
+  .formula-display--block {
+    overflow-x: auto;
+    overflow-y: hidden;
+  }
+
+  .formula-display .katex-display {
+    margin: 0 !important;
+  }
+
+  .formula-display .katex {
+    max-width: none;
   }
 }

@@ -47,11 +47,7 @@ const FormulaStudioPage: React.FC = () => {
           </div>
         );
       case 'studio':
-        return (
-          <div className="h-full">
-            <StudioCanvas />
-          </div>
-        );
+        return <StudioCanvas />;
       case 'stories':
         return (
           <StoriesTab
@@ -66,9 +62,11 @@ const FormulaStudioPage: React.FC = () => {
     }
   };
 
+  const isStudio = activeTab === 'studio';
+
   return (
     <div className="min-h-screen bg-slate-900 text-white">
-      <div className="max-w-[1600px] mx-auto">
+      <div className={isStudio ? '' : 'max-w-[1600px] mx-auto'}>
         <header className="border-b border-slate-800/50">
           <div className="flex items-center justify-between px-6 py-4">
             <div className="flex items-center gap-3">
@@ -116,11 +114,17 @@ const FormulaStudioPage: React.FC = () => {
           </div>
         </header>
 
-        <main className="p-6">
-          <div className="bg-slate-800/30 border border-slate-800/50 rounded-xl overflow-hidden" style={{ height: 'calc(100vh - 180px)' }}>
+        {isStudio ? (
+          <main className="h-[calc(100vh-72px)]">
             {renderContent()}
-          </div>
-        </main>
+          </main>
+        ) : (
+          <main className="p-6">
+            <div className="bg-slate-800/30 border border-slate-800/50 rounded-xl overflow-hidden" style={{ height: 'calc(100vh - 180px)' }}>
+              {renderContent()}
+            </div>
+          </main>
+        )}
       </div>
     </div>
   );
