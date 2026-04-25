@@ -72,7 +72,7 @@ export const FormulaNode: React.FC<FormulaNodeProps> = ({
       return `border-2 border-cyan-400 animate-pulse`;
     }
     if (isSelected) {
-      return `border-2 border-white`;
+      return `border-2 border-blue-400 ring-2 ring-blue-400/30`;
     }
     return `border ${categoryColorClass}`;
   };

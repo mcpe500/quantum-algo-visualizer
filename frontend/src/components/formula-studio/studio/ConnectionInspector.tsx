@@ -18,7 +18,7 @@ export const ConnectionInspector: React.FC<ConnectionInspectorProps> = ({
   if (!connection) return null;
 
   return (
-    <aside className="w-72 border-l border-slate-700/50 bg-slate-900/70 p-3 flex flex-col gap-3">
+    <aside className="w-96 shrink-0 border-l border-slate-700/50 bg-slate-900/70 p-3 flex flex-col gap-3">
       <div className="flex items-center justify-between">
         <h3 className="text-sm font-semibold text-slate-100">Connection</h3>
         <button

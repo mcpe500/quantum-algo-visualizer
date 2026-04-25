@@ -147,16 +147,19 @@ export function calculateAutoLayout(
       const dx = posTo.x - posFrom.x;
       const dy = posTo.y - posFrom.y;
 
-      const forceX = dx * ATTRACTION_STRENGTH;
-      const forceY = dy * ATTRACTION_STRENGTH;
+      // Directional horizontal bias: pull source left, target right
+      const horizontalForce = (Math.abs(dx) + 100) * ATTRACTION_STRENGTH;
+      const verticalForce = dy * ATTRACTION_STRENGTH * 0.5;
 
       const forceFrom = forces.get(conn.fromId)!;
       const forceTo = forces.get(conn.toId)!;
 
-      forceFrom.x += forceX;
-      forceFrom.y += forceY;
-      forceTo.x -= forceX;
-      forceTo.y -= forceY;
+      // Source node pulled toward left of target
+      forceFrom.x -= horizontalForce;
+      forceFrom.y += verticalForce;
+      // Target node pulled toward right of source
+      forceTo.x += horizontalForce;
+      forceTo.y -= verticalForce;
     });
 
     let totalMovement = 0;
