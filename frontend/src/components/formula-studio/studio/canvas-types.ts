@@ -1,13 +1,27 @@
 import type { FormulaDefinition } from '../types';
 
+// ─── node kind ───────────────────────────────────────────────────────────────
+
+export type CanvasNodeKind = 'formula' | 'input' | 'expression';
+
+// ─── core data ───────────────────────────────────────────────────────────────
+
 export interface CanvasNodeData {
   id: string;
-  formulaId: string;
+  kind: CanvasNodeKind;
+  /** Only present when kind === 'formula' */
+  formulaId?: string;
   position: { x: number; y: number };
   width: number;
   height: number;
   customTitle?: string;
   customLatex?: string;
+  /** kind === 'input': the variable symbol published to the global scope, e.g. "n" */
+  varName?: string;
+  /** kind === 'input': the string-encoded numeric value, e.g. "4" */
+  varValue?: string;
+  /** kind === 'expression': the math expression string, e.g. "n*(n+1)/2" */
+  nodeExpression?: string;
 }
 
 export interface CanvasConnection {
@@ -30,7 +44,14 @@ export interface CanvasState {
 export type ConnectionMode = 'idle' | 'selecting-source' | 'selecting-target';
 
 export type CanvasAction =
+  // ── formula nodes (existing) ──
   | { type: 'ADD_NODE'; formulaId: string; position: { x: number; y: number } }
+  // ── new node types ──
+  | { type: 'ADD_INPUT_NODE'; position: { x: number; y: number } }
+  | { type: 'ADD_EXPRESSION_NODE'; position: { x: number; y: number } }
+  | { type: 'UPDATE_INPUT_VAR'; nodeId: string; varName?: string; varValue?: string }
+  | { type: 'UPDATE_NODE_EXPRESSION'; nodeId: string; nodeExpression: string }
+  // ── shared ──
   | { type: 'MOVE_NODE'; nodeId: string; position: { x: number; y: number } }
   | { type: 'UPDATE_NODE_CONTENT'; nodeId: string; customTitle?: string; customLatex?: string }
   | { type: 'UPDATE_NODE_SIZE'; nodeId: string; width: number; height: number }
@@ -56,11 +77,14 @@ export const INITIAL_CANVAS_STATE: CanvasState = {
   zoom: 1.0,
 };
 
+/** @deprecated use CanvasNodeData directly */
 export interface CanvasNode extends CanvasNodeData {
   formula: FormulaDefinition;
 }
 
 export const NODE_WIDTH = 280;
+export const INPUT_NODE_WIDTH = 220;
+export const EXPRESSION_NODE_WIDTH = 260;
 export const NODE_MIN_HEIGHT = 120;
 export const ANCHOR_RADIUS = 8;
 
@@ -85,6 +109,8 @@ export const RELATION_COLORS: Record<string, string> = {
   'derives': 'stroke-yellow-400',
   'target': 'stroke-yellow-400',
   'used-in': 'stroke-yellow-400',
+  'feeds-into': 'stroke-teal-400',
+  'outputs-to': 'stroke-teal-400',
 };
 
 export const RELATION_TYPE_OPTIONS: Array<{ value: string; label: string }> = [
@@ -98,6 +124,8 @@ export const RELATION_TYPE_OPTIONS: Array<{ value: string; label: string }> = [
   { value: 'used-in', label: 'Used In' },
   { value: 'result', label: 'Result' },
   { value: 'target', label: 'Target' },
+  { value: 'feeds-into', label: 'Feeds Into' },
+  { value: 'outputs-to', label: 'Outputs To' },
   { value: 'quantum-version', label: 'Quantum Version' },
   { value: 'specializes', label: 'Specializes' },
   { value: 'generalizes', label: 'Generalizes' },

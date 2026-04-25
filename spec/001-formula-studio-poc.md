@@ -293,3 +293,212 @@ const INITIAL_CANVAS_STATE: CanvasState = {
 14. **Update FormulaStudioPage.tsx** - Replace placeholder with StudioCanvas
 15. **Update studio/index.ts** - Export new components
 16. **Update SPEC** - Document Phase 2 completion
+
+---
+
+## 2.5 Post-POC Completion Update (Session 057)
+
+### Status Upgrade
+
+Formula Studio has moved beyond static POC state. The following modules are now implemented and integrated:
+
+1. **Studio interaction reliability**
+   - Real drop coordinates (no more hardcoded spawn)
+   - Connection state machine repaired
+   - Selection propagation fixed (connection selection no longer immediately cleared)
+   - Pan + zoom transform consistency
+   - Auto-layout overlap jitter handling
+
+2. **Graph editing UX**
+   - Connection inspector (edit relation type + label, delete connection)
+   - Node inspector (edit title/LaTeX override, delete node)
+   - Keyboard shortcuts (C/A/F/+/-/Esc/Delete)
+
+3. **General symbolic engine**
+   - Tokenizer + parser (AST)
+   - Simplifier
+   - Evaluator with structured error handling
+   - Infix/LaTeX printers
+   - Step execution pipeline
+
+4. **Step-by-step computation runtime**
+   - StepByStep panel now functional (no placeholder alert)
+   - Parameterized run + step navigation
+   - Computation presets attached to selected formulas
+
+5. **Stories tab implementation**
+   - Story dataset for DJ/QFT/VQE/QAOA
+   - Story player controls + timeline + active formula rendering
+   - Deep-link to Explore detail via `Open Detail`
+
+6. **Registry integrity guardrails**
+   - Missing `relatedFormulas.targetId` validator
+   - Missing IDs fixed (`qft-circuit-construction`, `complexity-quantum`)
+
+### Formula Computation Coverage (Current)
+
+Computation configs currently enabled for:
+
+- `dj-classical-bound`
+- `qft-gate-count`
+- `acceptance-probability`
+- `maxcut-cost-function`
+- `variational-energy`
+- `normalization-constant`
+
+### Remaining Enhancements (Next Iteration)
+
+1. Undo/redo stack for Studio edits
+2. Project import/export JSON
+3. Stronger symbolic ruleset (implicit multiplication, richer transforms)
+4. Direct cross-tab highlight sync from Stories to Studio
+5. E2E regression tests for DnD/connect/compute flows
+
+---
+
+## 2.6 LaTeX Live Edit + Error Resilience (Session 058)
+
+### Latar Belakang Masalah
+
+Beberapa error terjadi saat penggunaan Formula Studio:
+
+1. **Parse error pada karakter `=`** — Position 737, 164 dalam registry.ts merujuk ke formula `oracle-unitary` dengan LaTeX `U_f|x⟩|y⟩ = |x⟩|y ⊕ f(x)⟩`. Tokenizer menolak `=` karena bukan operator matematika. Parse gagal dan crash tanpa graceful error message.
+
+2. **Tidak ada feedback visual saat editing custom LaTeX** — NodeInspector memiliki textarea untuk custom LaTeX tanpa live preview. User mengetik盲目 tanpa tahu apakah LaTeX valid.
+
+3. **Step-by-Step panel crash jika formula tidak punya computation config** — Beberapa formula (matrices, definitions) tidak memiliki config komputasi. Panel menampilkan placeholder tetapi tidak ada graceful degradation.
+
+4. **Symbolic engine tidak digunakan secara unified** — `NodeInspector` menggunakan `parseExpression`/`evaluateExpression`, sedangkan `StepByStepPanel` menggunakan `formula.computation.steps()`. Tidak ada shared logic atau guard.
+
+### Solusi yang Diimplementasikan
+
+#### A. Tokenizer Handle Non-Math Characters
+
+**File:** `frontend/src/components/formula-studio/engine/tokenizer.ts`
+
+Karakter `=` dan karakter non-matematika lain (seperti `\rangle`, `\langle`, `\oplus`, `\otimes`, `|`) sekarang di-skip oleh tokenizer alih-alih menyebabkan error. Result: LaTeX seperti `U_f|x⟩|y⟩ = |x⟩|y ⊕ f(x)⟩` tidak crash tokenizer — tokenizer berhenti saat encounter karakter yang tidak bisa di-parse, mengembalikan tokens yang valid.
+
+Pendekatan: tokenizer melaporkan posisi error dengan `at` yang akurat, tetapi tidak throw. Parser membungkus parse dengan try/catch dan mengembalikan `EngineResult` dengan `code: 'PARSE_FAILED'` alih-alih exception.
+
+#### B. Validation Helper — `engine/validate.ts` (NEW)
+
+File baru menyediakan serangkaian fungsi keamanan untuk symbolic engine:
+
+```typescript
+// Hilangkan markup LaTeX, extract bagian yang bisa di-compute
+stripLatexNoise(source: string): string
+
+// Check apakah ekspresi bisa di-parse (tidak ada karakter problematic)
+canCompute(source: string): boolean
+
+// Parse dengan aman — returns EngineResult, never throws
+safeParse(source: string): EngineResult<ExprNode>
+
+// Jika ada '=', ambil bagian kiri saja sebagai expression
+stripEquality(source: string): string
+```
+
+Fungsi `stripLatexNoise` menghapus:
+- `\text{...}`, `\mathbb{...}`, `\begin{pmatrix}...\end{pmatrix}`
+- `\rangle`, `\langle`, `\otimes`, `\oplus`
+- Karakter `|` yang bukan operator matematika
+- Whitespace yang tidak penting
+
+**Catatan penting:** Formula dengan `=` (seperti `oracle-unitary`, `eigenvalue-equation`) secara inheren adalah definisi matematika, bukan expression numerik. Solution ini bukan membuat semua formula computable — melainkan memastikan:
+- Yang bisa di-compute tetap berjalan
+- Yang tidak bisa gagal dengan graceful (tidak crash)
+- User mendapat feedback yang jelas
+
+#### C. NodeInspector UX Upgrade — Live LaTeX Preview
+
+**File:** `frontend/src/components/formula-studio/studio/NodeInspector.tsx`
+
+Layout baru:
+
+```
+┌─ Node ─────────────────────────────────────┐
+│  [Formula Name]              [×]            │
+├─────────────────────────────────────────────┤
+│  Custom Title: [______________________]     │
+│                                             │
+│  Custom LaTeX:                              │
+│  ┌─────────────────────────────────────┐    │
+│  │ \frac{1}{\sqrt{2}}                  │    │  ← textarea
+│  └─────────────────────────────────────┘    │
+│  ↓ Live Preview                             │
+│  ┌─────────────────────────────────────┐    │
+│  │       1/√2  (rendered KaTeX)         │    │  ← live preview
+│  └─────────────────────────────────────┘    │
+│                                             │
+│  Symbolic Engine:                           │
+│  Expression: [n*(n+1)/2__________]         │
+│  Variables: [n=4___________________]        │
+│  [Compute Expression]                        │
+│                                             │
+│  Result: 10  ← atau error message          │
+└─────────────────────────────────────────────┘
+```
+
+Fitur:
+- **Live preview** — `FormulaDisplay` render di bawah textarea, update on every keystroke (debounce 150ms)
+- **Safe compute** — `Compute` button menggunakan `safeParse` + `canCompute` guard; jika expression tidak computable, tampilkan warning message alih-alih crash
+- **Error display** — merah border + pesan error yang jelas jika parse/evaluation gagal
+- **Graceful degradation** — jika symbolic engine tidak bisa proses, tampilkan "Formula ini tidak bisa dihitung langsung via symbolic engine. Gunakan Step-by-Step panel jika tersedia."
+
+#### D. Step-by-Step Panel — Guard + UI Polish
+
+**File:** `frontend/src/components/formula-studio/shared/StepByStepPanel.tsx`
+
+**Guard untuk formula tanpa computation:**
+Jika `formula.computation` null/undefined, panel menampilkan state informatif:
+- Pesan: "Formula ini tidak memiliki konfigurasi komputasi step-by-step."
+- Sub-message: "Formula dengan definisi matriks atau persamaan tidak bisa dihitung langsung. Gunakan Studio untuk visualisasi hubungan antar formula."
+- Tombol Close saja
+
+**UI Improvements:**
+- **Step indicator** — progress bar dengan dots: `● ○ ○ ○ ○`
+- **Keyboard navigation** — `→` next step, `←` prev step, `Escape` close panel
+- **Animasi** — fade transition 150ms saat step berubah
+- **Step badge** — "Step 2 / 5" dengan styling lebih prominent (badge-style, bukan plain text)
+- **Font size** — formula display naik ke `1.5rem` untuk readability
+- **Better color contrast** — background gelap untuk focus pada ekspresi
+
+#### E. Error Boundary di FormulaDetailPanel
+
+**File:** `frontend/src/components/formula-studio/shared/FormulaDetailPanel.tsx`
+
+Error boundary kecil menangkap parse errors yang mungkin lolos dari step computation dan menampilkan toast notification sementara, bukan crash entire panel.
+
+### File Changes
+
+| File | Action | Deskripsi |
+|------|--------|-----------|
+| `engine/tokenizer.ts` | Modified | Skip karakter `=` dan non-math chars |
+| `engine/parser.ts` | Modified | Try/catch di `parseExpression()`, return fail instead of throw |
+| `engine/validate.ts` | **NEW** | `stripLatexNoise`, `canCompute`, `safeParse`, `stripEquality` |
+| `engine/index.ts` | Modified | Export fungsi validate |
+| `studio/NodeInspector.tsx` | Modified | Live LaTeX preview, safe compute, error display |
+| `shared/StepByStepPanel.tsx` | Modified | Guard missing computation, keyboard nav, UI polish |
+| `shared/FormulaDetailPanel.tsx` | Modified | Error boundary kecil |
+
+### Verification Checklist
+
+- [ ] Build: `rtk npm run build` → pass
+- [ ] Buka formula `oracle-unitary` (punya `=`) → tidak crash, Step-by-Step button hidden (no computation)
+- [ ] Buka formula `qft-gate-count` (computable) → Step-by-Step berfungsi, input `n=4`, result `10`
+- [ ] Di Studio, select node → custom LaTeX textarea punya live preview di bawahnya
+- [ ] Ketik `=` di expression input → graceful error message, tidak crash
+- [ ] Step-by-Step: keyboard `→` / `←` navigate antar step
+- [ ] Step-by-Step: progress dots tampil sesuai jumlah step
+- [ ] Formula tanpa computation config → panel menunjukkan informational message, bukan crash
+
+### Status
+
+**IMPLEMENTED — AWAITING VERIFICATION**
+
+### Metadata
+
+- **Session:** 058
+- **Date:** 2026-04-23
+- **Trigger:** Parse error on `=` at Position 737, 164 in registry.ts (`oracle-unitary`)
+- **Scope:** LaTeX live edit + error resilience + Step-by-Step polish

@@ -1,5 +1,5 @@
 import type { CanvasState, CanvasAction } from './canvas-types';
-import { INITIAL_CANVAS_STATE } from './canvas-types';
+import { INITIAL_CANVAS_STATE, INPUT_NODE_WIDTH, EXPRESSION_NODE_WIDTH } from './canvas-types';
 
 function generateId(): string {
   return crypto.randomUUID();
@@ -7,9 +7,12 @@ function generateId(): string {
 
 export function canvasReducer(state: CanvasState, action: CanvasAction): CanvasState {
   switch (action.type) {
+
+    // ── formula node (dragged from palette) ────────────────────────────────
     case 'ADD_NODE': {
       const newNode = {
         id: generateId(),
+        kind: 'formula' as const,
         formulaId: action.formulaId,
         position: action.position,
         width: 280,
@@ -23,6 +26,72 @@ export function canvasReducer(state: CanvasState, action: CanvasAction): CanvasS
       };
     }
 
+    // ── input node (added via toolbar) ─────────────────────────────────────
+    case 'ADD_INPUT_NODE': {
+      const newNode = {
+        id: generateId(),
+        kind: 'input' as const,
+        position: action.position,
+        width: INPUT_NODE_WIDTH,
+        height: 90,
+        varName: 'x',
+        varValue: '0',
+      };
+      return {
+        ...state,
+        nodes: [...state.nodes, newNode],
+        selectedNodeId: newNode.id,
+        selectedConnectionId: null,
+      };
+    }
+
+    // ── expression node (added via toolbar) ────────────────────────────────
+    case 'ADD_EXPRESSION_NODE': {
+      const newNode = {
+        id: generateId(),
+        kind: 'expression' as const,
+        position: action.position,
+        width: EXPRESSION_NODE_WIDTH,
+        height: 110,
+        nodeExpression: '',
+      };
+      return {
+        ...state,
+        nodes: [...state.nodes, newNode],
+        selectedNodeId: newNode.id,
+        selectedConnectionId: null,
+      };
+    }
+
+    // ── update input var name / value ──────────────────────────────────────
+    case 'UPDATE_INPUT_VAR': {
+      return {
+        ...state,
+        nodes: state.nodes.map((node) =>
+          node.id === action.nodeId
+            ? {
+                ...node,
+                varName: action.varName ?? node.varName,
+                varValue: action.varValue ?? node.varValue,
+              }
+            : node
+        ),
+      };
+    }
+
+    // ── update expression string ───────────────────────────────────────────
+    case 'UPDATE_NODE_EXPRESSION': {
+      return {
+        ...state,
+        nodes: state.nodes.map((node) =>
+          node.id === action.nodeId
+            ? { ...node, nodeExpression: action.nodeExpression }
+            : node
+        ),
+      };
+    }
+
+    // ── shared ─────────────────────────────────────────────────────────────
     case 'MOVE_NODE': {
       return {
         ...state,
@@ -128,7 +197,8 @@ export function canvasReducer(state: CanvasState, action: CanvasAction): CanvasS
       return {
         ...state,
         connections: state.connections.filter((conn) => conn.id !== action.connectionId),
-        selectedConnectionId: state.selectedConnectionId === action.connectionId ? null : state.selectedConnectionId,
+        selectedConnectionId:
+          state.selectedConnectionId === action.connectionId ? null : state.selectedConnectionId,
       };
     }
 
@@ -141,28 +211,29 @@ export function canvasReducer(state: CanvasState, action: CanvasAction): CanvasS
     }
 
     case 'CLEAR_CANVAS': {
-      return {
-        ...INITIAL_CANVAS_STATE,
-      };
+      return { ...INITIAL_CANVAS_STATE };
     }
 
     case 'LOAD_CANVAS': {
-      return action.state;
+      // Migrate legacy nodes that don't have 'kind'
+      const migrated = {
+        ...action.state,
+        nodes: action.state.nodes.map((n) =>
+          (n as CanvasState['nodes'][0] & { kind?: string }).kind
+            ? n
+            : { ...n, kind: 'formula' as const }
+        ),
+      };
+      return migrated;
     }
 
     case 'SET_PAN': {
-      return {
-        ...state,
-        panOffset: action.offset,
-      };
+      return { ...state, panOffset: action.offset };
     }
 
     case 'SET_ZOOM': {
-      const clampedZoom = Math.max(0.5, Math.min(2, action.zoom));
-      return {
-        ...state,
-        zoom: clampedZoom,
-      };
+      const clampedZoom = Math.max(0.25, Math.min(3, action.zoom));
+      return { ...state, zoom: clampedZoom };
     }
 
     default:

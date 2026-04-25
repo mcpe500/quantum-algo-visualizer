@@ -82,6 +82,7 @@ export function executeSymbolicPlan(
 export function createSymbolicComputationConfig(plan: SymbolicComputationPlan): ComputationConfig {
   return {
     requiresParams: plan.requiresParams,
+    expression: plan.initialExpression,
     steps: (params: Record<string, number>) => {
       const result = executeSymbolicPlan(plan, params);
       if (!result.ok) {

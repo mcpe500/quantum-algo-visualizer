@@ -188,8 +188,16 @@ class Parser {
 }
 
 export function parseExpression(source: string): EngineResult<ExprNode> {
-  const tokensResult = tokenizeExpression(source);
-  if (!tokensResult.ok) return tokensResult;
-  const parser = new Parser(tokensResult.value);
-  return parser.parseExpression();
+  try {
+    const tokensResult = tokenizeExpression(source);
+    if (!tokensResult.ok) return tokensResult;
+    const parser = new Parser(tokensResult.value);
+    return parser.parseExpression();
+  } catch (err) {
+    return fail({
+      code: 'PARSE_FAILED',
+      message: err instanceof Error ? err.message : `Parse error at position 0`,
+      at: 0,
+    });
+  }
 }

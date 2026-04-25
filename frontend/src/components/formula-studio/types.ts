@@ -26,6 +26,8 @@ export interface ComputationStep {
 // Computation function for step-by-step
 export interface ComputationConfig {
   requiresParams: string[];
+  /** Human-readable math expression used by the engine, e.g. "n*(n+1)/2" (NOT LaTeX). */
+  expression?: string;
   steps: (params: any) => ComputationStep[];
 }
 
