@@ -8,31 +8,30 @@ import { calculateAutoLayout, getCanvasBounds } from './canvasUtils';
 import { CanvasToolbar } from './CanvasToolbar';
 import { NodePalette } from './NodePalette';
 import { FormulaNode } from './FormulaNode';
+import { InputNode } from './InputNode';
+import { ExpressionNode } from './ExpressionNode';
 import { ConnectionLines } from './ConnectionLines';
 import { ConnectionInspector } from './ConnectionInspector';
 import { NodeInspector } from './NodeInspector';
+import { computeGraph, buildVarScope } from './graphEngine';
 
-const STORAGE_KEY = 'formula-studio-canvas';
+const STORAGE_KEY = 'formula-studio-canvas-v2';
 
 function loadFromStorage(): CanvasState | null {
   try {
     const stored = localStorage.getItem(STORAGE_KEY);
-    if (stored) {
-      return JSON.parse(stored);
-    }
-  } catch {
-    // ignore
-  }
+    if (stored) return JSON.parse(stored);
+  } catch { /* ignore */ }
   return null;
 }
 
 function saveToStorage(state: CanvasState) {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-  } catch {
-    // ignore
-  }
+  } catch { /* ignore */ }
 }
+
+/* ─── DroppableCanvas ──────────────────────────────────────────────────── */
 
 interface DroppableCanvasProps {
   children: React.ReactNode;
@@ -40,19 +39,13 @@ interface DroppableCanvasProps {
 }
 
 const DroppableCanvas: React.FC<DroppableCanvasProps> = ({ children, onDrop }) => {
-  const { setNodeRef, isOver } = useDroppable({
-    id: 'canvas-drop-zone',
-  });
+  const { setNodeRef, isOver } = useDroppable({ id: 'canvas-drop-zone' });
 
   const handlePointerUp = useCallback(
     (e: React.PointerEvent) => {
       if (isOver) {
         const rect = (e.target as HTMLElement).closest('.canvas-area')?.getBoundingClientRect();
-        if (rect) {
-          const x = e.clientX - rect.left;
-          const y = e.clientY - rect.top;
-          onDrop(x, y);
-        }
+        if (rect) onDrop(e.clientX - rect.left, e.clientY - rect.top);
       }
     },
     [isOver, onDrop]
@@ -70,6 +63,8 @@ const DroppableCanvas: React.FC<DroppableCanvasProps> = ({ children, onDrop }) =
   );
 };
 
+/* ─── DraggableNode ────────────────────────────────────────────────────── */
+
 interface DraggableNodeProps {
   nodeId: string;
   children: React.ReactNode;
@@ -82,23 +77,31 @@ const DraggableNode: React.FC<DraggableNodeProps> = ({ nodeId, children }) => {
   });
 
   const style = transform
-    ? {
-        transform: `translate3d(${transform.x}px, ${transform.y}px, 0)`,
-        zIndex: 1000,
-      }
+    ? { transform: `translate3d(${transform.x}px, ${transform.y}px, 0)`, zIndex: 1000 }
     : undefined;
 
   return (
-    <div ref={setNodeRef} style={style} className={`${isDragging ? 'opacity-80' : ''}`} {...listeners} {...attributes}>
+    <div ref={setNodeRef} style={style} className={isDragging ? 'opacity-80' : ''} {...listeners} {...attributes}>
       {children}
     </div>
   );
 };
 
+/* ─── StudioCanvas ─────────────────────────────────────────────────────── */
+
 export const StudioCanvas: React.FC = () => {
   const [state, dispatch] = React.useReducer(canvasReducer, null, () => {
     const loaded = loadFromStorage();
-    return loaded || {
+    if (loaded) {
+      // Migrate: ensure all nodes have `kind`
+      return {
+        ...loaded,
+        nodes: loaded.nodes.map((n) =>
+          (n as typeof n & { kind?: string }).kind ? n : { ...n, kind: 'formula' as const }
+        ),
+      };
+    }
+    return {
       nodes: [],
       connections: [],
       selectedNodeId: null,
@@ -114,23 +117,54 @@ export const StudioCanvas: React.FC = () => {
   const canvasRef = useRef<HTMLDivElement>(null);
   const dropPointRef = useRef<{ x: number; y: number } | null>(null);
 
-  useEffect(() => {
-    saveToStorage(state);
-  }, [state]);
+  useEffect(() => { saveToStorage(state); }, [state]);
 
-  const sensors = useSensors(
-    useSensor(PointerSensor, {
-      activationConstraint: {
-        distance: 8,
-      },
-    })
-  );
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
+
+  /* ── derived data ── */
 
   const formulaMap = useMemo(() => {
     const map = new Map<string, (typeof FORMULA_REGISTRY)[0]>();
     FORMULA_REGISTRY.forEach((f) => map.set(f.id, f));
     return map;
   }, []);
+
+  /** Live-computed graph results: Map<nodeId, NodeResult> */
+  const graphResults = useMemo(() => computeGraph(state.nodes), [state.nodes]);
+
+  /** Global variable scope from all input nodes */
+  const varScope = useMemo(() => buildVarScope(state.nodes), [state.nodes]);
+
+  const selectedNode = useMemo(
+    () => state.nodes.find((n) => n.id === state.selectedNodeId) ?? null,
+    [state.nodes, state.selectedNodeId]
+  );
+
+  const selectedConnection = useMemo(
+    () => state.connections.find((c) => c.id === state.selectedConnectionId) ?? null,
+    [state.connections, state.selectedConnectionId]
+  );
+
+  /** Only meaningful for formula nodes */
+  const selectedNodeFormula = useMemo(() => {
+    if (!selectedNode || selectedNode.kind !== 'formula' || !selectedNode.formulaId) return null;
+    return formulaMap.get(selectedNode.formulaId) ?? null;
+  }, [selectedNode, formulaMap]);
+
+  /* ── helpers for new node placement ── */
+
+  function centerPosition() {
+    const el = canvasRef.current;
+    if (!el) return { x: 100, y: 100 };
+    const cx = el.clientWidth / 2;
+    const cy = el.clientHeight / 2;
+    return {
+      x: Math.max(0, (cx - state.panOffset.x) / state.zoom - 110),
+      y: Math.max(0, (cy - state.panOffset.y) / state.zoom - 50),
+    };
+  }
+
+  /* ── DnD from palette ── */
 
   const handleCanvasDrop = useCallback((x: number, y: number) => {
     dropPointRef.current = { x, y };
@@ -143,46 +177,35 @@ export const StudioCanvas: React.FC = () => {
       if (!data) return;
 
       if (data.type === 'palette-item' && data.formulaId) {
-        if (over?.id !== 'canvas-drop-zone') {
-          dropPointRef.current = null;
-          return;
-        }
-
+        if (over?.id !== 'canvas-drop-zone') { dropPointRef.current = null; return; }
         const rect = canvasRef.current?.getBoundingClientRect();
         if (!rect) return;
 
-        let screenX: number;
-        let screenY: number;
-
+        let screenX: number, screenY: number;
         if (dropPointRef.current) {
           screenX = dropPointRef.current.x;
           screenY = dropPointRef.current.y;
         } else {
           const translated = active.rect.current.translated;
-          if (!translated) {
-            dropPointRef.current = null;
-            return;
-          }
+          if (!translated) { dropPointRef.current = null; return; }
           screenX = translated.left - rect.left + translated.width / 2;
           screenY = translated.top - rect.top + translated.height / 2;
         }
 
         const x = Math.max(0, (screenX - state.panOffset.x) / state.zoom - 140);
         const y = Math.max(0, (screenY - state.panOffset.y) / state.zoom - 60);
-
         dispatch({ type: 'ADD_NODE', formulaId: data.formulaId, position: { x, y } });
         dropPointRef.current = null;
+
       } else if (data.type === 'canvas-node' && data.nodeId) {
         const node = state.nodes.find((n) => n.id === data.nodeId);
         if (node) {
-          const worldDx = delta.x / state.zoom;
-          const worldDy = delta.y / state.zoom;
           dispatch({
             type: 'MOVE_NODE',
             nodeId: data.nodeId,
             position: {
-              x: node.position.x + worldDx,
-              y: node.position.y + worldDy,
+              x: node.position.x + delta.x / state.zoom,
+              y: node.position.y + delta.y / state.zoom,
             },
           });
         }
@@ -191,100 +214,78 @@ export const StudioCanvas: React.FC = () => {
     [state.nodes, state.zoom, state.panOffset.x, state.panOffset.y]
   );
 
-  const handleNodeSelect = useCallback(
-    (nodeId: string) => {
-      if (connectionMode === 'idle') {
-        dispatch({ type: 'SELECT_NODE', nodeId });
-      }
-    },
-    [connectionMode]
-  );
+  /* ── node handlers ── */
 
-  const handleNodeDelete = useCallback(
-    (nodeId: string) => {
-      dispatch({ type: 'DELETE_NODE', nodeId });
-    },
-    []
-  );
+  const handleNodeSelect = useCallback((nodeId: string) => {
+    if (connectionMode === 'idle') dispatch({ type: 'SELECT_NODE', nodeId });
+  }, [connectionMode]);
 
-  const handleNodeUpdate = useCallback(
-    (nodeId: string, patch: { customTitle?: string; customLatex?: string }) => {
-      dispatch({
-        type: 'UPDATE_NODE_CONTENT',
-        nodeId,
-        customTitle: patch.customTitle,
-        customLatex: patch.customLatex,
-      });
-    },
-    []
-  );
+  const handleNodeDelete = useCallback((nodeId: string) => {
+    dispatch({ type: 'DELETE_NODE', nodeId });
+  }, []);
 
-  const handleConnectionStart = useCallback(
-    (nodeId: string) => {
-      if (connectionMode === 'idle') {
-        setConnectionMode('selecting-target');
-        setConnectionSourceId(nodeId);
-      } else if (connectionMode === 'selecting-source') {
-        setConnectionMode('selecting-target');
-        setConnectionSourceId(nodeId);
-      } else if (connectionMode === 'selecting-target') {
-        if (connectionSourceId === nodeId) {
-          setConnectionMode('selecting-source');
-          setConnectionSourceId(null);
-        }
-      }
-    },
-    [connectionMode, connectionSourceId]
-  );
+  const handleNodeUpdate = useCallback((nodeId: string, patch: { customTitle?: string; customLatex?: string }) => {
+    dispatch({ type: 'UPDATE_NODE_CONTENT', nodeId, ...patch });
+  }, []);
 
-  const handleConnectionEnd = useCallback(
-    (nodeId: string) => {
-      if (connectionMode === 'selecting-target' && connectionSourceId && connectionSourceId !== nodeId) {
-        const sourceNode = state.nodes.find((n) => n.id === connectionSourceId);
-        const targetNode = state.nodes.find((n) => n.id === nodeId);
-        if (sourceNode && targetNode) {
-          dispatch({
-            type: 'ADD_CONNECTION',
-            fromId: connectionSourceId,
-            toId: nodeId,
-            relationType: 'related',
-            label: 'related',
-          });
-        }
-      }
+  const handleUpdateInputVar = useCallback((nodeId: string, varName: string, varValue: string) => {
+    dispatch({ type: 'UPDATE_INPUT_VAR', nodeId, varName, varValue });
+  }, []);
+
+  const handleUpdateExpression = useCallback((nodeId: string, nodeExpression: string) => {
+    dispatch({ type: 'UPDATE_NODE_EXPRESSION', nodeId, nodeExpression });
+  }, []);
+
+  /* ── toolbar node-add handlers ── */
+
+  const handleAddInputNode = useCallback(() => {
+    dispatch({ type: 'ADD_INPUT_NODE', position: centerPosition() });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state.panOffset, state.zoom]);
+
+  const handleAddExpressionNode = useCallback(() => {
+    dispatch({ type: 'ADD_EXPRESSION_NODE', position: centerPosition() });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state.panOffset, state.zoom]);
+
+  /* ── connection handlers ── */
+
+  const handleConnectionStart = useCallback((nodeId: string) => {
+    if (connectionMode === 'idle' || connectionMode === 'selecting-source') {
+      setConnectionMode('selecting-target');
+      setConnectionSourceId(nodeId);
+    } else if (connectionMode === 'selecting-target' && connectionSourceId === nodeId) {
       setConnectionMode('selecting-source');
       setConnectionSourceId(null);
-    },
-    [connectionMode, connectionSourceId, state.nodes]
-  );
+    }
+  }, [connectionMode, connectionSourceId]);
+
+  const handleConnectionEnd = useCallback((nodeId: string) => {
+    if (connectionMode === 'selecting-target' && connectionSourceId && connectionSourceId !== nodeId) {
+      dispatch({ type: 'ADD_CONNECTION', fromId: connectionSourceId, toId: nodeId, relationType: 'feeds-into', label: '→' });
+    }
+    setConnectionMode('selecting-source');
+    setConnectionSourceId(null);
+  }, [connectionMode, connectionSourceId]);
 
   const handleConnectionSelect = useCallback((connectionId: string) => {
     dispatch({ type: 'SELECT_CONNECTION', connectionId });
   }, []);
 
-  const handleConnectionUpdate = useCallback(
-    (connectionId: string, patch: { relationType?: string; label?: string }) => {
-      dispatch({
-        type: 'UPDATE_CONNECTION',
-        connectionId,
-        relationType: patch.relationType,
-        label: patch.label,
-      });
-    },
-    []
-  );
+  const handleConnectionUpdate = useCallback((connectionId: string, patch: { relationType?: string; label?: string }) => {
+    dispatch({ type: 'UPDATE_CONNECTION', connectionId, ...patch });
+  }, []);
 
   const handleConnectionDelete = useCallback((connectionId: string) => {
     dispatch({ type: 'DELETE_CONNECTION', connectionId });
   }, []);
 
-  const handleClearCanvas = useCallback(() => {
-    dispatch({ type: 'CLEAR_CANVAS' });
-  }, []);
+  /* ── canvas controls ── */
+
+  const handleClearCanvas = useCallback(() => { dispatch({ type: 'CLEAR_CANVAS' }); }, []);
 
   const handleAutoLayout = useCallback(() => {
-    const newNodes = calculateAutoLayout(state.nodes, state.connections);
-    newNodes.forEach((node) => {
+    calculateAutoLayout(state.nodes, state.connections).forEach((node) => {
       dispatch({ type: 'MOVE_NODE', nodeId: node.id, position: node.position });
     });
   }, [state.nodes, state.connections]);
@@ -292,14 +293,9 @@ export const StudioCanvas: React.FC = () => {
   const handleScreenshot = useCallback(async () => {
     const canvasArea = canvasRef.current;
     if (!canvasArea) return;
-
     setIsCapturing(true);
     try {
-      const dataUrl = await toPng(canvasArea, {
-        backgroundColor: '#0f172a',
-        pixelRatio: 2,
-      });
-
+      const dataUrl = await toPng(canvasArea, { backgroundColor: '#0f172a', pixelRatio: 2 });
       const link = document.createElement('a');
       link.download = `formula-canvas-${Date.now()}.png`;
       link.href = dataUrl;
@@ -311,85 +307,41 @@ export const StudioCanvas: React.FC = () => {
     }
   }, []);
 
-  const handleZoomIn = useCallback(() => {
-    dispatch({ type: 'SET_ZOOM', zoom: state.zoom + 0.1 });
-  }, [state.zoom]);
-
-  const handleZoomOut = useCallback(() => {
-    dispatch({ type: 'SET_ZOOM', zoom: state.zoom - 0.1 });
-  }, [state.zoom]);
+  const handleZoomIn = useCallback(() => { dispatch({ type: 'SET_ZOOM', zoom: state.zoom + 0.1 }); }, [state.zoom]);
+  const handleZoomOut = useCallback(() => { dispatch({ type: 'SET_ZOOM', zoom: state.zoom - 0.1 }); }, [state.zoom]);
 
   const handleFitView = useCallback(() => {
     if (state.nodes.length === 0) return;
     const bounds = getCanvasBounds(state.nodes);
     const canvasEl = canvasRef.current;
     if (!canvasEl) return;
-
-    const containerWidth = canvasEl.clientWidth;
-    const containerHeight = canvasEl.clientHeight;
     const padding = 60;
-
-    const scaleX = (containerWidth - padding * 2) / bounds.width;
-    const scaleY = (containerHeight - padding * 2) / bounds.height;
+    const scaleX = (canvasEl.clientWidth - padding * 2) / bounds.width;
+    const scaleY = (canvasEl.clientHeight - padding * 2) / bounds.height;
     const newZoom = Math.min(scaleX, scaleY, 1.5);
-
     dispatch({ type: 'SET_ZOOM', zoom: newZoom });
-    dispatch({
-      type: 'SET_PAN',
-      offset: {
-        x: padding - bounds.minX * newZoom,
-        y: padding - bounds.minY * newZoom,
-      },
-    });
+    dispatch({ type: 'SET_PAN', offset: { x: padding - bounds.minX * newZoom, y: padding - bounds.minY * newZoom } });
   }, [state.nodes]);
 
   const handleToggleConnectionMode = useCallback(() => {
-    if (connectionMode !== 'idle') {
-      setConnectionMode('idle');
-      setConnectionSourceId(null);
-    } else {
-      setConnectionMode('selecting-source');
+    if (connectionMode !== 'idle') { setConnectionMode('idle'); setConnectionSourceId(null); }
+    else setConnectionMode('selecting-source');
+  }, [connectionMode]);
+
+  const handleCanvasClick = useCallback((e: React.MouseEvent) => {
+    if (e.target === e.currentTarget) {
+      dispatch({ type: 'SELECT_NODE', nodeId: null });
+      dispatch({ type: 'SELECT_CONNECTION', connectionId: null });
+      if (connectionMode !== 'idle') { setConnectionMode('idle'); setConnectionSourceId(null); }
     }
   }, [connectionMode]);
 
-  const handleCanvasClick = useCallback(
-    (e: React.MouseEvent) => {
-      if (e.target === e.currentTarget) {
-        dispatch({ type: 'SELECT_NODE', nodeId: null });
-        dispatch({ type: 'SELECT_CONNECTION', connectionId: null });
-        if (connectionMode !== 'idle') {
-          setConnectionMode('idle');
-          setConnectionSourceId(null);
-        }
-      }
-    },
-    [connectionMode]
-  );
-
-  const selectedNode = useMemo(
-    () => state.nodes.find((node) => node.id === state.selectedNodeId) ?? null,
-    [state.nodes, state.selectedNodeId]
-  );
-
-  const selectedConnection = useMemo(
-    () => state.connections.find((conn) => conn.id === state.selectedConnectionId) ?? null,
-    [state.connections, state.selectedConnectionId]
-  );
-
-  const selectedNodeFormula = useMemo(() => {
-    if (!selectedNode) return null;
-    return formulaMap.get(selectedNode.formulaId) ?? null;
-  }, [selectedNode, formulaMap]);
+  /* ── keyboard shortcuts ── */
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       const target = event.target as HTMLElement | null;
-      const isTyping = !!target && (
-        target.tagName === 'INPUT' ||
-        target.tagName === 'TEXTAREA' ||
-        target.isContentEditable
-      );
-      if (isTyping) return;
+      if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) return;
 
       if (event.key === 'Escape') {
         dispatch({ type: 'SELECT_NODE', nodeId: null });
@@ -398,30 +350,21 @@ export const StudioCanvas: React.FC = () => {
         setConnectionSourceId(null);
         return;
       }
-
-      if (event.key.toLowerCase() === 'c') {
-        event.preventDefault();
-        setConnectionSourceId(null);
-        setConnectionMode((prev) => (prev === 'idle' ? 'selecting-source' : 'idle'));
-        return;
-      }
-
+      if (event.key.toLowerCase() === 'c') { event.preventDefault(); setConnectionSourceId(null); setConnectionMode(p => p === 'idle' ? 'selecting-source' : 'idle'); return; }
+      if (event.key.toLowerCase() === 'a') { event.preventDefault(); calculateAutoLayout(state.nodes, state.connections).forEach(n => dispatch({ type: 'MOVE_NODE', nodeId: n.id, position: n.position })); return; }
+      if (event.key.toLowerCase() === 'f') { event.preventDefault(); handleFitView(); return; }
+      if (event.key === '+' || event.key === '=') { event.preventDefault(); dispatch({ type: 'SET_ZOOM', zoom: state.zoom + 0.1 }); return; }
+      if (event.key === '-') { event.preventDefault(); dispatch({ type: 'SET_ZOOM', zoom: state.zoom - 0.1 }); return; }
       if (event.key === 'Delete' || event.key === 'Backspace') {
-        if (state.selectedConnectionId) {
-          event.preventDefault();
-          dispatch({ type: 'DELETE_CONNECTION', connectionId: state.selectedConnectionId });
-          return;
-        }
-        if (state.selectedNodeId) {
-          event.preventDefault();
-          dispatch({ type: 'DELETE_NODE', nodeId: state.selectedNodeId });
-        }
+        if (state.selectedConnectionId) { event.preventDefault(); dispatch({ type: 'DELETE_CONNECTION', connectionId: state.selectedConnectionId }); return; }
+        if (state.selectedNodeId) { event.preventDefault(); dispatch({ type: 'DELETE_NODE', nodeId: state.selectedNodeId }); }
       }
     };
-
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [state.selectedConnectionId, state.selectedNodeId]);
+  }, [state.selectedConnectionId, state.selectedNodeId, state.nodes, state.connections, state.zoom, handleFitView]);
+
+  /* ── render ── */
 
   return (
     <DndContext sensors={sensors} onDragEnd={handleDragEnd}>
@@ -435,6 +378,8 @@ export const StudioCanvas: React.FC = () => {
           onZoomIn={handleZoomIn}
           onZoomOut={handleZoomOut}
           onFitView={handleFitView}
+          onAddInputNode={handleAddInputNode}
+          onAddExpressionNode={handleAddExpressionNode}
           zoom={state.zoom}
         />
 
@@ -459,7 +404,50 @@ export const StudioCanvas: React.FC = () => {
               />
 
               {state.nodes.map((node) => {
-                const formula = formulaMap.get(node.formulaId);
+                const isSelected = state.selectedNodeId === node.id;
+                const isSource = connectionSourceId === node.id;
+                const result = graphResults.get(node.id);
+
+                if (node.kind === 'input') {
+                  return (
+                    <DraggableNode key={node.id} nodeId={node.id}>
+                      <InputNode
+                        node={node}
+                        result={result}
+                        isSelected={isSelected}
+                        isConnectionSource={isSource}
+                        connectionMode={connectionMode}
+                        onSelect={handleNodeSelect}
+                        onDelete={handleNodeDelete}
+                        onConnectionStart={handleConnectionStart}
+                        onConnectionEnd={handleConnectionEnd}
+                        onUpdateVar={handleUpdateInputVar}
+                      />
+                    </DraggableNode>
+                  );
+                }
+
+                if (node.kind === 'expression') {
+                  return (
+                    <DraggableNode key={node.id} nodeId={node.id}>
+                      <ExpressionNode
+                        node={node}
+                        result={result}
+                        isSelected={isSelected}
+                        isConnectionSource={isSource}
+                        connectionMode={connectionMode}
+                        onSelect={handleNodeSelect}
+                        onDelete={handleNodeDelete}
+                        onConnectionStart={handleConnectionStart}
+                        onConnectionEnd={handleConnectionEnd}
+                        onUpdateExpression={handleUpdateExpression}
+                      />
+                    </DraggableNode>
+                  );
+                }
+
+                // formula node
+                const formula = node.formulaId ? formulaMap.get(node.formulaId) : undefined;
                 if (!formula) return null;
 
                 return (
@@ -467,8 +455,8 @@ export const StudioCanvas: React.FC = () => {
                     <FormulaNode
                       node={node}
                       formula={formula}
-                      isSelected={state.selectedNodeId === node.id}
-                      isConnectionSource={connectionSourceId === node.id}
+                      isSelected={isSelected}
+                      isConnectionSource={isSource}
                       connectionMode={connectionMode}
                       onSelect={handleNodeSelect}
                       onDelete={handleNodeDelete}
@@ -481,9 +469,13 @@ export const StudioCanvas: React.FC = () => {
 
               {state.nodes.length === 0 && (
                 <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                  <div className="text-center">
-                    <div className="text-slate-500 text-sm mb-2">Canvas is empty</div>
-                    <div className="text-slate-600 text-xs">Drag formulas from the left panel to add them</div>
+                  <div className="text-center space-y-2">
+                    <div className="text-slate-500 text-sm">Canvas kosong</div>
+                    <div className="text-slate-600 text-xs leading-relaxed">
+                      Klik <span className="text-teal-400 font-medium">Input</span> untuk mendefinisikan variabel<br/>
+                      Klik <span className="text-amber-400 font-medium">Ekspresi</span> untuk menulis formula<br/>
+                      atau drag formula dari panel kiri
+                    </div>
                   </div>
                 </div>
               )}
@@ -499,11 +491,15 @@ export const StudioCanvas: React.FC = () => {
             />
           )}
 
-          {!selectedConnection && selectedNode && selectedNodeFormula && (
+          {!selectedConnection && selectedNode && (
             <NodeInspector
               node={selectedNode}
               formula={selectedNodeFormula}
+              computedResult={graphResults.get(selectedNode.id)}
+              varScope={varScope}
               onUpdate={handleNodeUpdate}
+              onUpdateInputVar={handleUpdateInputVar}
+              onUpdateExpression={handleUpdateExpression}
               onDelete={handleNodeDelete}
               onClose={() => dispatch({ type: 'SELECT_NODE', nodeId: null })}
             />
@@ -511,23 +507,21 @@ export const StudioCanvas: React.FC = () => {
         </div>
 
         {connectionMode !== 'idle' && (
-          <div className="absolute bottom-4 left-1/2 -translate-x-1/2 px-4 py-2 bg-cyan-500/20 border border-cyan-500/30 rounded-lg text-xs text-cyan-300">
-            {connectionMode === 'selecting-source'
-              ? 'Click a node to select as connection source'
-              : 'Click a node to connect as target'}
+          <div className="absolute bottom-4 left-1/2 -translate-x-1/2 px-4 py-2 bg-cyan-500/20 border border-cyan-500/30 rounded-lg text-xs text-cyan-300 pointer-events-none">
+            {connectionMode === 'selecting-source' ? 'Klik node sumber koneksi' : 'Klik node target koneksi'}
           </div>
         )}
 
         {isCapturing && (
-          <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
-            <div className="text-white text-sm">Capturing canvas...</div>
+          <div className="absolute inset-0 bg-black/50 flex items-center justify-center pointer-events-none">
+            <div className="text-white text-sm">Mengambil screenshot...</div>
           </div>
         )}
       </div>
 
       <DragOverlay>
         <div className="w-64 h-20 bg-slate-800 border border-cyan-500/50 rounded-lg shadow-xl opacity-90 flex items-center justify-center">
-          <div className="text-cyan-400 text-xs">Drop on canvas</div>
+          <div className="text-cyan-400 text-xs">Drop di canvas</div>
         </div>
       </DragOverlay>
     </DndContext>

@@ -84,6 +84,11 @@ export function tokenizeExpression(source: string): EngineResult<Token[]> {
       continue;
     }
 
+    if (ch === '=') {
+      i += 1;
+      continue;
+    }
+
     return fail({
       code: 'TOKEN_INVALID',
       message: `Invalid token '${ch}' at position ${i}`,

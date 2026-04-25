@@ -5,3 +5,4 @@ export * from './simplify';
 export * from './evaluator';
 export * from './print';
 export * from './executor';
+export * from './validate';
