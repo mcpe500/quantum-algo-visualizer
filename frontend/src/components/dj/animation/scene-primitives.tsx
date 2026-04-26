@@ -3,9 +3,46 @@ import { useMemo } from 'react';
 import type { DJAnimationPartition, DJAnimationPayload } from '../../../types/dj';
 import { PHASE_COLOR, PHASE_LABEL, SCENE_PHASE_LABEL } from './constants';
 import { getColumnLayout, getLaneYs, getQubitP1 } from './helpers';
+import { getOracleFunctionLabel } from './narration';
 import { StageColumn } from './scene-column';
 import { BlochSphereNode, ResultBoard } from './scene-bloch';
 import { CameraRig, PhaseBand } from '../../../shared/components';
+
+function FunctionBoard({
+  x,
+  y,
+  label,
+  profile,
+  active,
+}: {
+  x: number;
+  y: number;
+  label: string;
+  profile: DJAnimationPayload['oracle_summary']['profile'];
+  active: boolean;
+}) {
+  const isConstant = profile !== 'balanced';
+  const color = isConstant ? '#2563EB' : '#F59E0B';
+  const width = Math.max(3.9, Math.min(7.4, label.length * 0.17 + 1.5));
+
+  return (
+    <group position={[x, y, 0.2]} scale={active ? [1.08, 1.08, 1.08] : [1, 1, 1]}>
+      <mesh>
+        <planeGeometry args={[width, 1.12]} />
+        <meshStandardMaterial color={isConstant ? '#DBEAFE' : '#FEF3C7'} transparent opacity={0.94} />
+      </mesh>
+      <Text position={[0, 0.24, 0.04]} fontSize={0.18} color={color} anchorX="center" anchorY="middle">
+        FUNCTION
+      </Text>
+      <Text position={[0, -0.08, 0.04]} fontSize={0.24} color="#0F172A" anchorX="center" anchorY="middle" maxWidth={width - 0.42} textAlign="center">
+        {label}
+      </Text>
+      <Text position={[0, -0.39, 0.04]} fontSize={0.14} color={color} anchorX="center" anchorY="middle">
+        {isConstant ? 'constant output' : 'balanced truth table'}
+      </Text>
+    </group>
+  );
+}
 
 export function StoryScene({
   data,
@@ -24,6 +61,7 @@ export function StoryScene({
   const phaseColor = PHASE_COLOR[activeStep.phase] || '#2563EB';
   const showResult = activeStep.phase === 'measure' && currentStep === data.timeline.length - 1;
   const resultX = endX + 2.1;
+  const functionLabel = useMemo(() => getOracleFunctionLabel(data), [data]);
 
   const qubitStates = useMemo(() => {
     const totalQubits = data.total_qubits;
@@ -76,6 +114,14 @@ export function StoryScene({
           {laneLabels[index]}
         </Text>
       ))}
+
+      <FunctionBoard
+        x={Math.min(startX + 3.1, -2.4)}
+        y={topY + 1.02}
+        label={functionLabel}
+        profile={data.oracle_summary.profile}
+        active={activeStep.phase === 'pre-init'}
+      />
 
       {data.timeline.map((step, index) => (
         <StageColumn

@@ -1,5 +1,5 @@
 import React from 'react';
-import { ZoomIn, ZoomOut, Maximize, MousePointer2, Move, Trash2 } from 'lucide-react';
+import { ZoomIn, ZoomOut } from 'lucide-react';
 
 interface CanvasStatusBarProps {
   zoom: number;
@@ -21,7 +21,7 @@ export const CanvasStatusBar: React.FC<CanvasStatusBarProps> = ({
   onFitView,
 }) => {
   return (
-    <div className="flex items-center justify-between px-3 py-1.5 bg-slate-900/80 border-t border-slate-800/60 text-[11px] text-slate-500 select-none">
+    <div className="flex items-center justify-between px-3 py-1.5 bg-slate-900/80 border-t border-slate-800/60 text-[11px] text-slate-500 select-none shrink-0">
       <div className="flex items-center gap-3">
         <span>{nodeCount} node{nodeCount !== 1 ? 's' : ''}</span>
         <span>{connectionCount} connection{connectionCount !== 1 ? 's' : ''}</span>

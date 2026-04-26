@@ -7,6 +7,7 @@ export { ConnectionLines } from './ConnectionLines';
 export { ConnectionLine } from './ConnectionLine';
 export { ConnectionInspector } from './ConnectionInspector';
 export { NodeInspector } from './NodeInspector';
+export { StudioFlowPanel } from './StudioFlowPanel';
 export * from './canvas-types';
 export * from './useCanvasReducer';
 export * from './canvasUtils';

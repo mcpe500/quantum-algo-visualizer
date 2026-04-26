@@ -9,6 +9,7 @@ interface InputNodeProps {
   result: NodeResult | undefined;
   isSelected: boolean;
   isConnectionSource: boolean;
+  isFlowActive?: boolean;
   connectionMode: ConnectionMode;
   onSelect: (nodeId: string) => void;
   onDelete: (nodeId: string) => void;
@@ -22,6 +23,7 @@ export const InputNode: React.FC<InputNodeProps> = ({
   result,
   isSelected,
   isConnectionSource,
+  isFlowActive = false,
   connectionMode,
   onSelect,
   onDelete,
@@ -84,6 +86,8 @@ export const InputNode: React.FC<InputNodeProps> = ({
 
   const borderClass = isConnectionSource
     ? 'border-2 border-teal-300 animate-pulse'
+    : isFlowActive
+    ? 'border-2 border-cyan-300 ring-4 ring-cyan-400/20 shadow-lg shadow-cyan-500/20'
     : isSelected
     ? 'border-2 border-teal-200'
     : 'border border-teal-500/60';

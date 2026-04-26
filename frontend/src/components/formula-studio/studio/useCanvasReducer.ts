@@ -2,7 +2,10 @@ import type { CanvasState, CanvasAction } from './canvas-types';
 import { INITIAL_CANVAS_STATE, INPUT_NODE_WIDTH, EXPRESSION_NODE_WIDTH } from './canvas-types';
 
 function generateId(): string {
-  return crypto.randomUUID();
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+  return 'id-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 11);
 }
 
 export function canvasReducer(state: CanvasState, action: CanvasAction): CanvasState {

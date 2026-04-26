@@ -10,6 +10,33 @@ export interface VQECase {
   hamiltonian: {
     terms: Record<string, number>;
   };
+  raw_spec?: {
+    problem_type?: string;
+    molecule_spec?: {
+      formula?: string;
+      interatomic_distance_angstrom?: number;
+      basis?: string;
+      charge?: number;
+      multiplicity?: number;
+    };
+    preprocessing?: {
+      mapping?: string;
+      target_qubits?: number;
+    };
+    experiment?: {
+      ansatz_type?: string;
+      n_layers?: number;
+      shots?: number;
+      classical_reference?: string;
+    };
+  };
+  transform?: {
+    source?: string;
+    mapping?: string;
+    target_qubits?: number;
+    canonical_terms?: number;
+    note?: string;
+  };
 }
 
 export interface VQEClassicalResult {

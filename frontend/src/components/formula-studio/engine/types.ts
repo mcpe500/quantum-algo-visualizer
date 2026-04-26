@@ -21,6 +21,7 @@ export interface EngineError {
     | 'PARSE_UNEXPECTED_TOKEN'
     | 'PARSE_UNBALANCED_PAREN'
     | 'PARSE_EMPTY'
+    | 'PARSE_FAILED'
     | 'EVAL_MISSING_SYMBOL'
     | 'EVAL_DIVISION_BY_ZERO'
     | 'EVAL_DOMAIN_ERROR'
