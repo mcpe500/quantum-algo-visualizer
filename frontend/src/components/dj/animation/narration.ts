@@ -71,6 +71,18 @@ export function getStepAccent(step: DJAnimationStep, totalSteps: number) {
   return `Langkah ${step.step} dari ${totalSteps}`;
 }
 
+export function getOracleFunctionLabel(data: DJAnimationPayload) {
+  const { profile } = data.oracle_summary;
+  if (profile === 'constant-zero') return 'f(x) = 0 for all x';
+  if (profile === 'constant-one') return 'f(x) = 1 for all x';
+
+  const activeInputs = data.truth_table
+    .filter((entry) => entry.output === 1)
+    .map((entry) => entry.input);
+
+  return `f(x) = 1 for {${activeInputs.join(', ')}}`;
+}
+
 export function getContextGlossary(step: DJAnimationStep, nQubits: number) {
   const notes = [
     'Panah pada sphere = keadaan qubit saat ini',
@@ -130,6 +142,6 @@ export function getExportNarration(mode: 'intro' | 'play' | 'outro', data: DJAni
   return {
     headline: `${PHASE_LABEL[step.phase] || step.phase} · ${step.comment || getStepHeadline(step)}`,
     detail: getStepExplanation(step, data.timeline.length),
-    accent: getStepAccent(step, data.timeline.length),
+    accent: step.phase === 'pre-init' ? `Function: ${getOracleFunctionLabel(data)}` : getStepAccent(step, data.timeline.length),
   };
 }

@@ -1,6 +1,6 @@
 import { Text } from '@react-three/drei';
 import { useFrame } from '@react-three/fiber';
-import { useRef } from 'react';
+import { useEffect, useRef } from 'react';
 import * as THREE from 'three';
 
 export interface BlochQubitNodeProps {
@@ -22,7 +22,7 @@ function BlochQubitNode({ y, targetX, phaseColor, blochState, p0, bodyColor, coh
   const matRef = useRef<THREE.MeshStandardMaterial>(null);
   const arrowRef = useRef<THREE.Group>(null);
   const currentDirRef = useRef(new THREE.Vector3(0, 1, 0));
-  const startTimeRef = useRef(performance.now());
+  const startTimeRef = useRef(0);
 
   const { bx, by, bz, label } = blochState;
 
@@ -34,10 +34,14 @@ function BlochQubitNode({ y, targetX, phaseColor, blochState, p0, bodyColor, coh
   const effectiveCoherence = coherence === undefined ? (isSuper ? 1 : 0) : clamp(coherence, 0, 1);
   const bobAmplitude = 0.07 * effectiveCoherence;
   const emissiveIntensityTarget = 0.15 + effectiveCoherence * 0.33;
-  const opacityTarget = 0.96 - effectiveCoherence * 0.28;
+  const opacityTarget = 0.42 + effectiveCoherence * 0.12;
   const wireframeTarget = effectiveCoherence >= 0.55;
 
   const targetDir = new THREE.Vector3(bx, bz, by);
+
+  useEffect(() => {
+    startTimeRef.current = performance.now();
+  }, []);
 
   useFrame((_, delta) => {
     if (!groupRef.current) return;
@@ -65,7 +69,7 @@ function BlochQubitNode({ y, targetX, phaseColor, blochState, p0, bodyColor, coh
   return (
     <group ref={groupRef} position={[targetX, y, 0.32]}>
       <mesh>
-        <sphereGeometry args={[0.42, 26, 26]} />
+        <sphereGeometry args={[0.5, 30, 30]} />
         <meshStandardMaterial
           ref={matRef}
           color={color}
@@ -81,19 +85,23 @@ function BlochQubitNode({ y, targetX, phaseColor, blochState, p0, bodyColor, coh
 
       <mesh ref={arrowRef} position={[0, 0, 0]}>
         <group>
-          <mesh position={[0, 0.24, 0]}>
-            <coneGeometry args={[0.07, 0.16, 8]} />
-            <meshStandardMaterial color={color} emissive={color} emissiveIntensity={0.5} />
+          <mesh position={[0, 0.38, 0]}>
+            <coneGeometry args={[0.11, 0.24, 18]} />
+            <meshStandardMaterial color="#0F172A" emissive={color} emissiveIntensity={0.45} />
           </mesh>
-          <mesh position={[0, 0.09, 0]}>
-            <cylinderGeometry args={[0.028, 0.028, 0.18, 8]} />
-            <meshStandardMaterial color={color} emissive={color} emissiveIntensity={0.35} />
+          <mesh position={[0, 0.18, 0]}>
+            <cylinderGeometry args={[0.036, 0.036, 0.36, 16]} />
+            <meshStandardMaterial color="#0F172A" emissive={color} emissiveIntensity={0.32} />
+          </mesh>
+          <mesh position={[0, -0.04, 0]}>
+            <sphereGeometry args={[0.045, 12, 12]} />
+            <meshStandardMaterial color="#0F172A" emissive={color} emissiveIntensity={0.28} />
           </mesh>
         </group>
       </mesh>
 
       <mesh rotation={[Math.PI / 2, 0, 0]}>
-        <torusGeometry args={[0.55, 0.028, 12, 48]} />
+        <torusGeometry args={[0.64, 0.023, 12, 56]} />
         <meshStandardMaterial color={phaseColor} emissive={phaseColor} emissiveIntensity={0.22} />
       </mesh>
 

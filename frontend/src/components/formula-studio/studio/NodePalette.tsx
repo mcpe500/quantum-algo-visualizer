@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { ChevronRight, Search, PanelLeftClose, PanelLeftOpen, Atom, Binary, Calculator, CircuitBoard, FunctionSquare, Gauge, GitBranch, Layers, Sigma, Zap } from 'lucide-react';
+import { ChevronRight, Search, PanelLeftClose, PanelLeftOpen, Atom, Binary, Calculator, CircuitBoard, FunctionSquare, Gauge, Layers, Sigma, Zap, Thermometer, Hash } from 'lucide-react';
 import type { FormulaDefinition, FormulaCategory } from '../types';
 import { NodePaletteItem } from './NodePaletteItem';
 
@@ -10,6 +10,7 @@ const CATEGORY_ORDER: FormulaCategory[] = [
   'qft',
   'vqe',
   'qaoa',
+  'sa',
   'complexity',
   'equations',
   'foundational',
@@ -40,8 +41,8 @@ const CATEGORY_ICONS: Record<FormulaCategory, React.ReactNode> = {
   complexity: <Calculator className="w-4 h-4" />,
   equations: <Sigma className="w-4 h-4" />,
   foundational: <Layers className="w-4 h-4" />,
-  basics: <GitBranch className="w-4 h-4" />,
-  sa: <Gauge className="w-4 h-4" />,
+  basics: <Hash className="w-4 h-4" />,
+  sa: <Thermometer className="w-4 h-4" />,
 };
 
 interface NodePaletteProps {
@@ -127,7 +128,7 @@ export const NodePalette: React.FC<NodePaletteProps> = ({ formulas, collapsed = 
           <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-500" />
           <input
             type="text"
-            placeholder="Search formulas..."
+            placeholder="Cari formula..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="w-full pl-8 pr-3 py-1.5 text-xs bg-slate-800/80 border border-slate-700/50 rounded-md text-slate-200 placeholder-slate-500 focus:outline-none focus:border-cyan-500/50"

@@ -1,11 +1,14 @@
 import React from 'react';
 import type { CanvasConnection, CanvasNodeData } from './canvas-types';
+import type { NodeResult } from './graphEngine';
 import { ConnectionLine } from './ConnectionLine';
 
 interface ConnectionLinesProps {
   connections: CanvasConnection[];
   nodes: CanvasNodeData[];
   selectedConnectionId: string | null;
+  activeConnectionIds?: Set<string>;
+  nodeResults?: Map<string, NodeResult>;
   onSelectConnection: (connectionId: string) => void;
 }
 
@@ -13,6 +16,8 @@ export const ConnectionLines: React.FC<ConnectionLinesProps> = ({
   connections,
   nodes,
   selectedConnectionId,
+  activeConnectionIds,
+  nodeResults,
   onSelectConnection,
 }) => {
   const nodeMap = new Map(nodes.map((n) => [n.id, n]));
@@ -46,6 +51,8 @@ export const ConnectionLines: React.FC<ConnectionLinesProps> = ({
               sourceNode={sourceNode}
               targetNode={targetNode}
               isSelected={selectedConnectionId === conn.id}
+              isFlowActive={activeConnectionIds?.has(conn.id)}
+              sourceResult={nodeResults?.get(conn.fromId)}
               onSelect={onSelectConnection}
             />
           </g>

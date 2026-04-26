@@ -53,9 +53,24 @@ const CATEGORY_ACCENT: Record<string, string> = {
   foundational: 'indigo',
 };
 
+const CATEGORY_ACCENT_CLASSES: Record<string, { text: string; border: string; bg: string; bgLight: string }> = {
+  cyan:    { text: 'text-cyan-400',    border: 'border-cyan-500/30',    bg: 'bg-cyan-500/5',    bgLight: 'bg-cyan-500/20' },
+  violet:  { text: 'text-violet-400', border: 'border-violet-500/30', bg: 'bg-violet-500/5',  bgLight: 'bg-violet-500/20' },
+  blue:    { text: 'text-blue-400',   border: 'border-blue-500/30',   bg: 'bg-blue-500/5',    bgLight: 'bg-blue-500/20' },
+  emerald: { text: 'text-emerald-400',border: 'border-emerald-500/30',bg: 'bg-emerald-500/5', bgLight: 'bg-emerald-500/20' },
+  orange:  { text: 'text-orange-400', border: 'border-orange-500/30', bg: 'bg-orange-500/5',  bgLight: 'bg-orange-500/20' },
+  rose:    { text: 'text-rose-400',   border: 'border-rose-500/30',   bg: 'bg-rose-500/5',    bgLight: 'bg-rose-500/20' },
+  amber:   { text: 'text-amber-400',  border: 'border-amber-500/30',  bg: 'bg-amber-500/5',   bgLight: 'bg-amber-500/20' },
+  slate:   { text: 'text-slate-400',  border: 'border-slate-500/30',  bg: 'bg-slate-500/5',   bgLight: 'bg-slate-500/20' },
+  teal:    { text: 'text-teal-400',  border: 'border-teal-500/30',   bg: 'bg-teal-500/5',    bgLight: 'bg-teal-500/20' },
+  purple:  { text: 'text-purple-400', border: 'border-purple-500/30', bg: 'bg-purple-500/5',  bgLight: 'bg-purple-500/20' },
+  indigo:  { text: 'text-indigo-400', border: 'border-indigo-500/30', bg: 'bg-indigo-500/5',  bgLight: 'bg-indigo-500/20' },
+};
+
 function SectionHeader({ icon, label, accent = 'slate' }: { icon: React.ReactNode; label: string; accent?: string }) {
+  const accentClass = CATEGORY_ACCENT_CLASSES[accent] ?? CATEGORY_ACCENT_CLASSES.slate;
   return (
-    <div className={`flex items-center gap-1.5 text-${accent}-400 text-[11px] font-bold uppercase tracking-wider`}>
+    <div className={`flex items-center gap-1.5 ${accentClass.text} text-[11px] font-bold uppercase tracking-wider`}>
       {icon}
       {label}
     </div>
@@ -406,9 +421,10 @@ function FormulaInspector({
   }, []);
 
   const accent = CATEGORY_ACCENT[formula.category] ?? 'slate';
+  const accentClass = CATEGORY_ACCENT_CLASSES[accent] ?? CATEGORY_ACCENT_CLASSES.slate;
 
   return (
-    <aside className="w-72 border-l border-slate-700/50 bg-slate-900/80 flex flex-col gap-0 overflow-y-auto text-slate-100">
+    <aside className="w-96 shrink-0 border-l border-slate-700/50 bg-slate-900/80 flex flex-col gap-0 overflow-y-auto text-slate-100">
       {/* Header */}
       <div className="sticky top-0 z-10 bg-slate-900/95 backdrop-blur-sm border-b border-slate-800/60 px-3 py-2.5 flex items-center justify-between">
         <div>
@@ -421,9 +437,9 @@ function FormulaInspector({
       </div>
 
       {/* Formula display */}
-      <div className={`mx-3 mt-3 rounded-xl border border-${accent}-500/30 bg-${accent}-500/5 p-3 space-y-2`}>
+      <div className={`mx-3 mt-3 rounded-xl border ${accentClass.border} ${accentClass.bg} p-3 space-y-2`}>
         <div className="flex items-start justify-between gap-2">
-          <span className={`text-xs font-semibold px-2 py-0.5 rounded-full bg-${accent}-500/20 text-${accent}-400`}>{formula.category.toUpperCase()}</span>
+          <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${accentClass.bgLight} ${accentClass.text}`}>{formula.category.toUpperCase()}</span>
           <span className="text-[10px] font-mono text-slate-500">{formula.id}</span>
         </div>
         <div className="bg-slate-950/60 border border-slate-800/60 rounded-lg p-2.5 min-h-10 flex items-center overflow-x-auto">

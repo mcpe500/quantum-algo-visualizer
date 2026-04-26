@@ -13,48 +13,16 @@
  */
 
 import type { CanvasNodeData, CanvasConnection } from './canvas-types';
-
-// Module-level lazy initialization to avoid circular dependency issues
-// while ensuring require() is only called once per module
-let _formulaRegistry: Array<{ id: string; latex?: string; computation?: unknown }> | null = null;
-let _formulaComputationMap: Record<string, unknown> | null = null;
-let _engine: {
-  parseExpression: (expr: string) => { ok: boolean; value?: unknown; error?: { message: string } };
-  substituteSymbols: (node: unknown, values: Record<string, number>) => unknown;
-  simplifyExpression: (node: unknown) => unknown;
-  evaluateExpression: (node: unknown, context: { variables?: Record<string, number> }) => { ok: boolean; value?: number; error?: { message: string } };
-  toInfix: (node: unknown) => string;
-  toLatex: (node: unknown) => string;
-} | null = null;
-
-function getFormulaRegistry() {
-  if (!_formulaRegistry) {
-    _formulaRegistry = require('../registry') as Array<{ id: string; latex?: string; computation?: unknown }>;
-  }
-  return _formulaRegistry;
-}
-
-function getFormulaComputationMap() {
-  if (!_formulaComputationMap) {
-    _formulaComputationMap = require('../computation') as Record<string, unknown>;
-  }
-  return _formulaComputationMap;
-}
-
-function getEngine() {
-  if (!_engine) {
-    const mod = require('../engine');
-    _engine = {
-      parseExpression: mod.parseExpression,
-      substituteSymbols: mod.substituteSymbols,
-      simplifyExpression: mod.simplifyExpression,
-      evaluateExpression: mod.evaluateExpression,
-      toInfix: mod.toInfix,
-      toLatex: mod.toLatex,
-    };
-  }
-  return _engine;
-}
+import { FORMULA_REGISTRY } from '../registry';
+import { FORMULA_COMPUTATION_MAP } from '../computation';
+import {
+  evaluateExpression,
+  parseExpression,
+  simplifyExpression,
+  substituteSymbols,
+  toInfix,
+  toLatex,
+} from '../engine';
 
 export interface DataflowNodeResult {
   value?: number;
@@ -92,33 +60,19 @@ function buildAdjacencyList(
   }
 
   for (const conn of connections) {
+    const connMeta = conn as unknown as Record<string, unknown>;
     const edges = adj.get(conn.fromId) ?? [];
     edges.push({
       from: conn.fromId,
       to: conn.toId,
-      fromPort: (conn as Record<string, unknown>).fromPort as string ?? 'default',
-      toPort: (conn as Record<string, unknown>).toPort as string ?? 'default',
+      fromPort: (connMeta.fromPort as string | undefined) ?? 'default',
+      toPort: (connMeta.toPort as string | undefined) ?? 'default',
       connectionId: conn.id,
     });
     adj.set(conn.fromId, edges);
   }
 
   return adj;
-}
-
-/** Build reverse adjacency (incoming edges) */
-function buildReverseAdjacency(adj: Map<string, Edge[]>): Map<string, Edge[]> {
-  const rev = new Map<string, Edge[]>();
-
-  for (const [fromId, edges] of adj) {
-    for (const edge of edges) {
-      const incoming = rev.get(edge.to) ?? [];
-      incoming.push(edge);
-      rev.set(edge.to, incoming);
-    }
-  }
-
-  return rev;
 }
 
 /** Detect cycles using DFS with color marking */
@@ -221,7 +175,8 @@ function gatherInputs(
   const incoming = connections.filter(c => c.toId === nodeId);
 
   for (const conn of incoming) {
-    const portName = (conn as Record<string, unknown>).toPort as string ?? 'default';
+    const connMeta = conn as unknown as Record<string, unknown>;
+    const portName = (connMeta.toPort as string | undefined) ?? 'default';
     const sourceResult = computedResults.get(conn.fromId);
 
     if (sourceResult?.status === 'computed' && sourceResult.value !== undefined) {
@@ -404,10 +359,15 @@ function computeNode(
       }
 
       case 'formula': {
-        const FORMULA_REGISTRY = getFormulaRegistry();
-        const FORMULA_COMPUTATION_MAP = getFormulaComputationMap();
+        if (!node.formulaId) {
+          return {
+            value: undefined,
+            error: 'Formula tidak valid',
+            status: 'error',
+          };
+        }
 
-        const formula = FORMULA_REGISTRY.find((f: { id: string }) => f.id === node.formulaId);
+        const formula = FORMULA_REGISTRY.find((f) => f.id === node.formulaId);
         const computation = formula?.computation ?? FORMULA_COMPUTATION_MAP[node.formulaId];
 
         if (!computation) {
@@ -433,7 +393,7 @@ function computeNode(
         try {
           const paramValues: Record<string, number> = {};
           for (const p of required) {
-            paramValues[p] = scope[p];
+            paramValues[p] = scope[p] ?? 0;
           }
           const steps = computation.steps(paramValues);
 
@@ -487,29 +447,4 @@ function computeNode(
       status: 'error',
     };
   }
-}
-
-// Re-export parse functions for use in this module
-function parseExpression(expr: string) {
-  return getEngine().parseExpression(expr);
-}
-
-function substituteSymbols(node: unknown, values: Record<string, number>) {
-  return getEngine().substituteSymbols(node, values);
-}
-
-function simplifyExpression(node: unknown) {
-  return getEngine().simplifyExpression(node);
-}
-
-function evaluateExpression(node: unknown, context: { variables?: Record<string, number> }) {
-  return getEngine().evaluateExpression(node, context);
-}
-
-function toInfix(node: unknown): string {
-  return getEngine().toInfix(node);
-}
-
-function toLatex(node: unknown): string {
-  return getEngine().toLatex(node);
 }

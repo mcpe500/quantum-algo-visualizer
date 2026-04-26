@@ -1,20 +1,17 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   Camera,
   FlaskRound,
   LayoutGrid,
   Variable,
-  X,
   ZoomIn,
   ZoomOut,
-  Maximize,
   Link2,
   Unlink,
-  MousePointer2,
   Trash2,
-  Screenshot,
 } from 'lucide-react';
 import type { ConnectionMode } from './canvas-types';
+import type { FormulaStudioScenario } from '../scenarios';
 
 interface CanvasToolbarProps {
   connectionMode: ConnectionMode;
@@ -27,6 +24,8 @@ interface CanvasToolbarProps {
   onFitView: () => void;
   onAddInputNode: () => void;
   onAddExpressionNode: () => void;
+  scenarios: FormulaStudioScenario[];
+  onLoadScenario: (scenarioId: string) => void;
   zoom: number;
 }
 
@@ -41,8 +40,17 @@ export const CanvasToolbar: React.FC<CanvasToolbarProps> = ({
   onFitView,
   onAddInputNode,
   onAddExpressionNode,
+  scenarios,
+  onLoadScenario,
   zoom,
 }) => {
+  const [selectedScenarioId, setSelectedScenarioId] = useState('');
+
+  const handleLoadScenario = () => {
+    if (!selectedScenarioId) return;
+    onLoadScenario(selectedScenarioId);
+  };
+
   return (
     <div className="flex items-center justify-between px-3 py-2 bg-slate-900/80 border-b border-slate-800/60 gap-2">
       {/* LEFT: Primary node creation */}
@@ -67,6 +75,33 @@ export const CanvasToolbar: React.FC<CanvasToolbarProps> = ({
 
         <div className="w-px h-5 bg-slate-700/50 mx-0.5" />
 
+        <div className="flex items-center gap-1.5 px-1.5 py-1 bg-slate-950/40 border border-slate-800/60 rounded-md">
+          <select
+            value={selectedScenarioId}
+            onChange={(event) => setSelectedScenarioId(event.target.value)}
+            className="max-w-56 bg-transparent text-xs text-slate-300 focus:outline-none"
+            title="Pilih skenario canvas siap pakai di Studio"
+          >
+            <option value="" className="bg-slate-950 text-slate-300">Pilih skenario Studio...</option>
+            {scenarios.map((scenario) => (
+              <option key={scenario.id} value={scenario.id} className="bg-slate-950 text-slate-200">
+                {scenario.title}
+              </option>
+            ))}
+          </select>
+          <button
+            type="button"
+            onClick={handleLoadScenario}
+            disabled={!selectedScenarioId}
+            className="px-2 py-1 text-xs font-medium rounded bg-cyan-500/15 border border-cyan-500/30 text-cyan-300 hover:bg-cyan-500/25 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            title="Muat skenario ke canvas Studio"
+          >
+            Muat
+          </button>
+        </div>
+
+        <div className="w-px h-5 bg-slate-700/50 mx-0.5" />
+
         <button
           onClick={onToggleConnectionMode}
           className={`flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium rounded-md transition-colors ${
@@ -74,7 +109,7 @@ export const CanvasToolbar: React.FC<CanvasToolbarProps> = ({
               ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/30'
               : 'text-slate-300 hover:text-white hover:bg-slate-800/50'
           }`}
-          title="Draw connections between nodes (C)"
+          title="Hubungkan antar node (C)"
         >
           {connectionMode === 'idle' ? <Link2 className="w-3.5 h-3.5" /> : <Unlink className="w-3.5 h-3.5" />}
           {connectionMode === 'idle' ? 'Connect' : 'Cancel'}
@@ -83,7 +118,7 @@ export const CanvasToolbar: React.FC<CanvasToolbarProps> = ({
         <button
           onClick={onAutoLayout}
           className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-slate-300 hover:text-white hover:bg-slate-800/50 rounded-md transition-colors"
-          title="Auto-arrange nodes (A)"
+          title="Susun ulang node otomatis (A)"
         >
           <LayoutGrid className="w-3.5 h-3.5" />
           Auto
@@ -120,7 +155,7 @@ export const CanvasToolbar: React.FC<CanvasToolbarProps> = ({
         <button
           onClick={onScreenshot}
           className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-slate-300 hover:text-white hover:bg-slate-800/50 rounded-md transition-colors"
-          title="Capture canvas as image"
+          title="Ambil screenshot canvas"
         >
           <Camera className="w-3.5 h-3.5" />
           Screenshot
@@ -131,7 +166,7 @@ export const CanvasToolbar: React.FC<CanvasToolbarProps> = ({
         <button
           onClick={onClearCanvas}
           className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-red-400/80 hover:text-red-300 hover:bg-red-500/10 rounded-md transition-colors"
-          title="Clear all nodes and connections"
+          title="Hapus semua node dan koneksi"
         >
           <Trash2 className="w-3.5 h-3.5" />
           Clear

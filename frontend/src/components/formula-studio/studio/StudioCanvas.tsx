@@ -14,7 +14,10 @@ import { ExpressionNode } from './ExpressionNode';
 import { ConnectionLines } from './ConnectionLines';
 import { ConnectionInspector } from './ConnectionInspector';
 import { NodeInspector } from './NodeInspector';
-import { computeGraph, buildVarScope } from './graphEngine';
+import { StudioFlowPanel } from './StudioFlowPanel';
+import { buildVarScope } from './graphEngine';
+import { computeDataflowGraph } from './dataflowEngine';
+import { FORMULA_STUDIO_SCENARIOS } from '../scenarios';
 
 const STORAGE_KEY = 'formula-studio-canvas-v2';
 
@@ -55,7 +58,7 @@ const DroppableCanvas: React.FC<DroppableCanvasProps> = ({ children, onDrop }) =
   return (
     <div
       ref={setNodeRef}
-      className={`canvas-area flex-1 relative overflow-auto bg-slate-900/50 ${isOver ? 'bg-cyan-500/5' : ''}`}
+      className={`canvas-area flex-1 min-w-0 relative overflow-auto bg-slate-900/50 ${isOver ? 'bg-cyan-500/5' : ''}`}
       onPointerUp={handlePointerUp}
       style={{ backgroundImage: 'radial-gradient(circle, #334155 1px, transparent 1px)', backgroundSize: '20px 20px' }}
     >
@@ -115,9 +118,19 @@ export const StudioCanvas: React.FC = () => {
   const [connectionMode, setConnectionMode] = React.useState<ConnectionMode>('idle');
   const [connectionSourceId, setConnectionSourceId] = React.useState<string | null>(null);
   const [isCapturing, setIsCapturing] = React.useState(false);
-  const [paletteCollapsed, setPaletteCollapsed] = React.useState(false);
+  const [activeScenarioId, setActiveScenarioId] = React.useState<string | null>(null);
+  const [activeFlowStepIndex, setActiveFlowStepIndex] = React.useState(0);
+  const [paletteCollapsed, setPaletteCollapsed] = React.useState(() => {
+    try { return localStorage.getItem('formula-studio-palette-collapsed') === 'true'; } catch { return false; }
+  });
   const canvasRef = useRef<HTMLDivElement>(null);
-  const dropPointRef = useRef<{ x: number; y: number } | null>(null);
+
+  const stateRef = useRef(state);
+  useEffect(() => { stateRef.current = state; }, [state]);
+
+  useEffect(() => {
+    try { localStorage.setItem('formula-studio-palette-collapsed', String(paletteCollapsed)); } catch { /* ignore */ }
+  }, [paletteCollapsed]);
 
   useEffect(() => { saveToStorage(state); }, [state]);
 
@@ -131,11 +144,33 @@ export const StudioCanvas: React.FC = () => {
     return map;
   }, []);
 
-  /** Live-computed graph results: Map<nodeId, NodeResult> */
-  const graphResults = useMemo(() => computeGraph(state.nodes), [state.nodes]);
-
   /** Global variable scope from all input nodes */
   const varScope = useMemo(() => buildVarScope(state.nodes), [state.nodes]);
+
+  /** Connection-aware computation results used by node badges and flow labels. */
+  const dataflowGraph = useMemo(
+    () => computeDataflowGraph(state.nodes, state.connections, varScope),
+    [state.nodes, state.connections, varScope]
+  );
+
+  const graphResults = dataflowGraph.results;
+
+  const activeScenario = useMemo(
+    () => FORMULA_STUDIO_SCENARIOS.find((scenario) => scenario.id === activeScenarioId) ?? null,
+    [activeScenarioId]
+  );
+
+  const activeFlowStep = activeScenario?.flowSteps[activeFlowStepIndex];
+
+  const activeFlowNodeIds = useMemo(
+    () => new Set(activeFlowStep?.nodeIds ?? []),
+    [activeFlowStep]
+  );
+
+  const activeFlowConnectionIds = useMemo(
+    () => new Set(activeFlowStep?.connectionIds ?? []),
+    [activeFlowStep]
+  );
 
   const selectedNode = useMemo(
     () => state.nodes.find((n) => n.id === state.selectedNodeId) ?? null,
@@ -168,8 +203,8 @@ export const StudioCanvas: React.FC = () => {
 
   /* ── DnD from palette ── */
 
-  const handleCanvasDrop = useCallback((x: number, y: number) => {
-    dropPointRef.current = { x, y };
+  const handleCanvasDrop = useCallback((_x: number, _y: number) => {
+    // No longer needed — drop coordinates from dnd-kit are authoritative
   }, []);
 
   const handleDragEnd = useCallback(
@@ -179,25 +214,19 @@ export const StudioCanvas: React.FC = () => {
       if (!data) return;
 
       if (data.type === 'palette-item' && data.formulaId) {
-        if (over?.id !== 'canvas-drop-zone') { dropPointRef.current = null; return; }
+        if (over?.id !== 'canvas-drop-zone') return;
         const rect = canvasRef.current?.getBoundingClientRect();
         if (!rect) return;
 
-        let screenX: number, screenY: number;
-        if (dropPointRef.current) {
-          screenX = dropPointRef.current.x;
-          screenY = dropPointRef.current.y;
-        } else {
-          const translated = active.rect.current.translated;
-          if (!translated) { dropPointRef.current = null; return; }
-          screenX = translated.left - rect.left + translated.width / 2;
-          screenY = translated.top - rect.top + translated.height / 2;
-        }
+        const translated = active.rect.current.translated;
+        if (!translated) return;
+
+        const screenX = translated.left - rect.left + translated.width / 2;
+        const screenY = translated.top - rect.top + translated.height / 2;
 
         const x = Math.max(0, (screenX - state.panOffset.x) / state.zoom - 140);
         const y = Math.max(0, (screenY - state.panOffset.y) / state.zoom - 60);
         dispatch({ type: 'ADD_NODE', formulaId: data.formulaId, position: { x, y } });
-        dropPointRef.current = null;
 
       } else if (data.type === 'canvas-node' && data.nodeId) {
         const node = state.nodes.find((n) => n.id === data.nodeId);
@@ -288,7 +317,23 @@ export const StudioCanvas: React.FC = () => {
 
   /* ── canvas controls ── */
 
-  const handleClearCanvas = useCallback(() => { dispatch({ type: 'CLEAR_CANVAS' }); }, []);
+  const handleClearCanvas = useCallback(() => {
+    dispatch({ type: 'CLEAR_CANVAS' });
+    setActiveScenarioId(null);
+    setActiveFlowStepIndex(0);
+  }, []);
+
+  const handleLoadScenario = useCallback((scenarioId: string) => {
+    const scenario = FORMULA_STUDIO_SCENARIOS.find((item) => item.id === scenarioId);
+    if (!scenario) return;
+
+    const nextState = JSON.parse(JSON.stringify(scenario.state)) as CanvasState;
+    dispatch({ type: 'LOAD_CANVAS', state: nextState });
+    setConnectionMode('idle');
+    setConnectionSourceId(null);
+    setActiveScenarioId(scenarioId);
+    setActiveFlowStepIndex(0);
+  }, []);
 
   const handleAutoLayout = useCallback(() => {
     calculateAutoLayout(state.nodes, state.connections).forEach((node) => {
@@ -349,6 +394,8 @@ export const StudioCanvas: React.FC = () => {
       const target = event.target as HTMLElement | null;
       if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) return;
 
+      const currentState = stateRef.current;
+
       if (event.key === 'Escape') {
         dispatch({ type: 'SELECT_NODE', nodeId: null });
         dispatch({ type: 'SELECT_CONNECTION', connectionId: null });
@@ -357,18 +404,18 @@ export const StudioCanvas: React.FC = () => {
         return;
       }
       if (event.key.toLowerCase() === 'c') { event.preventDefault(); setConnectionSourceId(null); setConnectionMode(p => p === 'idle' ? 'selecting-source' : 'idle'); return; }
-      if (event.key.toLowerCase() === 'a') { event.preventDefault(); calculateAutoLayout(state.nodes, state.connections).forEach(n => dispatch({ type: 'MOVE_NODE', nodeId: n.id, position: n.position })); return; }
+      if (event.key.toLowerCase() === 'a') { event.preventDefault(); calculateAutoLayout(currentState.nodes, currentState.connections).forEach(n => dispatch({ type: 'MOVE_NODE', nodeId: n.id, position: n.position })); return; }
       if (event.key.toLowerCase() === 'f') { event.preventDefault(); handleFitView(); return; }
-      if (event.key === '+' || event.key === '=') { event.preventDefault(); dispatch({ type: 'SET_ZOOM', zoom: state.zoom + 0.1 }); return; }
-      if (event.key === '-') { event.preventDefault(); dispatch({ type: 'SET_ZOOM', zoom: state.zoom - 0.1 }); return; }
+      if (event.key === '+' || event.key === '=') { event.preventDefault(); dispatch({ type: 'SET_ZOOM', zoom: currentState.zoom + 0.1 }); return; }
+      if (event.key === '-') { event.preventDefault(); dispatch({ type: 'SET_ZOOM', zoom: currentState.zoom - 0.1 }); return; }
       if (event.key === 'Delete' || event.key === 'Backspace') {
-        if (state.selectedConnectionId) { event.preventDefault(); dispatch({ type: 'DELETE_CONNECTION', connectionId: state.selectedConnectionId }); return; }
-        if (state.selectedNodeId) { event.preventDefault(); dispatch({ type: 'DELETE_NODE', nodeId: state.selectedNodeId }); }
+        if (currentState.selectedConnectionId) { event.preventDefault(); dispatch({ type: 'DELETE_CONNECTION', connectionId: currentState.selectedConnectionId }); return; }
+        if (currentState.selectedNodeId) { event.preventDefault(); dispatch({ type: 'DELETE_NODE', nodeId: currentState.selectedNodeId }); }
       }
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [state.selectedConnectionId, state.selectedNodeId, state.nodes, state.connections, state.zoom, handleFitView]);
+  }, []);
 
   /* ── render ── */
 
@@ -392,6 +439,8 @@ export const StudioCanvas: React.FC = () => {
           onFitView={handleFitView}
           onAddInputNode={handleAddInputNode}
           onAddExpressionNode={handleAddExpressionNode}
+          scenarios={FORMULA_STUDIO_SCENARIOS}
+          onLoadScenario={handleLoadScenario}
           zoom={state.zoom}
         />
 
@@ -416,6 +465,8 @@ export const StudioCanvas: React.FC = () => {
                 connections={state.connections}
                 nodes={state.nodes}
                 selectedConnectionId={state.selectedConnectionId}
+                activeConnectionIds={activeFlowConnectionIds}
+                nodeResults={graphResults}
                 onSelectConnection={handleConnectionSelect}
               />
 
@@ -432,6 +483,7 @@ export const StudioCanvas: React.FC = () => {
                         result={result}
                         isSelected={isSelected}
                         isConnectionSource={isSource}
+                        isFlowActive={activeFlowNodeIds.has(node.id)}
                         connectionMode={connectionMode}
                         onSelect={handleNodeSelect}
                         onDelete={handleNodeDelete}
@@ -451,6 +503,7 @@ export const StudioCanvas: React.FC = () => {
                         result={result}
                         isSelected={isSelected}
                         isConnectionSource={isSource}
+                        isFlowActive={activeFlowNodeIds.has(node.id)}
                         connectionMode={connectionMode}
                         onSelect={handleNodeSelect}
                         onDelete={handleNodeDelete}
@@ -473,6 +526,8 @@ export const StudioCanvas: React.FC = () => {
                       formula={formula}
                       isSelected={isSelected}
                       isConnectionSource={isSource}
+                      isFlowActive={activeFlowNodeIds.has(node.id)}
+                      result={result}
                       connectionMode={connectionMode}
                       onSelect={handleNodeSelect}
                       onDelete={handleNodeDelete}
@@ -496,10 +551,19 @@ export const StudioCanvas: React.FC = () => {
                 </div>
               )}
             </div>
+
+            {activeScenario && (
+              <StudioFlowPanel
+                scenario={activeScenario}
+                activeStepIndex={activeFlowStepIndex}
+                onStepChange={setActiveFlowStepIndex}
+                onClose={() => setActiveScenarioId(null)}
+              />
+            )}
           </DroppableCanvas>
 
           {/* Right inspector — always present to prevent layout shift */}
-          <div className="shrink-0">
+          <div className="shrink-0 h-full">
             {selectedConnection ? (
               <ConnectionInspector
                 connection={selectedConnection}

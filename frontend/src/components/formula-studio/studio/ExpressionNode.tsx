@@ -9,6 +9,7 @@ interface ExpressionNodeProps {
   result: NodeResult | undefined;
   isSelected: boolean;
   isConnectionSource: boolean;
+  isFlowActive?: boolean;
   connectionMode: ConnectionMode;
   onSelect: (nodeId: string) => void;
   onDelete: (nodeId: string) => void;
@@ -22,6 +23,7 @@ export const ExpressionNode: React.FC<ExpressionNodeProps> = ({
   result,
   isSelected,
   isConnectionSource,
+  isFlowActive = false,
   connectionMode,
   onSelect,
   onDelete,
@@ -75,6 +77,8 @@ export const ExpressionNode: React.FC<ExpressionNodeProps> = ({
 
   const borderClass = isConnectionSource
     ? 'border-2 border-amber-300 animate-pulse'
+    : isFlowActive
+    ? 'border-2 border-cyan-300 ring-4 ring-cyan-400/20 shadow-lg shadow-cyan-500/20'
     : isSelected
     ? 'border-2 border-amber-300'
     : hasError

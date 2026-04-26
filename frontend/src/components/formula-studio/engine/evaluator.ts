@@ -19,6 +19,7 @@ const DEFAULT_FUNCTIONS: Record<string, (...args: number[]) => number> = {
   min: (...values: number[]) => Math.min(...values),
   max: (...values: number[]) => Math.max(...values),
   pow: (x: number, y: number) => Math.pow(x, y),
+  mod: (x: number, y: number) => ((x % y) + y) % y,
 };
 
 function evalNode(node: ExprNode, context: Required<EvaluationContext>): EngineResult<number> {

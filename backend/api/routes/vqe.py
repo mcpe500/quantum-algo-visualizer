@@ -4,6 +4,7 @@ from api import api_bp
 from services.vqe_service import (
     get_vqe_cases,
     get_vqe_case_or_none,
+    get_vqe_dataset_payload,
     get_vqe_circuit_payload,
     get_vqe_circuit_image_payload,
     get_vqe_classical_payload,
@@ -18,7 +19,7 @@ def vqe_cases():
 
 @api_bp.route('/vqe/dataset/<case_id>', methods=['GET'])
 def vqe_dataset(case_id):
-    case = get_vqe_case_or_none(case_id)
+    case = get_vqe_dataset_payload(case_id)
     if not case:
         return jsonify({'error': f'Case {case_id} not found'}), 404
     return jsonify(case)

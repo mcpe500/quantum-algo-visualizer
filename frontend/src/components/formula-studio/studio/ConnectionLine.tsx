@@ -1,5 +1,6 @@
 import React from 'react';
 import type { CanvasNodeData, CanvasConnection } from './canvas-types';
+import type { NodeResult } from './graphEngine';
 import { RELATION_COLORS } from './canvas-types';
 import { calculateBezierPath, calculateBezierMidpoint } from './canvasUtils';
 
@@ -8,6 +9,8 @@ interface ConnectionLineProps {
   sourceNode: CanvasNodeData;
   targetNode: CanvasNodeData;
   isSelected: boolean;
+  isFlowActive?: boolean;
+  sourceResult?: NodeResult;
   onSelect: (connectionId: string) => void;
 }
 
@@ -16,6 +19,8 @@ export const ConnectionLine: React.FC<ConnectionLineProps> = ({
   sourceNode,
   targetNode,
   isSelected,
+  isFlowActive = false,
+  sourceResult,
   onSelect,
 }) => {
   const path = calculateBezierPath(sourceNode, targetNode);
@@ -26,6 +31,10 @@ export const ConnectionLine: React.FC<ConnectionLineProps> = ({
   const isDotted = connection.relationType === 'related' || connection.relationType === 'same-concept';
 
   const dashArray = isDashed ? '8,4' : isDotted ? '3,3' : 'none';
+  const flowValue = sourceResult?.valueDisplay && ['feeds-into', 'result', 'outputs-to'].includes(connection.relationType)
+    ? `${connection.label} = ${sourceResult.valueDisplay}`
+    : connection.label;
+  const labelWidth = Math.max(80, Math.min(160, flowValue.length * 7 + 18));
 
   return (
     <g
@@ -45,18 +54,23 @@ export const ConnectionLine: React.FC<ConnectionLineProps> = ({
       <path
         d={path}
         fill="none"
-        stroke={isSelected ? '#ffffff' : undefined}
-        strokeWidth={isSelected ? 3 : 2}
+        stroke={isSelected ? '#ffffff' : isFlowActive ? '#22d3ee' : undefined}
+        strokeWidth={isSelected || isFlowActive ? 3 : 2}
         strokeDasharray={dashArray}
-        className={strokeColorClass}
+        className={isFlowActive ? 'drop-shadow-[0_0_8px_rgba(34,211,238,0.8)]' : strokeColorClass}
         markerEnd="url(#arrowhead)"
       />
-      {connection.label && (
+      {isFlowActive && (
+        <circle r="4" fill="#67e8f9" opacity="0.95">
+          <animateMotion dur="1.6s" repeatCount="indefinite" path={path} />
+        </circle>
+      )}
+      {flowValue && (
         <g transform={`translate(${midpoint.x}, ${midpoint.y})`}>
           <rect
-            x={-40}
+            x={-labelWidth / 2}
             y={-10}
-            width={80}
+            width={labelWidth}
             height={20}
             fill="#1e293b"
             fillOpacity={0.9}
@@ -65,9 +79,9 @@ export const ConnectionLine: React.FC<ConnectionLineProps> = ({
           <text
             textAnchor="middle"
             dominantBaseline="middle"
-            className="fill-slate-300 text-[10px] font-medium"
+            className={`${isFlowActive ? 'fill-cyan-100' : 'fill-slate-300'} text-[10px] font-medium`}
           >
-            {connection.label}
+            {flowValue}
           </text>
         </g>
       )}

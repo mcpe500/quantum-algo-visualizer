@@ -57,6 +57,8 @@ export interface CanvasConnection {
   toId: string;
   relationType: string;
   label: string;
+  fromPort?: string;
+  toPort?: string;
 }
 
 // Story narrative step

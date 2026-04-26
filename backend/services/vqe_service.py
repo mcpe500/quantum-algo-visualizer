@@ -13,11 +13,48 @@ from qiskit_aer import AerSimulator
 from qiskit.primitives import BackendEstimatorV2
 
 from api.shared.plotting import figure_to_base64
-from services.common import list_cases, load_case_canonical
+from services.common import list_cases, load_case, load_case_canonical
 
 
 def get_vqe_case_or_none(case_id):
     return load_case_canonical('vqe', case_id)
+
+
+def get_vqe_dataset_payload(case_id):
+    raw = load_case('vqe', case_id)
+    canonical = load_case_canonical('vqe', case_id)
+    if raw is None or canonical is None:
+        return None
+
+    target_qubits = int(raw.get('preprocessing', {}).get('target_qubits', canonical.get('qubits', 0)))
+    if target_qubits == 2:
+        transform_source = 'verified_2q_coefficients'
+        transform_note = (
+            'Canonical 2-qubit Hamiltonian uses verified H2/STO-3G coefficients; '
+            'raw JSON is the case specification, not the full chemistry integral dump.'
+        )
+    else:
+        transform_source = 'jordan_wigner_mapping'
+        transform_note = (
+            'Canonical Hamiltonian is produced from the H2/STO-3G preprocessing pipeline '
+            'and Jordan-Wigner mapping into four qubits.'
+        )
+
+    payload = dict(canonical)
+    payload['raw_spec'] = {
+        'problem_type': raw.get('problem_type'),
+        'molecule_spec': raw.get('molecule_spec', {}),
+        'preprocessing': raw.get('preprocessing', {}),
+        'experiment': raw.get('experiment', {}),
+    }
+    payload['transform'] = {
+        'source': transform_source,
+        'mapping': raw.get('preprocessing', {}).get('mapping'),
+        'target_qubits': target_qubits,
+        'canonical_terms': len(canonical.get('hamiltonian', {}).get('terms', {})),
+        'note': transform_note,
+    }
+    return payload
 
 
 def get_vqe_cases():

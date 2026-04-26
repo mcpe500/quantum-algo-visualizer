@@ -118,6 +118,11 @@ export function computeGraph(nodes: CanvasNodeData[]): Map<string, NodeResult> {
       }
 
     } else if (node.kind === 'formula') {
+      if (!node.formulaId) {
+        results.set(node.id, { error: 'Formula tidak valid.' });
+        continue;
+      }
+
       // Look up formula from registry
       const formula = FORMULA_REGISTRY.find(f => f.id === node.formulaId);
       const computation = formula?.computation ?? FORMULA_COMPUTATION_MAP[node.formulaId];
