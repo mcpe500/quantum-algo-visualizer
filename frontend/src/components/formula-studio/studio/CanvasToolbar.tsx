@@ -9,6 +9,10 @@ import {
   Link2,
   Unlink,
   Trash2,
+  Undo2,
+  Redo2,
+  Upload,
+  Download,
 } from 'lucide-react';
 import type { ConnectionMode } from './canvas-types';
 import type { FormulaStudioScenario } from '../scenarios';
@@ -24,6 +28,12 @@ interface CanvasToolbarProps {
   onFitView: () => void;
   onAddInputNode: () => void;
   onAddExpressionNode: () => void;
+  onUndo: () => void;
+  onRedo: () => void;
+  canUndo: boolean;
+  canRedo: boolean;
+  onExportProject: () => void;
+  onImportProject: () => void;
   scenarios: FormulaStudioScenario[];
   onLoadScenario: (scenarioId: string) => void;
   zoom: number;
@@ -40,6 +50,12 @@ export const CanvasToolbar: React.FC<CanvasToolbarProps> = ({
   onFitView,
   onAddInputNode,
   onAddExpressionNode,
+  onUndo,
+  onRedo,
+  canUndo,
+  canRedo,
+  onExportProject,
+  onImportProject,
   scenarios,
   onLoadScenario,
   zoom,
@@ -123,6 +139,29 @@ export const CanvasToolbar: React.FC<CanvasToolbarProps> = ({
           <LayoutGrid className="w-3.5 h-3.5" />
           Auto
         </button>
+
+
+        <div className="w-px h-5 bg-slate-700/50 mx-0.5" />
+
+        <button
+          onClick={onUndo}
+          disabled={!canUndo}
+          className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-slate-300 hover:text-white hover:bg-slate-800/50 rounded-md transition-colors disabled:opacity-35 disabled:cursor-not-allowed"
+          title="Undo perubahan canvas (Ctrl+Z)"
+        >
+          <Undo2 className="w-3.5 h-3.5" />
+          Undo
+        </button>
+
+        <button
+          onClick={onRedo}
+          disabled={!canRedo}
+          className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-slate-300 hover:text-white hover:bg-slate-800/50 rounded-md transition-colors disabled:opacity-35 disabled:cursor-not-allowed"
+          title="Redo perubahan canvas (Ctrl+Y)"
+        >
+          <Redo2 className="w-3.5 h-3.5" />
+          Redo
+        </button>
       </div>
 
       {/* CENTER: View controls */}
@@ -159,6 +198,25 @@ export const CanvasToolbar: React.FC<CanvasToolbarProps> = ({
         >
           <Camera className="w-3.5 h-3.5" />
           Screenshot
+        </button>
+
+
+        <button
+          onClick={onExportProject}
+          className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-slate-300 hover:text-white hover:bg-slate-800/50 rounded-md transition-colors"
+          title="Export project Formula Studio sebagai .qav-project"
+        >
+          <Download className="w-3.5 h-3.5" />
+          Export
+        </button>
+
+        <button
+          onClick={onImportProject}
+          className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-slate-300 hover:text-white hover:bg-slate-800/50 rounded-md transition-colors"
+          title="Import project Formula Studio dari .qav-project"
+        >
+          <Upload className="w-3.5 h-3.5" />
+          Import
         </button>
 
         <div className="w-px h-5 bg-slate-700/50 mx-0.5" />

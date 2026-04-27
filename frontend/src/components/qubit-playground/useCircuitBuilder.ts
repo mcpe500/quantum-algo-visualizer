@@ -1,6 +1,7 @@
 import { useState, useMemo, useCallback } from 'react';
 import type { Complex } from './types';
 import type { BlochData } from './useQubitState';
+import { decomposeCircuit, formatDecompositionSummary } from './circuitDecomposition';
 import {
   H,
   X,
@@ -845,6 +846,9 @@ export function useCircuitBuilder() {
     };
   }, [columnCount, numQubits, orderedPlacements]);
 
+  const decomposition = useMemo(() => decomposeCircuit(orderedPlacements), [orderedPlacements]);
+  const decompositionSummary = useMemo(() => formatDecompositionSummary(decomposition), [decomposition]);
+
   const exportCircuitCode = useCallback((format: CircuitCodeExportFormat): string => {
     const project = exportProjectData();
 
@@ -1035,6 +1039,8 @@ export function useCircuitBuilder() {
     trace: simulation.trace,
     playbackFrames: simulation.playbackFrames,
     insights: simulation.insights,
+    decomposition,
+    decompositionSummary,
     setNumQubits,
     increaseQubits,
     decreaseQubits,

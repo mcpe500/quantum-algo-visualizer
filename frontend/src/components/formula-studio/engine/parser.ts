@@ -1,4 +1,4 @@
-import type { EngineResult, ExprNode } from './types';
+import type { BinaryOperator, EngineResult, ExprNode } from './types';
 import { fail, ok } from './errors';
 import { tokenizeExpression, type Token } from './tokenizer';
 
@@ -53,7 +53,7 @@ class Parser {
     let left = first.value;
 
     while (this.match('operator', '+') || this.match('operator', '-')) {
-      const operator = this.consume().value as '+' | '-';
+      const operator = this.consume().value as BinaryOperator;
       const rightResult = this.parseMultiplicative();
       if (!rightResult.ok) return rightResult;
       left = {
@@ -72,8 +72,8 @@ class Parser {
     if (!first.ok) return first;
     let left = first.value;
 
-    while (this.match('operator', '*') || this.match('operator', '/')) {
-      const operator = this.consume().value as '*' | '/';
+    while (this.match('operator', '*') || this.match('operator', '/') || this.match('operator', '⊗')) {
+      const operator = this.consume().value as BinaryOperator;
       const rightResult = this.parsePower();
       if (!rightResult.ok) return rightResult;
       left = {
@@ -190,7 +190,7 @@ class Parser {
 export function parseExpression(source: string): EngineResult<ExprNode> {
   try {
     const tokensResult = tokenizeExpression(source);
-    if (!tokensResult.ok) return tokensResult;
+    if (!tokensResult.ok) return tokensResult as unknown as EngineResult<ExprNode>;
     const parser = new Parser(tokensResult.value);
     return parser.parseExpression();
   } catch (err) {

@@ -1,6 +1,6 @@
 import type { ComputationStep } from '../types';
 
-export type BinaryOperator = '+' | '-' | '*' | '/' | '^';
+export type BinaryOperator = '+' | '-' | '*' | '/' | '^' | '⊗';
 export type UnaryOperator = '-';
 
 export type ExprNode =

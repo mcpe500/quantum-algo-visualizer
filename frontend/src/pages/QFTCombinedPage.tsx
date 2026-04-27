@@ -1,10 +1,15 @@
+import { useEffect } from 'react';
 import { BookOpen, Cpu, LoaderCircle, PlayCircle, Waves } from 'lucide-react';
 import { useQFT } from '../hooks/useQFT';
 import { AlgorithmPageShell } from '../shared/components/AlgorithmPageShell';
 import { QFTClassicTab, QFTQuantumTab, QFTQuantumAnimation } from '../components/qft';
 import { CAPTURE_IDS } from '../constants/app';
 
-export default function QFTCombinedPage() {
+interface QFTCombinedPageProps {
+  initialTab?: 'classic' | 'quantum' | 'animation';
+}
+
+export default function QFTCombinedPage({ initialTab = 'classic' }: QFTCombinedPageProps) {
   const {
     selectedCaseId,
     availableCases,
@@ -21,6 +26,10 @@ export default function QFTCombinedPage() {
     handleRun,
     handleDownload,
   } = useQFT();
+
+  useEffect(() => {
+    setActiveTab(initialTab);
+  }, [initialTab, setActiveTab]);
 
   return (
     <AlgorithmPageShell

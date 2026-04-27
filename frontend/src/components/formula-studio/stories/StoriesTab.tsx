@@ -4,12 +4,14 @@ import type { FormulaDefinition, FormulaStory } from '../types';
 import { FORMULA_REGISTRY } from '../registry';
 import { FORMULA_STORIES } from './data';
 import { FormulaDisplay } from '../shared/FormulaDisplay';
+import { useFormulaStudioSync } from '../FormulaStudioContext';
 
 interface StoriesTabProps {
   onSelectFormula?: (formula: FormulaDefinition) => void;
 }
 
 export const StoriesTab: React.FC<StoriesTabProps> = ({ onSelectFormula }) => {
+  const { highlightRequest } = useFormulaStudioSync();
   const [activeStoryId, setActiveStoryId] = useState<string>(FORMULA_STORIES[0]?.id ?? '');
   const [stepIndex, setStepIndex] = useState(0);
   const [playing, setPlaying] = useState(false);
@@ -28,10 +30,22 @@ export const StoriesTab: React.FC<StoriesTabProps> = ({ onSelectFormula }) => {
   const activeStep = steps[stepIndex] ?? null;
   const activeFormula = activeStep ? formulaMap.get(activeStep.formulaId) ?? null : null;
 
+
   useEffect(() => {
-    setStepIndex(0);
+    if (!highlightRequest || highlightRequest.source !== 'studio') return;
+
+    const storyMatch = FORMULA_STORIES
+      .map((story) => ({
+        story,
+        stepIndex: story.steps.findIndex((step) => step.formulaId === highlightRequest.formulaId),
+      }))
+      .find((entry) => entry.stepIndex >= 0);
+
+    if (!storyMatch) return;
+    setActiveStoryId(storyMatch.story.id);
+    setStepIndex(storyMatch.stepIndex);
     setPlaying(false);
-  }, [activeStoryId]);
+  }, [highlightRequest]);
 
   useEffect(() => {
     if (!playing) return;
@@ -57,7 +71,7 @@ export const StoriesTab: React.FC<StoriesTabProps> = ({ onSelectFormula }) => {
             return (
               <button
                 key={story.id}
-                onClick={() => setActiveStoryId(story.id)}
+                onClick={() => { setActiveStoryId(story.id); setStepIndex(0); setPlaying(false); }}
                 className={`w-full text-left p-3 rounded-lg border transition-colors ${
                   active
                     ? 'bg-cyan-500/10 border-cyan-500/30 text-cyan-200'

@@ -28,10 +28,10 @@ def get_vqe_dataset_payload(case_id):
 
     target_qubits = int(raw.get('preprocessing', {}).get('target_qubits', canonical.get('qubits', 0)))
     if target_qubits == 2:
-        transform_source = 'verified_2q_coefficients'
+        transform_source = 'z2_tapered_jordan_wigner'
         transform_note = (
-            'Canonical 2-qubit Hamiltonian uses verified H2/STO-3G coefficients; '
-            'raw JSON is the case specification, not the full chemistry integral dump.'
+            'Canonical 2-qubit Hamiltonian uses the H2/STO-3G Z2-tapered '
+            'Jordan-Wigner singlet sector; raw JSON remains the compact experiment specification.'
         )
     else:
         transform_source = 'jordan_wigner_mapping'

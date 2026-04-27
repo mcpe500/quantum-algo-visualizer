@@ -13,8 +13,16 @@ import { PAGE_BACKGROUND_CLASS } from '../constants/ui';
 const SINGLE_GATE_NAMES = ['H', 'X', 'Y', 'Z', 'S', 'T', 'Rx', 'Ry', 'Rz'];
 const TWO_QUBIT_GATE_NAMES = ['CNOT', 'SWAP', 'CPhase'];
 
-export default function QubitPlaygroundPage() {
-  const [activeTab, setActiveTab] = useState<'state' | 'circuit'>('state');
+interface QubitPlaygroundPageProps {
+  initialTab?: 'state' | 'circuit';
+}
+
+export default function QubitPlaygroundPage({ initialTab = 'state' }: QubitPlaygroundPageProps) {
+  const [activeTab, setActiveTab] = useState<'state' | 'circuit'>(initialTab);
+
+  useEffect(() => {
+    setActiveTab(initialTab);
+  }, [initialTab]);
 
   useEffect(() => {
     const originalWarn = console.warn;

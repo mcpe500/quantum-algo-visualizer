@@ -203,6 +203,8 @@ export default function CircuitLabTab({ builder }: CircuitLabTabProps) {
     canPlaceGate,
     getCellState,
     exportCircuitCode,
+    decomposition,
+    decompositionSummary,
   } = builder;
 
   const [dragPayload, setDragPayload] = useState<DragPayload | null>(null);
@@ -876,6 +878,26 @@ export default function CircuitLabTab({ builder }: CircuitLabTabProps) {
                       </button>
                     ))}
                   </div>
+
+                  <section className="mb-4 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                    <div className="mb-2 flex items-center justify-between gap-3">
+                      <h3 className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-400">Decomposition + Optimization</h3>
+                      <span className="rounded-full bg-blue-100 px-2.5 py-1 text-[10px] font-bold text-blue-700">
+                        {decomposition.optimizedGateCount} ops
+                      </span>
+                    </div>
+                    <pre className="whitespace-pre-wrap font-mono text-[11px] leading-5 text-slate-600">{decompositionSummary}</pre>
+                    {decomposition.optimizedGates.length > 0 && (
+                      <div className="mt-3 max-h-32 overflow-auto rounded-xl border border-slate-200 bg-white p-2">
+                        {decomposition.optimizedGates.map((gate, index) => (
+                          <div key={`${gate.sourcePlacementId}-${index}`} className="flex items-center justify-between gap-3 py-1 font-mono text-[10px] text-slate-600">
+                            <span>{index + 1}. {gate.gate} q{gate.row}{gate.targetRow !== undefined ? ` -> q${gate.targetRow}` : ''}</span>
+                            <span>{gate.angle !== undefined ? gate.angle.toFixed(3) : gate.note}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </section>
 
                   <div className="flex-1 overflow-hidden rounded-2xl bg-slate-950 p-4 shadow-inner">
                     <div className="mb-3 flex items-center justify-between gap-3">

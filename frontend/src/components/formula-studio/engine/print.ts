@@ -3,7 +3,7 @@ import type { ExprNode } from './types';
 function precedence(node: ExprNode): number {
   if (node.kind === 'BinaryExpression') {
     if (node.operator === '+' || node.operator === '-') return 1;
-    if (node.operator === '*' || node.operator === '/') return 2;
+    if (node.operator === '*' || node.operator === '/' || node.operator === '⊗') return 2;
     if (node.operator === '^') return 3;
   }
   if (node.kind === 'UnaryExpression') return 4;
@@ -55,6 +55,9 @@ export function toLatex(node: ExprNode): string {
       }
       if (node.operator === '*') {
         return `${toLatex(node.left)} \\cdot ${toLatex(node.right)}`;
+      }
+      if (node.operator === '⊗') {
+        return `${toLatex(node.left)} \\otimes ${toLatex(node.right)}`;
       }
       return `${toLatex(node.left)} ${node.operator} ${toLatex(node.right)}`;
     }

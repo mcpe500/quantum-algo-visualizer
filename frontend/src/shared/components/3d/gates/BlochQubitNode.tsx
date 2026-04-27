@@ -67,7 +67,7 @@ function BlochQubitNode({ y, targetX, phaseColor, blochState, p0, bodyColor, coh
   });
 
   return (
-    <group ref={groupRef} position={[targetX, y, 0.32]}>
+    <group ref={groupRef} position={[targetX, y, 0.46]}>
       <mesh>
         <sphereGeometry args={[0.5, 30, 30]} />
         <meshStandardMaterial
@@ -80,29 +80,28 @@ function BlochQubitNode({ y, targetX, phaseColor, blochState, p0, bodyColor, coh
           wireframe={wireframeTarget}
           roughness={0.24}
           metalness={0.18}
+          depthWrite={false}
         />
       </mesh>
 
-      <mesh ref={arrowRef} position={[0, 0, 0]}>
-        <group>
-          <mesh position={[0, 0.38, 0]}>
-            <coneGeometry args={[0.11, 0.24, 18]} />
-            <meshStandardMaterial color="#0F172A" emissive={color} emissiveIntensity={0.45} />
-          </mesh>
-          <mesh position={[0, 0.18, 0]}>
-            <cylinderGeometry args={[0.036, 0.036, 0.36, 16]} />
-            <meshStandardMaterial color="#0F172A" emissive={color} emissiveIntensity={0.32} />
-          </mesh>
-          <mesh position={[0, -0.04, 0]}>
-            <sphereGeometry args={[0.045, 12, 12]} />
-            <meshStandardMaterial color="#0F172A" emissive={color} emissiveIntensity={0.28} />
-          </mesh>
-        </group>
-      </mesh>
+      <group ref={arrowRef} renderOrder={20}>
+        <mesh position={[0, 0.56, 0]} renderOrder={22}>
+          <coneGeometry args={[0.13, 0.28, 20]} />
+          <meshBasicMaterial color="#020617" depthTest={false} depthWrite={false} />
+        </mesh>
+        <mesh position={[0, 0.27, 0]} renderOrder={21}>
+          <cylinderGeometry args={[0.045, 0.045, 0.56, 18]} />
+          <meshBasicMaterial color="#020617" depthTest={false} depthWrite={false} />
+        </mesh>
+        <mesh position={[0, -0.06, 0]} renderOrder={21}>
+          <sphereGeometry args={[0.06, 14, 14]} />
+          <meshBasicMaterial color="#020617" depthTest={false} depthWrite={false} />
+        </mesh>
+      </group>
 
       <mesh rotation={[Math.PI / 2, 0, 0]}>
         <torusGeometry args={[0.64, 0.023, 12, 56]} />
-        <meshStandardMaterial color={phaseColor} emissive={phaseColor} emissiveIntensity={0.22} />
+        <meshStandardMaterial color="#64748B" transparent opacity={0.42} emissive={phaseColor} emissiveIntensity={0.08} depthWrite={false} />
       </mesh>
 
       <mesh position={[0, 0.65, 0]}>

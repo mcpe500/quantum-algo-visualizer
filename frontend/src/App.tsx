@@ -20,18 +20,24 @@ function App() {
       <Routes>
         <Route path="/" element={<AlgorithmSelector />} />
         <Route path="/dj" element={<DJCombinedPage />} />
+        <Route path="/dj/animation" element={<DJCombinedPage initialTab="animation" />} />
         <Route path="/dj/dataset" element={<DJTopographyPage />} />
         <Route path="/qft" element={<QFTCombinedPage />} />
+        <Route path="/qft/animation" element={<QFTCombinedPage initialTab="animation" />} />
         <Route path="/qft/dataset" element={<QFTTopographyPage />} />
         <Route path="/vqe" element={<VQECombinedPage />} />
         <Route path="/vqe/dataset" element={<VQEDatasetPage />} />
         <Route path="/qaoa" element={<QAOACombinedPage />} />
+        <Route path="/qaoa/animation" element={<QAOACombinedPage initialTab="animation" />} />
         <Route path="/qaoa/dataset" element={<QAOADatasetPage />} />
         <Route path="/playground" element={<QubitPlaygroundPage />} />
+        <Route path="/playground/circuit" element={<QubitPlaygroundPage initialTab="circuit" />} />
         <Route path="/hardware" element={<HardwareSelector />} />
         <Route path="/hardware/:id" element={<HardwareDetailPage />} />
         <Route path="/hardware/compare" element={<HardwareComparisonPage />} />
         <Route path="/formulas" element={<FormulaStudioPage />} />
+        <Route path="/formulas/studio" element={<FormulaStudioPage initialTab="studio" />} />
+        <Route path="/formulas/stories" element={<FormulaStudioPage initialTab="stories" />} />
       </Routes>
     </BrowserRouter>
   );

@@ -20,6 +20,8 @@ const DEFAULT_FUNCTIONS: Record<string, (...args: number[]) => number> = {
   max: (...values: number[]) => Math.max(...values),
   pow: (x: number, y: number) => Math.pow(x, y),
   mod: (x: number, y: number) => ((x % y) + y) % y,
+  sum: (...values: number[]) => values.reduce((total, value) => total + value, 0),
+  prod: (...values: number[]) => values.reduce((total, value) => total * value, 1),
 };
 
 function evalNode(node: ExprNode, context: Required<EvaluationContext>): EngineResult<number> {
@@ -61,6 +63,7 @@ function evalNode(node: ExprNode, context: Required<EvaluationContext>): EngineR
           value = left.value - right.value;
           break;
         case '*':
+        case '⊗':
           value = left.value * right.value;
           break;
         case '/':
