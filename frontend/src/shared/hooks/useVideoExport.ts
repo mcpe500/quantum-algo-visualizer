@@ -184,8 +184,17 @@ export function useVideoExport<TData extends BaseAnimationPayload<TStep>, TStep 
 
         if (target === 'mp4') {
           engine.setIsConverting(true);
-          const mp4Blob = await convertWebmToMp4(webmBlob);
-          downloadBlob(mp4Blob, `${exportConfig.filenamePrefix}${engine.data.case_id}_${exportConfig.filenameSuffix}.mp4`);
+          try {
+            const mp4Blob = await convertWebmToMp4(webmBlob);
+            downloadBlob(mp4Blob, `${exportConfig.filenamePrefix}${engine.data.case_id}_${exportConfig.filenameSuffix}.mp4`);
+          } catch (conversionError) {
+            downloadBlob(webmBlob, `${exportConfig.filenamePrefix}${engine.data.case_id}_${exportConfig.filenameSuffix}_fallback.webm`);
+            throw new Error(
+              conversionError instanceof Error
+                ? `Konversi MP4 gagal (${conversionError.message}). WebM fallback sudah diunduh.`
+                : 'Konversi MP4 gagal. WebM fallback sudah diunduh.',
+            );
+          }
         } else {
           downloadBlob(webmBlob, `${exportConfig.filenamePrefix}${engine.data.case_id}_${exportConfig.filenameSuffix}.webm`);
         }

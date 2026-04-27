@@ -2,8 +2,9 @@ import React, { useCallback, useEffect, useRef, useMemo } from 'react';
 import { DndContext, DragOverlay, useDraggable, useDroppable, PointerSensor, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
 import { toPng } from 'html-to-image';
 import type { CanvasState, ConnectionMode } from './canvas-types';
+import { INITIAL_CANVAS_STATE } from './canvas-types';
 import { FORMULA_REGISTRY } from '../registry';
-import { canvasReducer } from './useCanvasReducer';
+import { canvasHistoryReducer, createCanvasHistory } from './historyReducer';
 import { calculateAutoLayout, getCanvasBounds } from './canvasUtils';
 import { CanvasToolbar } from './CanvasToolbar';
 import { CanvasStatusBar } from './CanvasStatusBar';
@@ -18,6 +19,8 @@ import { StudioFlowPanel } from './StudioFlowPanel';
 import { buildVarScope } from './graphEngine';
 import { computeDataflowGraph } from './dataflowEngine';
 import { FORMULA_STUDIO_SCENARIOS } from '../scenarios';
+import { downloadCanvasProject, readProjectFile } from './projectIO';
+import { useFormulaStudioSync } from '../FormulaStudioContext';
 
 const STORAGE_KEY = 'formula-studio-canvas-v2';
 
@@ -33,6 +36,34 @@ function saveToStorage(state: CanvasState) {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
   } catch { /* ignore */ }
+}
+
+function migrateCanvasState(state: CanvasState): CanvasState {
+  return {
+    ...state,
+    selectedNodeId: state.selectedNodeId ?? null,
+    selectedConnectionId: state.selectedConnectionId ?? null,
+    panOffset: state.panOffset ?? INITIAL_CANVAS_STATE.panOffset,
+    zoom: typeof state.zoom === 'number' ? state.zoom : INITIAL_CANVAS_STATE.zoom,
+    nodes: state.nodes.map((node) =>
+      (node as typeof node & { kind?: string }).kind ? node : { ...node, kind: 'formula' as const }
+    ),
+    connections: state.connections ?? [],
+  };
+}
+
+function createEmptyCanvasState(): CanvasState {
+  return {
+    ...INITIAL_CANVAS_STATE,
+    nodes: [],
+    connections: [],
+    panOffset: { ...INITIAL_CANVAS_STATE.panOffset },
+  };
+}
+
+function loadInitialCanvasState(): CanvasState {
+  const loaded = loadFromStorage();
+  return loaded ? migrateCanvasState(loaded) : createEmptyCanvasState();
 }
 
 /* ─── DroppableCanvas ──────────────────────────────────────────────────── */
@@ -94,26 +125,13 @@ const DraggableNode: React.FC<DraggableNodeProps> = ({ nodeId, children }) => {
 /* ─── StudioCanvas ─────────────────────────────────────────────────────── */
 
 export const StudioCanvas: React.FC = () => {
-  const [state, dispatch] = React.useReducer(canvasReducer, null, () => {
-    const loaded = loadFromStorage();
-    if (loaded) {
-      // Migrate: ensure all nodes have `kind`
-      return {
-        ...loaded,
-        nodes: loaded.nodes.map((n) =>
-          (n as typeof n & { kind?: string }).kind ? n : { ...n, kind: 'formula' as const }
-        ),
-      };
-    }
-    return {
-      nodes: [],
-      connections: [],
-      selectedNodeId: null,
-      selectedConnectionId: null,
-      panOffset: { x: 0, y: 0 },
-      zoom: 1,
-    };
-  });
+  const [history, dispatch] = React.useReducer(
+    canvasHistoryReducer,
+    undefined,
+    () => createCanvasHistory(loadInitialCanvasState()),
+  );
+  const state = history.present;
+  const { highlightRequest, requestFormulaHighlight } = useFormulaStudioSync();
 
   const [connectionMode, setConnectionMode] = React.useState<ConnectionMode>('idle');
   const [connectionSourceId, setConnectionSourceId] = React.useState<string | null>(null);
@@ -124,6 +142,7 @@ export const StudioCanvas: React.FC = () => {
     try { return localStorage.getItem('formula-studio-palette-collapsed') === 'true'; } catch { return false; }
   });
   const canvasRef = useRef<HTMLDivElement>(null);
+  const importFileInputRef = useRef<HTMLInputElement>(null);
 
   const stateRef = useRef(state);
   useEffect(() => { stateRef.current = state; }, [state]);
@@ -248,8 +267,13 @@ export const StudioCanvas: React.FC = () => {
   /* ── node handlers ── */
 
   const handleNodeSelect = useCallback((nodeId: string) => {
-    if (connectionMode === 'idle') dispatch({ type: 'SELECT_NODE', nodeId });
-  }, [connectionMode]);
+    if (connectionMode !== 'idle') return;
+    dispatch({ type: 'SELECT_NODE', nodeId });
+    const node = stateRef.current.nodes.find((item) => item.id === nodeId);
+    if (node?.kind === 'formula' && node.formulaId) {
+      requestFormulaHighlight(node.formulaId, 'studio');
+    }
+  }, [connectionMode, requestFormulaHighlight]);
 
   const handleNodeDelete = useCallback((nodeId: string) => {
     dispatch({ type: 'DELETE_NODE', nodeId });
@@ -341,6 +365,40 @@ export const StudioCanvas: React.FC = () => {
     });
   }, [state.nodes, state.connections]);
 
+  const handleUndo = useCallback(() => {
+    dispatch({ type: 'UNDO' });
+  }, []);
+
+  const handleRedo = useCallback(() => {
+    dispatch({ type: 'REDO' });
+  }, []);
+
+  const handleExportProject = useCallback(() => {
+    downloadCanvasProject(stateRef.current);
+  }, []);
+
+  const handleImportProject = useCallback(() => {
+    importFileInputRef.current?.click();
+  }, []);
+
+  const handleImportProjectFile = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    try {
+      const importedState = await readProjectFile(file);
+      dispatch({ type: 'RESET_HISTORY', state: importedState });
+      setConnectionMode('idle');
+      setConnectionSourceId(null);
+      setActiveScenarioId(null);
+      setActiveFlowStepIndex(0);
+    } catch (error) {
+      window.alert(error instanceof Error ? error.message : 'Import project gagal.');
+    } finally {
+      event.target.value = '';
+    }
+  }, []);
+
   const handleScreenshot = useCallback(async () => {
     const canvasArea = canvasRef.current;
     if (!canvasArea) return;
@@ -387,6 +445,29 @@ export const StudioCanvas: React.FC = () => {
     }
   }, [connectionMode]);
 
+  useEffect(() => {
+    if (!highlightRequest || highlightRequest.source === 'studio') return;
+    const currentState = stateRef.current;
+    const existingNode = currentState.nodes.find(
+      (node) => node.kind === 'formula' && node.formulaId === highlightRequest.formulaId,
+    );
+
+    if (existingNode) {
+      dispatch({ type: 'SELECT_NODE', nodeId: existingNode.id });
+      return;
+    }
+
+    const el = canvasRef.current;
+    const position = el
+      ? {
+          x: Math.max(0, (el.clientWidth / 2 - currentState.panOffset.x) / currentState.zoom - 140),
+          y: Math.max(0, (el.clientHeight / 2 - currentState.panOffset.y) / currentState.zoom - 60),
+        }
+      : { x: 120, y: 120 };
+
+    dispatch({ type: 'ADD_NODE', formulaId: highlightRequest.formulaId, position });
+  }, [highlightRequest]);
+
   /* ── keyboard shortcuts ── */
 
   useEffect(() => {
@@ -395,6 +476,19 @@ export const StudioCanvas: React.FC = () => {
       if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) return;
 
       const currentState = stateRef.current;
+      const key = event.key.toLowerCase();
+      const isModifierShortcut = event.ctrlKey || event.metaKey;
+
+      if (isModifierShortcut && key === 'z') {
+        event.preventDefault();
+        dispatch({ type: event.shiftKey ? 'REDO' : 'UNDO' });
+        return;
+      }
+      if (isModifierShortcut && key === 'y') {
+        event.preventDefault();
+        dispatch({ type: 'REDO' });
+        return;
+      }
 
       if (event.key === 'Escape') {
         dispatch({ type: 'SELECT_NODE', nodeId: null });
@@ -439,9 +533,22 @@ export const StudioCanvas: React.FC = () => {
           onFitView={handleFitView}
           onAddInputNode={handleAddInputNode}
           onAddExpressionNode={handleAddExpressionNode}
+          onUndo={handleUndo}
+          onRedo={handleRedo}
+          canUndo={history.past.length > 0}
+          canRedo={history.future.length > 0}
+          onExportProject={handleExportProject}
+          onImportProject={handleImportProject}
           scenarios={FORMULA_STUDIO_SCENARIOS}
           onLoadScenario={handleLoadScenario}
           zoom={state.zoom}
+        />
+        <input
+          ref={importFileInputRef}
+          type="file"
+          accept=".qav-project,application/json"
+          className="hidden"
+          onChange={handleImportProjectFile}
         />
 
         <div className="flex flex-1 overflow-hidden">

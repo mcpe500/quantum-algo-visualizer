@@ -1,10 +1,15 @@
+import { useEffect } from 'react';
 import { BookOpen, Cpu, GitBranch, LoaderCircle, PlayCircle } from 'lucide-react';
 import { useQAOA } from '../hooks/useQAOA';
 import { AlgorithmPageShell } from '../shared/components/AlgorithmPageShell';
 import { QAOAClassicTab, QAOAHybridAnimation, QAOAQuantumTab } from '../components/qaoa';
 import { CAPTURE_IDS } from '../constants/app';
 
-export default function QAOACombinedPage() {
+interface QAOACombinedPageProps {
+  initialTab?: 'classic' | 'quantum' | 'animation';
+}
+
+export default function QAOACombinedPage({ initialTab = 'classic' }: QAOACombinedPageProps) {
   const {
     selectedCaseId,
     availableCases,
@@ -21,6 +26,10 @@ export default function QAOACombinedPage() {
     handleRun,
     handleDownload,
   } = useQAOA();
+
+  useEffect(() => {
+    setActiveTab(initialTab);
+  }, [initialTab, setActiveTab]);
 
   return (
     <AlgorithmPageShell

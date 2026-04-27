@@ -2,7 +2,7 @@ import { Line, OrbitControls, Text } from '@react-three/drei';
 import { useMemo } from 'react';
 import type { DJAnimationPartition, DJAnimationPayload } from '../../../types/dj';
 import { PHASE_COLOR, PHASE_LABEL, SCENE_PHASE_LABEL } from './constants';
-import { getColumnLayout, getLaneYs, getQubitP1 } from './helpers';
+import { clamp, getColumnLayout, getLaneYs, getQubitP1 } from './helpers';
 import { getOracleFunctionLabel } from './narration';
 import { StageColumn } from './scene-column';
 import { BlochSphereNode, ResultBoard } from './scene-bloch';
@@ -137,7 +137,10 @@ export function StoryScene({
       ))}
 
       {qubitStates.map((pOne, index) => {
-        const sphereOffset = 0;
+        const sphereOffset = Math.min(
+          clamp(gap * 0.6, 0.62, 0.86),
+          resultX - 1.2 - columnXs[currentStep],
+        );
         const blochForQubit = blochStates && blochStates[index]
           ? blochStates[index]
           : { bx: 0, by: 0, bz: pOne < 0.15 ? 1 : pOne > 0.85 ? -1 : 0, label: pOne < 0.15 ? '|0⟩' : pOne > 0.85 ? '|1⟩' : '0|1' };

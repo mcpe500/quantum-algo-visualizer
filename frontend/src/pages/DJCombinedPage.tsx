@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { Cpu, BookOpen, Video } from 'lucide-react';
 import { useDJBenchmark } from '../hooks/useDJBenchmark';
 import { AlgorithmPageShell } from '../shared/components/AlgorithmPageShell';
@@ -10,7 +11,11 @@ import { InlineEmptyState } from '../components/layout';
 import { UI_MESSAGES } from '../constants/ui';
 import { CAPTURE_IDS } from '../constants/app';
 
-export default function DJCombinedPage() {
+interface DJCombinedPageProps {
+  initialTab?: 'classic' | 'quantum' | 'animation';
+}
+
+export default function DJCombinedPage({ initialTab = 'classic' }: DJCombinedPageProps) {
   const {
     selectedCaseId,
     availableCases,
@@ -30,6 +35,10 @@ export default function DJCombinedPage() {
     handleRun,
     handleDownload,
   } = useDJBenchmark();
+
+  useEffect(() => {
+    setActiveTab(initialTab);
+  }, [initialTab, setActiveTab]);
 
   return (
     <div className={isVideoExporting ? 'pointer-events-none opacity-90' : ''}>

@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { LayoutGrid, FlaskConical, BookOpen } from 'lucide-react';
 import { FormulaExplorer } from './explore';
 import { StudioCanvas } from './studio';
 import { StoriesTab } from './stories';
 import { FormulaDetailPanel } from './shared/FormulaDetailPanel';
+import { FormulaStudioProvider, useFormulaStudioSync } from './FormulaStudioContext';
 import type { FormulaDefinition } from './types';
 import { FORMULA_REGISTRY } from './registry';
 
@@ -15,12 +16,27 @@ const tabs: { id: TabId; label: string; icon: React.ComponentType<{className?: s
   { id: 'stories', label: 'Stories', icon: BookOpen },
 ];
 
-const FormulaStudioPage: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<TabId>('explore');
+interface FormulaStudioPageProps {
+  initialTab?: TabId;
+}
+
+const FormulaStudioPageContent: React.FC<FormulaStudioPageProps> = ({ initialTab = 'explore' }) => {
+  const [activeTab, setActiveTab] = useState<TabId>(initialTab);
   const [selectedFormula, setSelectedFormula] = useState<FormulaDefinition | null>(null);
+  const { requestFormulaHighlight } = useFormulaStudioSync();
+
+  useEffect(() => {
+    setActiveTab(initialTab);
+  }, [initialTab]);
 
   const handleSelectFormula = (formula: FormulaDefinition) => {
     setSelectedFormula(formula);
+  };
+
+  const handleOpenFormulaInStudio = (formula: FormulaDefinition) => {
+    setSelectedFormula(formula);
+    requestFormulaHighlight(formula.id, 'stories');
+    setActiveTab('studio');
   };
 
   const renderContent = () => {
@@ -49,14 +65,7 @@ const FormulaStudioPage: React.FC = () => {
       case 'studio':
         return <StudioCanvas />;
       case 'stories':
-        return (
-          <StoriesTab
-            onSelectFormula={(formula) => {
-              setSelectedFormula(formula);
-              setActiveTab('explore');
-            }}
-          />
-        );
+        return <StoriesTab onSelectFormula={handleOpenFormulaInStudio} />;
       default:
         return null;
     }
@@ -129,5 +138,11 @@ const FormulaStudioPage: React.FC = () => {
     </div>
   );
 };
+
+const FormulaStudioPage: React.FC<FormulaStudioPageProps> = ({ initialTab = 'explore' }) => (
+  <FormulaStudioProvider>
+    <FormulaStudioPageContent initialTab={initialTab} />
+  </FormulaStudioProvider>
+);
 
 export default FormulaStudioPage;
