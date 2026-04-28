@@ -1,9 +1,9 @@
-QFT-01.json:
+QFT-01.json (canonical: 28 titik, padded ke 32):
 ```
 {
   "case_id": "QFT-01",
   "description": "Sinyal periodic sederhana",
-  "n_points": 32,
+  "n_points": 28,
   "signal_data": [
     2.0, 1.414, 0.0, -1.414, -2.0, -1.414, 0.0, 1.414,
     2.0, 1.414, 0.0, -1.414, -2.0, -1.414, 0.0, 1.414,
@@ -14,19 +14,14 @@ QFT-01.json:
 }
 ```
 
-QFT-02.json:
+QFT-02.json (canonical: 64 titik native, tanpa padding):
 ```
 {
   "case_id": "QFT-02",
   "description": "Sinyal mixed frequency",
-  "n_points": 48,
+  "n_points": 64,
   "signal_data": [
-    2.5, 1.8, 0.5, -1.2, -2.2, -1.9, -0.3, 1.5,
-    2.8, 2.1, 0.8, -0.9, -2.5, -2.0, -0.5, 1.8,
-    3.0, 2.3, 1.0, -0.6, -2.8, -2.2, -0.8, 2.0,
-    2.7, 2.0, 0.6, -1.0, -2.4, -1.8, -0.2, 1.6,
-    2.6, 1.9, 0.4, -1.3, -2.3, -2.1, -0.4, 1.7,
-    2.9, 2.2, 0.7, -0.8, -2.6, -1.9, -0.6, 1.9
+    /* 64 nilai — lihat datasets/qft/QFT-02.json untuk data penuh */
   ],
   "signal_type": "synthetic_mixed"
 }
