@@ -361,7 +361,7 @@ Located in `datasets/qft/QFT-XX.json`:
 {
   "case_id": "QFT-01",
   "description": "Sinyal periodic sederhana",
-  "n_points": 32,
+  "n_points": 28,
   "signal_data": [2.0, 1.414, 0.0, -1.414, ...],
   "signal_type": "synthetic_periodic"
 }
@@ -378,8 +378,8 @@ If N is NOT power of 2:
   → Number of qubits: n = log2(N') = k
 
 Examples:
-  QFT-01: 32 points → 32 = 2^5 → 5 qubits (no padding needed)
-  QFT-02: 48 points → pad to 64 = 2^6 → 6 qubits
+  QFT-01: 28 points → pad to 32 = 2^5 → 5 qubits
+  QFT-02: 64 points → 64 = 2^6 → 6 qubits (no padding needed)
 ```
 
 ### Dataset Flow
@@ -471,7 +471,7 @@ Measure all qubits
 | QFT | n | O(n²) | Number of qubits = log2(N) |
 
 **Example**: QFT-02
-- Original: 48 points
+- Original: 64 points
 - Padded: 64 points (N = 64)
 - Qubits: 6 (n = log2(64) = 6)
 - FFT: O(64 × 6) = O(384)

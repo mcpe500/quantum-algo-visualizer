@@ -91,8 +91,9 @@ export function DominantBinsExplanation({
             </p>
             <div className="bg-gray-50 p-2 rounded border border-gray-200 mt-2">
               <p className="text-[10px] text-gray-500">
-                <strong>Contoh:</strong> Jika Bin 4 memiliki magnitude 28.00, artinya frekuensi ke-4 
-                sangat kuat dalam sinyal ini. Nilai ini jauh lebih besar dari bin lainnya (sekitar 0-5).
+                <strong>Contoh:</strong> Jika suatu bin memiliki magnitude jauh lebih besar dari bin lainnya, 
+                artinya frekuensi tersebut sangat kuat hadir dalam sinyal. Magnitude yang tinggi ini 
+                menjadi dasar penentuan bin dominan.
               </p>
             </div>
           </div>
@@ -107,7 +108,7 @@ export function DominantBinsExplanation({
         >
           <div className="flex items-center gap-2">
             <ArrowRightLeft className="w-4 h-4 text-amber-500" />
-            <span className="text-sm font-medium text-gray-700">Kenapa Ada 2 Bin Sama (4 dan 28)?</span>
+            <span className="text-sm font-medium text-gray-700">Kenapa Ada 2 Bin Sama?</span>
           </div>
           <span className="text-amber-500 text-lg">
             {expandedSection === 'symmetry' ? '−' : '+'}
@@ -124,12 +125,12 @@ export function DominantBinsExplanation({
             </p>
             <ul className="list-disc list-inside mb-2 space-y-1">
               <li>Bin <strong>k</strong> dan Bin <strong>(N-k)</strong> memiliki magnitude sama</li>
-              <li>Untuk N={nPoints}: Bin 4 ↔ Bin {nPoints - 4}</li>
+              <li>Untuk N={nPoints}: Bin k ↔ Bin {nPoints} - k</li>
             </ul>
             <div className="bg-amber-100 p-2 rounded border border-amber-200">
               <p className="text-[10px] text-amber-800">
-                <strong>Intinya:</strong> Bin 4 dan Bin {nPoints - 4} itu <strong>satu frekuensi yang sama</strong>, 
-                cuma ditampilkan 2x karena sifat matematis FFT. Dalam analisis, kita cukup lihat setengah pertama 
+                <strong>Intinya:</strong> Setiap pasangan bin simetris merepresentasikan <strong>satu frekuensi yang sama</strong>, 
+                cuma ditampilkan dua kali karena sifat matematis FFT. Dalam analisis, kita cukup melihat setengah pertama 
                 (bin 0 sampai {Math.floor(nPoints/2)}).
               </p>
             </div>

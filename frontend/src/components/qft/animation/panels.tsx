@@ -31,8 +31,11 @@ export function SignalInputPanel({ data }: { data: QFTAnimationPayload }) {
           <p className="text-sm font-bold text-slate-900">{data.n_qubits}</p>
         </div>
         <div>
-          <p className="text-[10px] font-bold text-slate-400 uppercase">Points</p>
-          <p className="text-sm font-bold text-slate-900">{data.n_points_padded}</p>
+          <p className="text-[10px] font-bold text-slate-400 uppercase">Raw Points</p>
+          <p className="text-sm font-bold text-slate-900">{data.n_points_original}</p>
+          {data.n_points_original !== data.n_points_padded && (
+            <p className="text-[9px] text-slate-400">(→ {data.n_points_padded} padded)</p>
+          )}
         </div>
       </div>
       <div className="p-3">

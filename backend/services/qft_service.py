@@ -56,6 +56,10 @@ def _resolve_signal(case):
 
     declared_points = max(1, declared_points)
     n_original = len(signal) if len(signal) > 0 else declared_points
+    if n_original != declared_points:
+        raise ValueError(
+            f'QFT case metadata mismatch: n_points={declared_points} but signal_data has {n_original} values.'
+        )
     signal = pad_signal(signal, n_original)
     n_padded = next_power_of_2(n_original)
     padded = pad_signal(signal, n_padded)

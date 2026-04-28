@@ -24,24 +24,38 @@ export function QFTFlowDiagram({ nPointsOriginal, nPointsPadded, dominantBins }:
           </div>
         </div>
 
-        {/* Arrow 1 */}
-        <div className="flex flex-col items-center">
-          <ArrowRight className="w-5 h-5 text-blue-400 hidden lg:block" />
-          <div className="w-px h-4 bg-blue-300 lg:hidden" />
-          <span className="text-[10px] text-blue-600 bg-blue-100 px-2 py-0.5 rounded mt-1">
-            Zero-Padding
-          </span>
-        </div>
+        {nPointsOriginal !== nPointsPadded && (
+          <>
+            {/* Arrow 1 */}
+            <div className="flex flex-col items-center">
+              <ArrowRight className="w-5 h-5 text-blue-400 hidden lg:block" />
+              <div className="w-px h-4 bg-blue-300 lg:hidden" />
+              <span className="text-[10px] text-blue-600 bg-blue-100 px-2 py-0.5 rounded mt-1">
+                Zero-Padding
+              </span>
+            </div>
 
-        {/* Step 2: Padded Signal */}
-        <div className="flex flex-col items-center">
-          <div className="bg-blue-50 border-2 border-blue-400 rounded-lg p-3 w-32 text-center shadow-sm">
-            <FunctionSquare className="w-6 h-6 text-blue-600 mx-auto mb-1" />
-            <p className="text-xs font-semibold text-gray-800">Sinyal Pad</p>
-            <p className="text-[10px] text-gray-600">{nPointsPadded} titik (2ⁿ)</p>
-            <p className="text-[9px] text-blue-600 mt-1">Persiapan FFT</p>
+            {/* Step 2: Padded Signal */}
+            <div className="flex flex-col items-center">
+              <div className="bg-blue-50 border-2 border-blue-400 rounded-lg p-3 w-32 text-center shadow-sm">
+                <FunctionSquare className="w-6 h-6 text-blue-600 mx-auto mb-1" />
+                <p className="text-xs font-semibold text-gray-800">Sinyal Pad</p>
+                <p className="text-[10px] text-gray-600">{nPointsPadded} titik (2ⁿ)</p>
+                <p className="text-[9px] text-blue-600 mt-1">Persiapan FFT</p>
+              </div>
+            </div>
+          </>
+        )}
+
+        {nPointsOriginal === nPointsPadded && (
+          <div className="flex flex-col items-center">
+            <ArrowRight className="w-5 h-5 text-blue-400 hidden lg:block" />
+            <div className="w-px h-4 bg-blue-300 lg:hidden" />
+            <span className="text-[10px] text-blue-600 bg-blue-100 px-2 py-0.5 rounded mt-1">
+              Valid 2ⁿ
+            </span>
           </div>
-        </div>
+        )}
 
         {/* Arrow 2 */}
         <div className="flex flex-col items-center">
