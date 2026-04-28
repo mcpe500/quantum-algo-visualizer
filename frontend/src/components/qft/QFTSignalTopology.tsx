@@ -12,6 +12,10 @@ interface SignalWaveformProps {
 
 function SignalWaveform({ data, gradientId }: SignalWaveformProps) {
   const isEmpty = data.length === 0;
+  const isDense = data.length > 32;
+  const dotRadius = isDense ? 3 : 4.5;
+  const dotStroke = isDense ? 1 : 1.5;
+  const labelFontSize = isDense ? 6 : 8.5;
 
   const { pathLine, pathArea, zeroYPercent, chartPoints } = useMemo(() => {
     const chartData = data.length === 0 ? [0] : data;
@@ -25,19 +29,25 @@ function SignalWaveform({ data, gradientId }: SignalWaveformProps) {
 
     const width = 600;
     const height = 240;
+    const paddingX = isDense ? 30 : 28;
+    const paddingY = isDense ? 24 : 18;
+    const plotWidth = width - paddingX * 2;
+    const plotHeight = height - paddingY * 2;
     const denominator = Math.max(1, chartData.length - 1);
 
     const chartPointsLocal = chartData.map((val, i) => {
-      const x = (i / denominator) * width;
-      const y = height - ((val - yMin) / yRange) * height;
+      const x = paddingX + (i / denominator) * plotWidth;
+      const y = paddingY + (1 - (val - yMin) / yRange) * plotHeight;
       return { x, y };
     });
 
     const points = chartPointsLocal.map((point) => `${point.x},${point.y}`);
     const pathLineLocal = `M ${points.join(' L ')}`;
-    const zeroYRaw = height - ((0 - yMin) / yRange) * height;
-    const zeroY = Math.min(height, Math.max(0, zeroYRaw));
-    const pathAreaLocal = `${pathLineLocal} L ${width},${zeroY} L 0,${zeroY} Z`;
+    const zeroYRaw = paddingY + (1 - (0 - yMin) / yRange) * plotHeight;
+    const zeroY = Math.min(height - paddingY, Math.max(paddingY, zeroYRaw));
+    const firstX = chartPointsLocal[0]?.x ?? paddingX;
+    const lastX = chartPointsLocal[chartPointsLocal.length - 1]?.x ?? width - paddingX;
+    const pathAreaLocal = `${pathLineLocal} L ${lastX},${zeroY} L ${firstX},${zeroY} Z`;
 
     return {
       pathLine: pathLineLocal,
@@ -45,7 +55,7 @@ function SignalWaveform({ data, gradientId }: SignalWaveformProps) {
       zeroYPercent: (zeroY / height) * 100,
       chartPoints: chartPointsLocal,
     };
-  }, [data]);
+  }, [data, isDense]);
 
   if (isEmpty) {
     return (
@@ -87,24 +97,45 @@ function SignalWaveform({ data, gradientId }: SignalWaveformProps) {
           d={pathLine}
           fill="none"
           stroke="#3B82F6"
-          strokeWidth="3.5"
+          strokeWidth="2"
           strokeLinecap="round"
           strokeLinejoin="round"
           className="transition-all duration-700 ease-in-out group-hover:drop-shadow-[0_6px_10px_rgba(59,130,246,0.4)]"
         />
 
         {chartPoints.map((point, i) => {
+          const verticalOffsets = isDense ? [-9, 11] : [-14, 18];
+          const labelY = point.y + verticalOffsets[i % verticalOffsets.length];
+          const labelX = Math.min(592, Math.max(8, point.x));
+          const textAnchor = point.x < 18 ? 'start' : point.x > 582 ? 'end' : 'middle';
           return (
-            <circle
-              key={`point-${i}`}
-              cx={point.x}
-              cy={point.y}
-              r="3.5"
-              fill="#FFFFFF"
-              stroke="#3B82F6"
-              strokeWidth="2"
-              className="opacity-0 group-hover:opacity-100 transition-opacity duration-300"
-            />
+            <g key={`point-group-${i}`}>
+              <circle
+                cx={point.x}
+                cy={point.y}
+                r={dotRadius}
+                fill="#F97316"
+                stroke="#FFFFFF"
+                strokeWidth={dotStroke}
+                className="group-hover:drop-shadow-[0_2px_4px_rgba(249,115,22,0.4)]"
+              />
+              <text
+                x={labelX}
+                y={labelY}
+                textAnchor={textAnchor}
+                fontSize={labelFontSize}
+                fill="#64748B"
+                fontFamily="monospace"
+                fontWeight="600"
+                dominantBaseline="middle"
+                stroke="#FFFFFF"
+                strokeWidth="2.5"
+                paintOrder="stroke"
+                strokeLinejoin="round"
+              >
+                {i}
+              </text>
+            </g>
           );
         })}
       </svg>

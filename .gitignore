@@ -5,3 +5,5 @@ project_export.txt
 *dist*
 # *session-ses*
 *.diff*
+backend/backend_stderr.log
+backend/backend_stdout.log
