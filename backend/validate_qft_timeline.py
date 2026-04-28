@@ -132,7 +132,12 @@ def _validate_case(case_id):
         raise AssertionError(f'animation payload not found: {case_id}')
 
     signal = [float(value) for value in case.get('signal_data', [])]
-    n_original = len(signal) if signal else int(case.get('n_points', 1))
+    declared = int(case.get('n_points', len(signal) if signal else 1))
+    n_original = len(signal) if signal else declared
+    if n_original != declared:
+        raise AssertionError(
+            f'{case_id}: metadata mismatch n_points={declared} vs signal_data length={n_original}'
+        )
     n_padded = next_power_of_2(n_original)
     n_qubits = int(math.log2(n_padded))
 

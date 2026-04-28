@@ -29,7 +29,7 @@ function getQFTNarration(mode: 'intro' | 'play' | 'outro', data: QFTAnimationPay
     return {
       headline: 'Cara baca animasi QFT',
       detail: 'Signal klasik di-encode ke statevector kuantum. Phase cascade mentransformasi ke domain frekuensi.',
-      accent: `Signal: ${data.signal_type} · ${data.n_points_padded} poin → ${data.n_qubits} qubit`,
+      accent: `Signal: ${data.signal_type} · ${data.n_points_original}${data.n_points_original !== data.n_points_padded ? '→' + data.n_points_padded : ''} poin → ${data.n_qubits} qubit`,
     };
   }
   if (mode === 'outro') {
@@ -113,7 +113,7 @@ export function QFTQuantumAnimation({ data, onExportingChange }: QFTQuantumAnima
           </div>
 
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-            <DetailCard label="Qubit" value={`${data.n_qubits}`} hint={`${data.n_points_padded} points`} />
+            <DetailCard label="Qubit" value={`${data.n_qubits}`} hint={`${data.n_points_original}${data.n_points_original !== data.n_points_padded ? '→' + data.n_points_padded : ''} pts`} />
             <DetailCard label="Steps" value={`${engine.totalSteps}`} hint="Setiap step = 1 operasi." />
             <DetailCard label="Signal" value={data.signal_type} hint="Time domain input." />
             <DetailCard label="Shots" value={`${data.measurement.shots}`} hint="Backend measurement." />
