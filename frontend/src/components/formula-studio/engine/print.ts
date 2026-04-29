@@ -66,7 +66,7 @@ export function toLatex(node: ExprNode): string {
         return `\\sqrt{${toLatex(node.args[0])}}`;
       }
       const fnName = node.name === 'ln' ? '\\ln' : node.name === 'log' ? '\\log' : node.name;
-      return `${fnName}\left(${node.args.map((arg) => toLatex(arg)).join(', ')}\\right)`;
+      return `${fnName}\\left(${node.args.map((arg) => toLatex(arg)).join(', ')}\\right)`;
     }
     default:
       return '';

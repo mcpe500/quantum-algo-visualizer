@@ -28,7 +28,7 @@ export interface ComputationConfig {
   requiresParams: string[];
   /** Human-readable math expression used by the engine, e.g. "n*(n+1)/2" (NOT LaTeX). */
   expression?: string;
-  steps: (params: any) => ComputationStep[];
+  steps: (params: Record<string, number>) => ComputationStep[];
 }
 
 // The main formula definition

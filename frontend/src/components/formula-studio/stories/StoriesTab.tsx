@@ -4,7 +4,7 @@ import type { FormulaDefinition, FormulaStory } from '../types';
 import { FORMULA_REGISTRY } from '../registry';
 import { FORMULA_STORIES } from './data';
 import { FormulaDisplay } from '../shared/FormulaDisplay';
-import { useFormulaStudioSync } from '../FormulaStudioContext';
+import { useFormulaStudioSync } from '../FormulaStudioSyncContext';
 
 interface StoriesTabProps {
   onSelectFormula?: (formula: FormulaDefinition) => void;
@@ -42,15 +42,17 @@ export const StoriesTab: React.FC<StoriesTabProps> = ({ onSelectFormula }) => {
       .find((entry) => entry.stepIndex >= 0);
 
     if (!storyMatch) return;
-    setActiveStoryId(storyMatch.story.id);
-    setStepIndex(storyMatch.stepIndex);
-    setPlaying(false);
+    queueMicrotask(() => {
+      setActiveStoryId(storyMatch.story.id);
+      setStepIndex(storyMatch.stepIndex);
+      setPlaying(false);
+    });
   }, [highlightRequest]);
 
   useEffect(() => {
     if (!playing) return;
     if (!activeStory || stepIndex >= steps.length - 1) {
-      setPlaying(false);
+      queueMicrotask(() => setPlaying(false));
       return;
     }
 

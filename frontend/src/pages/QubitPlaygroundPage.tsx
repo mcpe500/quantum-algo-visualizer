@@ -21,7 +21,7 @@ export default function QubitPlaygroundPage({ initialTab = 'state' }: QubitPlayg
   const [activeTab, setActiveTab] = useState<'state' | 'circuit'>(initialTab);
 
   useEffect(() => {
-    setActiveTab(initialTab);
+    queueMicrotask(() => setActiveTab(initialTab));
   }, [initialTab]);
 
   useEffect(() => {

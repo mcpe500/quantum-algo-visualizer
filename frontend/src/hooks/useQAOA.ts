@@ -7,9 +7,9 @@ import type {
   QAOATrace,
 } from '../types/qaoa';
 import type { QAOACircuitImage } from '../services/api';
-import { sortCaseIds } from '../utils/sorting';
 import { downloadElementAsPNG } from '../utils/download';
 import { CAPTURE_IDS, DEFAULT_SHOTS } from '../constants/app';
+import { getSortedCaseIds } from '../utils/cases';
 
 export interface UseQAOAReturn {
   selectedCaseId: string;
@@ -29,8 +29,8 @@ export interface UseQAOAReturn {
 }
 
 export function useQAOA(): UseQAOAReturn {
-  const [selectedCaseId, setSelectedCaseId] = useState<string>('QAOA-01');
-  const [availableCases, setAvailableCases] = useState<string[]>(['QAOA-01']);
+  const [selectedCaseId, setSelectedCaseId] = useState<string>('');
+  const [availableCases, setAvailableCases] = useState<string[]>([]);
   const [benchmarkResult, setBenchmarkResult] = useState<QAOABenchmarkResult | null>(null);
   const [circuitImage, setCircuitImage] = useState<QAOACircuitImage | null>(null);
   const [trace, setTrace] = useState<QAOATrace | null>(null);
@@ -47,15 +47,13 @@ export function useQAOA(): UseQAOAReturn {
       try {
         const cases = await qaoaApi.getCases();
         if (cancelled) return;
-        const ids = sortCaseIds(
-          cases.map((c) => c.case_id).filter((id): id is string => Boolean(id))
-        );
+        const ids = getSortedCaseIds(cases);
         if (ids.length > 0) {
           setAvailableCases(ids);
           setSelectedCaseId((cur) => (ids.includes(cur) ? cur : ids[0]));
         }
       } catch {
-        // keep default
+        setAvailableCases([]);
       }
     };
     void load();
@@ -65,6 +63,7 @@ export function useQAOA(): UseQAOAReturn {
   }, []);
 
   const loadCircuitImage = useCallback(async (caseId: string, gamma?: number[], beta?: number[]) => {
+    if (!caseId) return;
     try {
       const data = await qaoaApi.getCircuitImage(caseId, gamma, beta);
       setCircuitImage(data);
@@ -74,6 +73,7 @@ export function useQAOA(): UseQAOAReturn {
   }, []);
 
   const loadTrace = useCallback(async (caseId: string, gamma?: number[], beta?: number[]) => {
+    if (!caseId) return;
     try {
       const data = await qaoaApi.getTrace(caseId, gamma, beta);
       setTrace(data);
@@ -83,6 +83,7 @@ export function useQAOA(): UseQAOAReturn {
   }, []);
 
   const loadAnimation = useCallback(async (caseId: string) => {
+    if (!caseId) return;
     setIsLoadingAnimation(true);
     try {
       const data = await qaoaApi.getAnimation(caseId, DEFAULT_SHOTS);
@@ -95,19 +96,27 @@ export function useQAOA(): UseQAOAReturn {
   }, []);
 
   useEffect(() => {
-    if (activeTab === 'animation') {
-      void loadAnimation(selectedCaseId);
+    if (selectedCaseId && activeTab === 'animation') {
+      queueMicrotask(() => void loadAnimation(selectedCaseId));
     }
   }, [activeTab, selectedCaseId, loadAnimation]);
 
   useEffect(() => {
-    void loadCircuitImage(selectedCaseId);
-    void loadTrace(selectedCaseId);
+    if (!selectedCaseId) return;
+    queueMicrotask(() => {
+      void loadCircuitImage(selectedCaseId);
+      void loadTrace(selectedCaseId);
+    });
   }, [selectedCaseId, loadCircuitImage, loadTrace]);
 
   const handleRun = useCallback(async () => {
     setIsLoading(true);
     setError(null);
+    if (!selectedCaseId) {
+      setError('Dataset case belum tersedia.');
+      setIsLoading(false);
+      return;
+    }
     try {
       const params: QAOABenchmarkParams = {
         case_id: selectedCaseId,
@@ -126,6 +135,7 @@ export function useQAOA(): UseQAOAReturn {
   }, [selectedCaseId, loadCircuitImage, loadTrace]);
 
   const handleDownload = useCallback(async () => {
+    if (!selectedCaseId) return;
     await downloadElementAsPNG(CAPTURE_IDS.qaoa, `qaoa_${selectedCaseId}.png`);
   }, [selectedCaseId]);
 

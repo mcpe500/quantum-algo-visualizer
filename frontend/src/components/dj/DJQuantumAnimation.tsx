@@ -221,7 +221,7 @@ export function DJQuantumAnimation({ data, onExportingChange }: DJQuantumAnimati
             onCreated={({ gl }) => {
               gl.setPixelRatio(1);
               gl.setSize(EXPORT_VIDEO_WIDTH, EXPORT_VIDEO_HEIGHT, false);
-              engine.exportRendererCanvasRef.current = gl.domElement;
+              engine.setExportRendererCanvas(gl.domElement);
             }}
           >
             <StoryScene data={data} currentStep={engine.currentStep} cameraMode={engine.cameraMode} />

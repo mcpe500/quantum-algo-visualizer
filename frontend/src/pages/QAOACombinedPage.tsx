@@ -28,7 +28,7 @@ export default function QAOACombinedPage({ initialTab = 'classic' }: QAOACombine
   } = useQAOA();
 
   useEffect(() => {
-    setActiveTab(initialTab);
+    queueMicrotask(() => setActiveTab(initialTab));
   }, [initialTab, setActiveTab]);
 
   return (

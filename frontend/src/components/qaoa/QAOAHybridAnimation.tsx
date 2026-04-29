@@ -96,7 +96,7 @@ export function QAOAHybridAnimation({ data }: QAOAHybridAnimationProps) {
     } else {
       stopTimer();
       if (currentStep >= totalSteps - 1) {
-        setIsPlaying(false);
+        queueMicrotask(() => setIsPlaying(false));
       }
     }
 
@@ -104,10 +104,12 @@ export function QAOAHybridAnimation({ data }: QAOAHybridAnimationProps) {
   }, [currentStep, isPlaying, speed, stopTimer, totalSteps]);
 
   useEffect(() => {
-    setCurrentStep(0);
-    setIsPlaying(false);
-    setExportError(null);
-    stopTimer();
+    queueMicrotask(() => {
+      setCurrentStep(0);
+      setIsPlaying(false);
+      setExportError(null);
+      stopTimer();
+    });
   }, [data.case_id, stopTimer]);
 
   useEffect(() => {

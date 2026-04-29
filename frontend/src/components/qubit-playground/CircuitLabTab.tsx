@@ -280,24 +280,26 @@ export default function CircuitLabTab({ builder }: CircuitLabTabProps) {
   const occupiedColumns = useMemo(() => new Set(placements.map((placement) => placement.column)).size, [placements]);
 
   useEffect(() => {
-    setCurrentStep((value) => Math.min(value, totalSteps));
-    if (totalSteps === 0) {
-      setIsPlaying(false);
-    }
+    queueMicrotask(() => {
+      setCurrentStep((value) => Math.min(value, totalSteps));
+      if (totalSteps === 0) {
+        setIsPlaying(false);
+      }
+    });
   }, [totalSteps]);
 
   useEffect(() => {
     if (!selectedPlacementId) return;
     const stepIndex = stepIndexByPlacementId.get(selectedPlacementId);
     if (stepIndex !== undefined) {
-      setCurrentStep(stepIndex);
+      queueMicrotask(() => setCurrentStep(stepIndex));
     }
   }, [selectedPlacementId, stepIndexByPlacementId]);
 
   useEffect(() => {
     if (!isPlaying || totalSteps === 0) return;
     if (currentStep >= totalSteps) {
-      setIsPlaying(false);
+      queueMicrotask(() => setIsPlaying(false));
       return;
     }
 
@@ -310,7 +312,7 @@ export default function CircuitLabTab({ builder }: CircuitLabTabProps) {
 
   useEffect(() => {
     if (isPlaying && currentStep >= totalSteps) {
-      setIsPlaying(false);
+      queueMicrotask(() => setIsPlaying(false));
     }
   }, [currentStep, isPlaying, totalSteps]);
 

@@ -56,6 +56,7 @@ export function AlgorithmPageShell({
   captureId,
   extraControls,
 }: AlgorithmPageShellProps) {
+  const hasCases = availableCases.length > 0;
   const tabClass = (tabId: string) =>
     activeTab === tabId
       ? 'bg-white text-slate-900 shadow-sm'
@@ -94,8 +95,10 @@ export function AlgorithmPageShell({
           <select
             value={selectedCaseId}
             onChange={(e) => onCaseChange(e.target.value)}
+            disabled={!hasCases}
             className="px-4 py-2 border-2 border-dashed border-gray-300 rounded-lg text-sm text-gray-700 bg-white hover:border-gray-400 transition-all cursor-pointer font-mono"
           >
+            {!hasCases && <option value="">No dataset cases</option>}
             {availableCases.map((id) => (
               <option key={id} value={id}>{id}</option>
             ))}
@@ -105,7 +108,7 @@ export function AlgorithmPageShell({
 
           <button
             onClick={() => void onRun()}
-            disabled={isLoading}
+            disabled={isLoading || !hasCases}
             className="px-4 py-2 bg-gray-900 text-white text-sm font-medium rounded-lg hover:bg-gray-800 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
           >
             <Play className="w-4 h-4" />

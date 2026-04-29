@@ -20,7 +20,7 @@ import { buildVarScope } from './graphEngine';
 import { computeDataflowGraph } from './dataflowEngine';
 import { FORMULA_STUDIO_SCENARIOS } from '../scenarios';
 import { downloadCanvasProject, readProjectFile } from './projectIO';
-import { useFormulaStudioSync } from '../FormulaStudioContext';
+import { useFormulaStudioSync } from '../FormulaStudioSyncContext';
 
 const STORAGE_KEY = 'formula-studio-canvas-v2';
 
@@ -222,7 +222,7 @@ export const StudioCanvas: React.FC = () => {
 
   /* ── DnD from palette ── */
 
-  const handleCanvasDrop = useCallback((_x: number, _y: number) => {
+  const handleCanvasDrop = useCallback(() => {
     // No longer needed — drop coordinates from dnd-kit are authoritative
   }, []);
 
@@ -509,7 +509,7 @@ export const StudioCanvas: React.FC = () => {
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, []);
+  }, [handleFitView]);
 
   /* ── render ── */
 

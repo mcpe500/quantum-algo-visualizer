@@ -141,12 +141,12 @@ export function OracleTopography({ cases: initialCases }: OracleTopographyProps)
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    setMounted(true);
+    queueMicrotask(() => setMounted(true));
   }, []);
 
   useEffect(() => {
     if (initialCases) {
-      setCases(initialCases);
+      queueMicrotask(() => setCases(initialCases));
       return;
     }
 

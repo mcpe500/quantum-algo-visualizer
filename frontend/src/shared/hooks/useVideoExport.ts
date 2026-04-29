@@ -115,7 +115,7 @@ export function useVideoExport<TData extends BaseAnimationPayload<TStep>, TStep 
       const drawCompositeFrame = () => {
         if (cancelled) return;
         if (!sourceCanvas) {
-          engine.exportAnimationFrameRef.current = window.requestAnimationFrame(drawCompositeFrame);
+          engine.setExportAnimationFrame(window.requestAnimationFrame(drawCompositeFrame));
           return;
         }
         const exportStep = engine.data.timeline[engine.currentStepRef.current] ?? engine.data.timeline[0];
@@ -131,7 +131,7 @@ export function useVideoExport<TData extends BaseAnimationPayload<TStep>, TStep 
           totalSteps: engine.totalSteps,
         });
 
-        engine.exportAnimationFrameRef.current = window.requestAnimationFrame(drawCompositeFrame);
+        engine.setExportAnimationFrame(window.requestAnimationFrame(drawCompositeFrame));
       };
 
       engine.setExportError(null);
@@ -174,10 +174,7 @@ export function useVideoExport<TData extends BaseAnimationPayload<TStep>, TStep 
         await wait(exportConfig.outroMs);
 
         cancelled = true;
-        if (engine.exportAnimationFrameRef.current !== null) {
-          window.cancelAnimationFrame(engine.exportAnimationFrameRef.current);
-          engine.exportAnimationFrameRef.current = null;
-        }
+        engine.cancelExportAnimationFrame();
 
         recorder?.stop();
         const webmBlob = await recorderPromise;
@@ -211,12 +208,9 @@ export function useVideoExport<TData extends BaseAnimationPayload<TStep>, TStep 
         }
       } finally {
         cancelled = true;
-        if (engine.exportAnimationFrameRef.current !== null) {
-          window.cancelAnimationFrame(engine.exportAnimationFrameRef.current);
-          engine.exportAnimationFrameRef.current = null;
-        }
+        engine.cancelExportAnimationFrame();
         stream?.getTracks().forEach((track) => track.stop());
-        engine.exportRendererCanvasRef.current = null;
+        engine.setExportRendererCanvas(null);
 
         engine.setSpeed(previousSpeed);
         engine.setCurrentStep(previousStep);
@@ -247,7 +241,7 @@ export function useVideoExport<TData extends BaseAnimationPayload<TStep>, TStep 
     }
 
     await runExportPipeline('mp4');
-  }, [ffmpegReady, engine.isExporting, runExportPipeline, engine.setExportError]);
+  }, [engine, ffmpegReady, runExportPipeline]);
 
   return {
     handleExportVideo,

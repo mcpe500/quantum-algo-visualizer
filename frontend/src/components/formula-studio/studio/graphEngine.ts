@@ -145,7 +145,7 @@ export function computeGraph(nodes: CanvasNodeData[]): Map<string, NodeResult> {
               valueDisplay: finalStep.result?.toString(),
               simplified: formula?.latex ?? '',
             });
-          } catch (err) {
+          } catch {
             results.set(node.id, { error: 'Kesalahan komputasi' });
           }
         } else {

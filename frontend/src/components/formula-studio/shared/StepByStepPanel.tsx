@@ -16,7 +16,7 @@ function toTitle(param: string): string {
 }
 
 export const StepByStepPanel: React.FC<StepByStepPanelProps> = ({ formula, onClose }) => {
-  const params = formula.computation?.requiresParams ?? [];
+  const params = useMemo(() => formula.computation?.requiresParams ?? [], [formula.computation]);
   const [values, setValues] = useState<Record<string, string>>(() =>
     Object.fromEntries(params.map((param) => [param, '']))
   );
@@ -71,7 +71,7 @@ export const StepByStepPanel: React.FC<StepByStepPanelProps> = ({ formula, onClo
   useEffect(() => {
     if (!isPlaying || steps.length === 0) return;
     if (activeStep >= steps.length - 1) {
-      setIsPlaying(false);
+      queueMicrotask(() => setIsPlaying(false));
       return;
     }
     const timer = setTimeout(() => {

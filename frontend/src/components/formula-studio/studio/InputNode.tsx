@@ -40,8 +40,10 @@ export const InputNode: React.FC<InputNodeProps> = ({
 
   // sync if node prop changes externally
   useEffect(() => {
-    setNameInput(node.varName ?? 'x');
-    setValueInput(node.varValue ?? '0');
+    queueMicrotask(() => {
+      setNameInput(node.varName ?? 'x');
+      setValueInput(node.varValue ?? '0');
+    });
   }, [node.varName, node.varValue]);
 
   useEffect(() => {

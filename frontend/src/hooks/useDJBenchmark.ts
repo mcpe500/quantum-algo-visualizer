@@ -8,9 +8,9 @@ import type {
 } from '../types/dj';
 import type { DJCircuitImage } from '../services/api';
 import type { ClassicalResult } from '../types/classical';
-import { sortCaseIds } from '../utils/sorting';
 import { downloadElementAsPNG } from '../utils/download';
 import { CAPTURE_IDS, DEFAULT_SHOTS } from '../constants/app';
+import { getSortedCaseIds } from '../utils/cases';
 
 export interface UseDJBenchmarkReturn {
   selectedCaseId: string;
@@ -33,8 +33,8 @@ export interface UseDJBenchmarkReturn {
 }
 
 export function useDJBenchmark(): UseDJBenchmarkReturn {
-  const [selectedCaseId, setSelectedCaseId] = useState<string>('DJ-01');
-  const [availableCases, setAvailableCases] = useState<string[]>(['DJ-01']);
+  const [selectedCaseId, setSelectedCaseId] = useState<string>('');
+  const [availableCases, setAvailableCases] = useState<string[]>([]);
   const [benchmarkResult, setBenchmarkResult] = useState<DJBenchmarkResult | null>(null);
   const [circuitImage, setCircuitImage] = useState<DJCircuitImage | null>(null);
   const [boxedCircuitImage, setBoxedCircuitImage] = useState<DJCircuitImage | null>(null);
@@ -52,15 +52,13 @@ export function useDJBenchmark(): UseDJBenchmarkReturn {
       try {
         const cases = await djApi.getCases();
         if (cancelled) return;
-        const ids = sortCaseIds(
-          cases.map((c) => c.case_id).filter((id): id is string => Boolean(id))
-        );
+        const ids = getSortedCaseIds(cases);
         if (ids.length > 0) {
           setAvailableCases(ids);
           setSelectedCaseId((cur) => (ids.includes(cur) ? cur : ids[0]));
         }
       } catch {
-        // keep default
+        setAvailableCases([]);
       }
     };
     void load();
@@ -68,36 +66,49 @@ export function useDJBenchmark(): UseDJBenchmarkReturn {
   }, []);
 
   const loadCircuitImage = useCallback(async (caseId: string) => {
+    if (!caseId) return;
     try { setCircuitImage(await djApi.getCircuitImage(caseId)); } catch { setCircuitImage(null); }
   }, []);
 
   const loadBoxedCircuitImage = useCallback(async (caseId: string) => {
+    if (!caseId) return;
     try { setBoxedCircuitImage(await djApi.getCircuitImageBoxed(caseId)); } catch { setBoxedCircuitImage(null); }
   }, []);
 
   const loadTrace = useCallback(async (caseId: string) => {
+    if (!caseId) return;
     try { setTrace(await djApi.getQuantumTrace(caseId)); } catch { setTrace(null); }
   }, []);
 
   const loadAnimation = useCallback(async (caseId: string) => {
+    if (!caseId) return;
     try { setAnimationData(await djApi.getAnimation(caseId, DEFAULT_SHOTS)); } catch { setAnimationData(null); }
   }, []);
 
   const loadClassical = useCallback(async (caseId: string) => {
+    if (!caseId) return;
     try { setClassicalResult(await djApi.runClassicalDJ(caseId)); } catch { /* ignore */ }
   }, []);
 
   useEffect(() => {
-    void loadClassical(selectedCaseId);
-    void loadCircuitImage(selectedCaseId);
-    void loadBoxedCircuitImage(selectedCaseId);
-    void loadTrace(selectedCaseId);
-    void loadAnimation(selectedCaseId);
+    if (!selectedCaseId) return;
+    queueMicrotask(() => {
+      void loadClassical(selectedCaseId);
+      void loadCircuitImage(selectedCaseId);
+      void loadBoxedCircuitImage(selectedCaseId);
+      void loadTrace(selectedCaseId);
+      void loadAnimation(selectedCaseId);
+    });
   }, [selectedCaseId, loadClassical, loadCircuitImage, loadBoxedCircuitImage, loadTrace, loadAnimation]);
 
   const handleRun = useCallback(async () => {
     setIsLoading(true);
     setError(null);
+    if (!selectedCaseId) {
+      setError('Dataset case belum tersedia.');
+      setIsLoading(false);
+      return;
+    }
     try {
       const params: DJBenchmarkParams = { case_id: selectedCaseId, shots: DEFAULT_SHOTS };
       const data = await djApi.runBenchmark(params);
@@ -114,6 +125,7 @@ export function useDJBenchmark(): UseDJBenchmarkReturn {
   }, [selectedCaseId, loadClassical, loadCircuitImage, loadBoxedCircuitImage, loadAnimation]);
 
   const handleDownload = useCallback(async () => {
+    if (!selectedCaseId) return;
     await downloadElementAsPNG(CAPTURE_IDS.djQuantum, `dj_combined_${selectedCaseId}.png`);
   }, [selectedCaseId]);
 

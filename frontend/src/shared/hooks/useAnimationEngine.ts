@@ -38,6 +38,9 @@ export interface AnimationEngineReturn<TData extends BaseAnimationPayload<TStep>
   speedRef: React.MutableRefObject<number>;
   exportRendererCanvasRef: React.MutableRefObject<HTMLCanvasElement | null>;
   exportAnimationFrameRef: React.MutableRefObject<number | null>;
+  setExportRendererCanvas: (canvas: HTMLCanvasElement | null) => void;
+  setExportAnimationFrame: (frameId: number | null) => void;
+  cancelExportAnimationFrame: () => void;
 }
 
 export function useAnimationEngine<TData extends BaseAnimationPayload<TStep>, TStep extends BaseAnimationStep>(
@@ -67,6 +70,21 @@ export function useAnimationEngine<TData extends BaseAnimationPayload<TStep>, TS
     if (!timerRef.current) return;
     clearInterval(timerRef.current);
     timerRef.current = null;
+  }, []);
+
+  const setExportRendererCanvas = useCallback((canvas: HTMLCanvasElement | null) => {
+    exportRendererCanvasRef.current = canvas;
+  }, []);
+
+  const setExportAnimationFrame = useCallback((frameId: number | null) => {
+    exportAnimationFrameRef.current = frameId;
+  }, []);
+
+  const cancelExportAnimationFrame = useCallback(() => {
+    if (exportAnimationFrameRef.current !== null) {
+      window.cancelAnimationFrame(exportAnimationFrameRef.current);
+      exportAnimationFrameRef.current = null;
+    }
   }, []);
 
   useEffect(() => {
@@ -104,24 +122,29 @@ export function useAnimationEngine<TData extends BaseAnimationPayload<TStep>, TS
       }, speed);
     } else {
       stopTimer();
-      if (currentStep >= totalSteps - 1) setIsPlaying(false);
+      if (currentStep >= totalSteps - 1) {
+        queueMicrotask(() => setIsPlaying(false));
+      }
     }
 
     return stopTimer;
   }, [currentStep, isPlaying, speed, stopTimer, totalSteps]);
 
   useEffect(() => {
-    setCurrentStep(0);
-    setIsPlaying(false);
-    setExportError(null);
-    stopTimer();
+    queueMicrotask(() => {
+      setCurrentStep(0);
+      setIsPlaying(false);
+      setExportError(null);
+      stopTimer();
+    });
   }, [data.case_id, stopTimer]);
 
   useEffect(() => {
+    const animationFrameRef = exportAnimationFrameRef;
     return () => {
       stopTimer();
-      if (exportAnimationFrameRef.current !== null) {
-        window.cancelAnimationFrame(exportAnimationFrameRef.current);
+      if (animationFrameRef.current !== null) {
+        window.cancelAnimationFrame(animationFrameRef.current);
       }
     };
   }, [stopTimer]);
@@ -197,5 +220,8 @@ export function useAnimationEngine<TData extends BaseAnimationPayload<TStep>, TS
     speedRef,
     exportRendererCanvasRef,
     exportAnimationFrameRef,
+    setExportRendererCanvas,
+    setExportAnimationFrame,
+    cancelExportAnimationFrame,
   };
 }

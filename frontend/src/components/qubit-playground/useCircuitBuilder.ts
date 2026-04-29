@@ -1019,7 +1019,11 @@ export function useCircuitBuilder() {
       statevector: finalStatevector,
       blochData: finalBlochData,
       blochCards,
-      trace: traceInternal.map(({ beforeBlochData: _beforeBlochData, placement: _placement, ...step }) => step),
+      trace: traceInternal.map(({ beforeBlochData, placement, ...step }) => {
+        void beforeBlochData;
+        void placement;
+        return step;
+      }),
       playbackFrames,
       insights: [...insightsMap.values()],
     };
