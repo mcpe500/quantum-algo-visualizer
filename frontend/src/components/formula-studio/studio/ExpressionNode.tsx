@@ -36,7 +36,7 @@ export const ExpressionNode: React.FC<ExpressionNodeProps> = ({
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    setExprInput(node.nodeExpression ?? '');
+    queueMicrotask(() => setExprInput(node.nodeExpression ?? ''));
   }, [node.nodeExpression]);
 
   useEffect(() => {

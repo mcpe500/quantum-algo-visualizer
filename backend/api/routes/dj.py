@@ -1,6 +1,7 @@
 from datetime import datetime
 from flask import jsonify, request
 from api import api_bp
+from api.shared.request_helpers import json_body, no_cases_response, parse_int, resolve_case_id
 from services.dj_service import (
     get_dj_cases,
     get_dj_case_or_none,
@@ -28,9 +29,11 @@ def dj_dataset(case_id):
 
 @api_bp.route('/dj/benchmark', methods=['POST'])
 def dj_benchmark():
-    data = request.get_json() or {}
-    case_id = data.get('case_id', 'DJ-01')
-    shots = data.get('shots', 1024)
+    data = json_body()
+    case_id = resolve_case_id(data.get('case_id'), get_dj_cases())
+    if case_id is None:
+        return no_cases_response('DJ')
+    shots = parse_int(data.get('shots'), 1024)
     payload = run_dj_benchmark_payload(case_id=case_id, shots=shots)
     if payload is None:
         return jsonify({'error': f'Case {case_id} not found'}), 404
@@ -55,7 +58,7 @@ def dj_circuit_image(case_id):
         error_msg = f'Error generating circuit image: {str(e)}'
         print(error_msg)
         traceback.print_exc()
-        return jsonify({'error': error_msg, 'trace': traceback.format_exc()}), 500
+        return jsonify({'error': error_msg}), 500
 
 @api_bp.route('/dj/circuit-image-boxed/<case_id>', methods=['GET'])
 def dj_circuit_image_boxed(case_id):
@@ -71,12 +74,14 @@ def dj_circuit_image_boxed(case_id):
         error_msg = f'Error generating boxed circuit image: {str(e)}'
         print(error_msg)
         traceback.print_exc()
-        return jsonify({'error': error_msg, 'trace': traceback.format_exc()}), 500
+        return jsonify({'error': error_msg}), 500
 
 @api_bp.route('/dj/classic-run', methods=['POST'])
 def dj_classic_run():
-    data = request.get_json() or {}
-    case_id = data.get('case_id', 'DJ-01')
+    data = json_body()
+    case_id = resolve_case_id(data.get('case_id'), get_dj_cases())
+    if case_id is None:
+        return no_cases_response('DJ')
     payload = get_dj_classic_trace_payload(case_id)
     if payload is None:
         return jsonify({'error': f'Case {case_id} not found'}), 404
@@ -91,8 +96,10 @@ def dj_quantum_trace(case_id):
 
 @api_bp.route('/dj/quantum-trace-grouped', methods=['POST'])
 def dj_quantum_trace_grouped():
-    data = request.get_json() or {}
-    case_id = data.get('case_id', 'DJ-01')
+    data = json_body()
+    case_id = resolve_case_id(data.get('case_id'), get_dj_cases())
+    if case_id is None:
+        return no_cases_response('DJ')
     payload = get_dj_quantum_trace_grouped_payload(case_id)
     if payload is None:
         return jsonify({'error': f'Case {case_id} not found'}), 404

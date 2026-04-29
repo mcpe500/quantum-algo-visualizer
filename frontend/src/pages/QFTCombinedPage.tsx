@@ -28,7 +28,7 @@ export default function QFTCombinedPage({ initialTab = 'classic' }: QFTCombinedP
   } = useQFT();
 
   useEffect(() => {
-    setActiveTab(initialTab);
+    queueMicrotask(() => setActiveTab(initialTab));
   }, [initialTab, setActiveTab]);
 
   return (

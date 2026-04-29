@@ -1,6 +1,7 @@
 from datetime import datetime
 from flask import jsonify, request
 from api import api_bp
+from api.shared.request_helpers import json_body, no_cases_response, parse_bool, parse_int, resolve_case_id
 from services.qaoa_service import (
     get_qaoa_cases,
     get_qaoa_case_or_none,
@@ -12,21 +13,6 @@ from services.qaoa_service import (
     run_qaoa_payload,
     enrich_case_graph,
 )
-
-
-def _parse_int(value, default):
-    try:
-        return int(value)
-    except (TypeError, ValueError):
-        return int(default)
-
-
-def _parse_bool(value, default=False):
-    if value is None:
-        return bool(default)
-    if isinstance(value, bool):
-        return value
-    return str(value).strip().lower() in {'1', 'true', 'yes', 'on'}
 
 
 def _parse_layer_values(raw_value, default):
@@ -66,19 +52,21 @@ def qaoa_dataset(case_id):
 
 @api_bp.route('/qaoa/benchmark', methods=['POST'])
 def qaoa_run():
-    data = request.get_json() or {}
-    case_id = data.get('case_id', 'QAOA-01')
-    shots = int(data.get('shots', 1024))
+    data = json_body()
+    case_id = resolve_case_id(data.get('case_id'), get_qaoa_cases())
+    if case_id is None:
+        return no_cases_response('QAOA')
+    shots = parse_int(data.get('shots'), 1024)
     payload = run_qaoa_payload(
         case_id=case_id,
         shots=shots,
-        optimizer_seed=_parse_int(data.get('optimizer_seed'), 42),
-        simulator_seed=_parse_int(data.get('simulator_seed'), 42),
-        max_iter=_parse_int(data.get('maxiter'), 120),
-        include_aggregate=_parse_bool(data.get('include_aggregate'), True),
-        aggregate_seed_start=_parse_int(data.get('aggregate_seed_start'), 0),
-        aggregate_seed_count=_parse_int(data.get('aggregate_seed_count'), 8),
-        aggregate_max_iter=_parse_int(data.get('aggregate_maxiter'), 120),
+        optimizer_seed=parse_int(data.get('optimizer_seed'), 42),
+        simulator_seed=parse_int(data.get('simulator_seed'), 42),
+        max_iter=parse_int(data.get('maxiter'), 120),
+        include_aggregate=parse_bool(data.get('include_aggregate'), True),
+        aggregate_seed_start=parse_int(data.get('aggregate_seed_start'), 0),
+        aggregate_seed_count=parse_int(data.get('aggregate_seed_count'), 8),
+        aggregate_max_iter=parse_int(data.get('aggregate_maxiter'), 120),
     )
     if payload is None:
         return jsonify({'error': f'Case {case_id} not found'}), 404
@@ -90,9 +78,9 @@ def qaoa_run():
 def qaoa_aggregate(case_id):
     payload = get_qaoa_aggregate_payload(
         case_id,
-        seed_start=_parse_int(request.args.get('seed_start'), 0),
-        seed_count=_parse_int(request.args.get('seed_count'), 8),
-        max_iter=_parse_int(request.args.get('maxiter'), 120),
+        seed_start=parse_int(request.args.get('seed_start'), 0),
+        seed_count=parse_int(request.args.get('seed_count'), 8),
+        max_iter=parse_int(request.args.get('maxiter'), 120),
     )
     if payload is None:
         return jsonify({'error': f'Case {case_id} not found'}), 404
@@ -101,13 +89,13 @@ def qaoa_aggregate(case_id):
 
 @api_bp.route('/qaoa/animation/<case_id>', methods=['GET'])
 def qaoa_animation(case_id):
-    shots = int(request.args.get('shots', 1024))
+    shots = parse_int(request.args.get('shots'), 1024)
     payload = get_qaoa_animation_payload(
         case_id=case_id,
         shots=shots,
-        optimizer_seed=_parse_int(request.args.get('optimizer_seed'), 42),
-        simulator_seed=_parse_int(request.args.get('simulator_seed'), 42),
-        max_iter=_parse_int(request.args.get('maxiter'), 120),
+        optimizer_seed=parse_int(request.args.get('optimizer_seed'), 42),
+        simulator_seed=parse_int(request.args.get('simulator_seed'), 42),
+        max_iter=parse_int(request.args.get('maxiter'), 120),
     )
     if payload is None:
         return jsonify({'error': f'Case {case_id} not found'}), 404
@@ -146,8 +134,10 @@ def qaoa_trace(case_id):
 
 @api_bp.route('/qaoa/classical-run', methods=['POST'])
 def qaoa_classical_run():
-    data = request.get_json() or {}
-    case_id = data.get('case_id', 'QAOA-01')
+    data = json_body()
+    case_id = resolve_case_id(data.get('case_id'), get_qaoa_cases())
+    if case_id is None:
+        return no_cases_response('QAOA')
     payload = get_qaoa_classical_payload(case_id)
     if payload is None:
         return jsonify({'error': f'Case {case_id} not found'}), 404

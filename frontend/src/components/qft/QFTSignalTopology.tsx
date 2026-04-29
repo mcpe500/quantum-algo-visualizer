@@ -8,21 +8,27 @@ import { downloadElementAsPNG } from '../../utils/download';
 interface SignalWaveformProps {
   data: number[];
   gradientId: string;
+  captureMode: boolean;
 }
 
-function SignalWaveform({ data, gradientId }: SignalWaveformProps) {
+function SignalWaveform({ data, gradientId, captureMode }: SignalWaveformProps) {
   const isEmpty = data.length === 0;
   const isDense = data.length > 32;
   const dotRadius = isDense ? 3 : 4.5;
   const dotStroke = isDense ? 1 : 1.5;
-  const labelFontSize = isDense ? 6 : 8.5;
+  const labelFontSize = captureMode ? 8 : isDense ? 6 : 8.5;
+  const chartHeightClass = captureMode ? 'h-[360px]' : 'h-48 sm:h-64';
+  const shouldShowPointLabel = (index: number) => {
+    if (!captureMode) return true;
+    return index % (isDense ? 8 : 4) === 0 || index === data.length - 1;
+  };
 
   const { pathLine, pathArea, zeroYPercent, chartPoints } = useMemo(() => {
     const chartData = data.length === 0 ? [0] : data;
     const maxVal = Math.max(...chartData);
     const minVal = Math.min(...chartData);
     const range = maxVal - minVal || 1;
-    const padding = range * 0.15;
+    const padding = range * (captureMode ? 0.06 : 0.15);
     const yMin = minVal - padding;
     const yMax = maxVal + padding;
     const yRange = yMax - yMin || 1;
@@ -30,7 +36,7 @@ function SignalWaveform({ data, gradientId }: SignalWaveformProps) {
     const width = 600;
     const height = 240;
     const paddingX = isDense ? 30 : 28;
-    const paddingY = isDense ? 24 : 18;
+    const paddingY = captureMode ? 16 : isDense ? 24 : 18;
     const plotWidth = width - paddingX * 2;
     const plotHeight = height - paddingY * 2;
     const denominator = Math.max(1, chartData.length - 1);
@@ -55,18 +61,18 @@ function SignalWaveform({ data, gradientId }: SignalWaveformProps) {
       zeroYPercent: (zeroY / height) * 100,
       chartPoints: chartPointsLocal,
     };
-  }, [data, isDense]);
+  }, [data, isDense, captureMode]);
 
   if (isEmpty) {
     return (
-      <div className="relative w-full h-48 sm:h-64 bg-white rounded-xl border-2 border-slate-200 overflow-hidden flex items-center justify-center">
+      <div className={`relative w-full ${chartHeightClass} bg-white rounded-xl border-2 border-slate-200 overflow-hidden flex items-center justify-center`}>
         <span className="text-sm font-semibold text-slate-400 tracking-wide">Signal data kosong</span>
       </div>
     );
   }
 
   return (
-    <div className="relative w-full h-48 sm:h-64 bg-white rounded-xl border-2 border-slate-200 overflow-hidden flex items-center justify-center group">
+    <div className={`relative w-full ${chartHeightClass} bg-white rounded-xl border-2 border-slate-200 overflow-hidden flex items-center justify-center group`}>
       <div className="absolute inset-0 pointer-events-none opacity-40">
         <div
           className="w-full h-full"
@@ -108,6 +114,7 @@ function SignalWaveform({ data, gradientId }: SignalWaveformProps) {
           const labelY = point.y + verticalOffsets[i % verticalOffsets.length];
           const labelX = Math.min(592, Math.max(8, point.x));
           const textAnchor = point.x < 18 ? 'start' : point.x > 582 ? 'end' : 'middle';
+          const showPointLabel = shouldShowPointLabel(i);
           return (
             <g key={`point-group-${i}`}>
               <circle
@@ -119,25 +126,46 @@ function SignalWaveform({ data, gradientId }: SignalWaveformProps) {
                 strokeWidth={dotStroke}
                 className="group-hover:drop-shadow-[0_2px_4px_rgba(249,115,22,0.4)]"
               />
-              <text
-                x={labelX}
-                y={labelY}
-                textAnchor={textAnchor}
-                fontSize={labelFontSize}
-                fill="#64748B"
-                fontFamily="monospace"
-                fontWeight="600"
-                dominantBaseline="middle"
-                stroke="#FFFFFF"
-                strokeWidth="2.5"
-                paintOrder="stroke"
-                strokeLinejoin="round"
-              >
-                {i}
-              </text>
+              {showPointLabel && !captureMode && (
+                <text
+                  x={labelX}
+                  y={labelY}
+                  textAnchor={textAnchor}
+                  fontSize={labelFontSize}
+                  fill="#64748B"
+                  fontFamily="monospace"
+                  fontWeight="600"
+                  dominantBaseline="middle"
+                  stroke="#FFFFFF"
+                  strokeWidth="2.5"
+                  paintOrder="stroke"
+                  strokeLinejoin="round"
+                >
+                  {i}
+                </text>
+              )}
+              {showPointLabel && captureMode && (
+                <>
+                  <line x1={point.x} y1="210" x2={point.x} y2="215" stroke="#94A3B8" strokeWidth="1" />
+                  <text
+                    x={labelX}
+                    y="224"
+                    textAnchor={textAnchor}
+                    fontSize={labelFontSize}
+                    fill="#475569"
+                    fontFamily="monospace"
+                    fontWeight="700"
+                    dominantBaseline="middle"
+                  >
+                    {i}
+                  </text>
+                </>
+              )}
             </g>
           );
         })}
+
+        {/* Axis labels intentionally omitted in book figure — explained in caption instead */}
       </svg>
     </div>
   );
@@ -147,9 +175,10 @@ interface DatasetCardProps {
   data: QFTCase;
   index: number;
   mounted: boolean;
+  captureMode: boolean;
 }
 
-function DatasetCard({ data, index, mounted }: DatasetCardProps) {
+function DatasetCard({ data, index, mounted, captureMode }: DatasetCardProps) {
   const [isCapturing, setIsCapturing] = useState(false);
   const isMixed = data.signal_type.includes('mixed');
   const Icon = isMixed ? Activity : Waves;
@@ -171,27 +200,29 @@ function DatasetCard({ data, index, mounted }: DatasetCardProps) {
     <div
       id={`qft-signal-${data.case_id}`}
       data-capture-root
-      className={`bg-white rounded-3xl border border-slate-200 overflow-hidden flex flex-col h-full transform transition-all duration-700 ease-out shadow-sm hover:shadow-[0_16px_50px_rgb(0,0,0,0.08)] ${
-        mounted ? 'translate-y-0 opacity-100' : 'translate-y-12 opacity-0'
+      className={`bg-white border border-slate-200 overflow-hidden flex flex-col h-full transform transition-all duration-700 ease-out ${
+        captureMode ? 'rounded-2xl shadow-none' : 'rounded-3xl shadow-sm hover:shadow-[0_16px_50px_rgb(0,0,0,0.08)]'
+      } ${mounted ? 'translate-y-0 opacity-100' : 'translate-y-12 opacity-0'} ${
+        captureMode ? 'qft-book-capture' : ''
       }`}
       style={{ transitionDelay: `${index * 100}ms` }}
     >
-      <div className="p-8 sm:p-10 pb-6 flex justify-between items-start bg-white">
+      <div className={`${captureMode ? 'p-4 pb-3' : 'p-8 sm:p-10 pb-6'} flex justify-between items-start bg-white`}>
         <div>
-          <div className="flex items-center gap-3 mb-3">
-            <div className="text-blue-500">
+          <div className={`flex items-center ${captureMode ? 'gap-2 mb-1' : 'gap-3 mb-3'}`}>
+            {!captureMode && <div className="text-blue-500">
               <Zap size={24} />
-            </div>
-            <h2 className="inline-flex min-h-12 items-center text-4xl sm:text-5xl font-black text-slate-800 tracking-tight leading-none">
+            </div>}
+            <h2 className={`inline-flex items-center font-black text-slate-800 tracking-tight leading-none ${captureMode ? 'min-h-8 text-3xl' : 'min-h-12 text-4xl sm:text-5xl'}`}>
               <span className="block translate-y-[-0.02em]">{data.case_id}</span>
             </h2>
           </div>
-          <span className="inline-flex min-h-5 items-center text-sm sm:text-base font-bold text-slate-400 tracking-widest uppercase leading-none ml-9">
+          <span className={`inline-flex min-h-5 items-center font-bold text-slate-400 tracking-widest uppercase leading-none ${captureMode ? 'text-xs ml-0' : 'text-sm sm:text-base ml-9'}`}>
             {signalLabel}
           </span>
         </div>
 
-        <div className="flex items-center gap-3 shrink-0">
+        {!captureMode && <div className="flex items-center gap-3 shrink-0">
           <div className="w-16 h-16 rounded-2xl bg-blue-50 flex items-center justify-center text-blue-500 shrink-0">
             <Icon strokeWidth={2.5} size={32} />
           </div>
@@ -208,23 +239,23 @@ function DatasetCard({ data, index, mounted }: DatasetCardProps) {
           >
             <Camera size={20} />
           </button>
-        </div>
+        </div>}
       </div>
 
-      <div className="px-8 sm:px-10 pb-8 flex-grow flex items-center justify-center bg-white">
-        <SignalWaveform data={data.signal_data} gradientId={`qft-gradient-${data.case_id.toLowerCase()}`} />
+      <div className={`${captureMode ? 'px-4 pb-4' : 'px-8 sm:px-10 pb-8'} flex-grow flex items-center justify-center bg-white`}>
+        <SignalWaveform data={data.signal_data} gradientId={`qft-gradient-${data.case_id.toLowerCase()}`} captureMode={captureMode} />
       </div>
 
-      <div className="bg-blue-50 border-t border-slate-200 p-6 sm:p-8 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className={`bg-blue-50 border-t border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between ${captureMode ? 'p-3 gap-2' : 'p-6 sm:p-8 gap-4'}`}>
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-full bg-white border border-slate-200 flex items-center justify-center">
+          {!captureMode && <div className="w-10 h-10 rounded-full bg-white border border-slate-200 flex items-center justify-center">
             <GitCommitHorizontal size={20} className="text-slate-400" />
-          </div>
-          <span className="inline-flex min-h-6 items-center text-base font-bold text-slate-800 leading-none">{data.description}</span>
+          </div>}
+          <span className={`inline-flex min-h-6 items-center font-bold text-slate-800 leading-none ${captureMode ? 'text-sm' : 'text-base'}`}>{data.description}</span>
         </div>
 
         <div className="flex items-center gap-3">
-          <div className="inline-flex items-center justify-center px-4 py-2 bg-white border border-slate-200 rounded-lg text-sm font-black text-blue-500 tracking-widest uppercase leading-none tabular-nums shadow-sm">
+          <div className={`inline-flex items-center justify-center bg-white border border-slate-200 rounded-lg font-black text-blue-500 tracking-widest uppercase leading-none tabular-nums shadow-sm ${captureMode ? 'px-3 py-1 text-xs' : 'px-4 py-2 text-sm'}`}>
             <span className="block translate-y-[-0.02em]">{data.n_points} Data Points</span>
           </div>
         </div>
@@ -238,9 +269,11 @@ export function QFTSignalTopology() {
   const [cases, setCases] = useState<QFTCase[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const captureParam = typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('capture') : null;
+  const captureMode = captureParam === null || captureParam === '1';
 
   useEffect(() => {
-    setMounted(true);
+    queueMicrotask(() => setMounted(true));
   }, []);
 
   useEffect(() => {
@@ -301,8 +334,8 @@ export function QFTSignalTopology() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 p-6 sm:p-10 md:p-16 font-sans selection:bg-blue-200">
-      <div className="max-w-[1400px] mx-auto mb-16 text-center flex flex-col items-center">
+    <div className={`min-h-screen bg-slate-50 font-sans selection:bg-blue-200 ${captureMode ? 'p-4' : 'p-6 sm:p-10 md:p-16'}`}>
+      {!captureMode && <div className="max-w-[1400px] mx-auto mb-16 text-center flex flex-col items-center">
         <h1 className="text-4xl sm:text-5xl lg:text-6xl font-black text-slate-800 mb-6 tracking-tight inline-flex items-center gap-4">
           <Activity className="text-blue-500" size={56} />
           Signal Topology
@@ -312,12 +345,12 @@ export function QFTSignalTopology() {
           menandakan sinyal <strong className="text-slate-800">periodik</strong>, kurva berpola tumpang tindih menandakan frekuensi{' '}
           <strong className="text-blue-500">campuran (mixed)</strong>.
         </p>
-      </div>
+      </div>}
 
-      <div className="max-w-[1500px] mx-auto">
-        <div className="grid grid-cols-1 xl:grid-cols-2 gap-10 xl:gap-14">
+      <div className={`${captureMode ? 'max-w-[1180px]' : 'max-w-[1500px]'} mx-auto`}>
+        <div className={`grid grid-cols-1 ${captureMode ? 'gap-6' : 'xl:grid-cols-2 gap-10 xl:gap-14'}`}>
           {cases.map((data, index) => (
-            <DatasetCard key={data.case_id} data={data} index={index} mounted={mounted} />
+            <DatasetCard key={data.case_id} data={data} index={index} mounted={mounted} captureMode={captureMode} />
           ))}
         </div>
       </div>

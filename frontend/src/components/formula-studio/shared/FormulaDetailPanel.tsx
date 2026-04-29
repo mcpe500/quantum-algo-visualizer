@@ -19,7 +19,7 @@ export function FormulaDetailPanel({ formula, onClose, onNavigate }: FormulaDeta
   const [showStepper, setShowStepper] = useState(false);
 
   useEffect(() => {
-    setShowStepper(false);
+    queueMicrotask(() => setShowStepper(false));
   }, [formula?.id]);
 
   const handleScreenshot = async () => {

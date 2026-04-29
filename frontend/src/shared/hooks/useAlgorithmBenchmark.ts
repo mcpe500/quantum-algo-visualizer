@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { downloadElementAsPNG } from '../../utils/download';
-import { sortCaseIds } from '../../utils/sorting';
 import { DEFAULT_SHOTS } from '../../constants/app';
+import { getSortedCaseIds } from '../../utils/cases';
 
 export interface AlgorithmBenchmarkConfig<
   TBenchmarkResult = unknown,
@@ -10,7 +10,7 @@ export interface AlgorithmBenchmarkConfig<
   TAnimationData = unknown,
 > {
   algorithmId: string;
-  defaultCaseId: string;
+  defaultCaseId?: string;
   defaultTab?: 'classic' | 'quantum' | 'animation';
   captureId?: string;
   defaultShots?: number;
@@ -54,7 +54,7 @@ export function createUseAlgorithmBenchmark<
   config: AlgorithmBenchmarkConfig<TBenchmarkResult, TCircuitImage, TTrace, TAnimationData>
 ) {
   const {
-    defaultCaseId,
+    defaultCaseId = '',
     defaultTab = 'classic',
     captureId,
     defaultShots = DEFAULT_SHOTS,
@@ -68,7 +68,7 @@ export function createUseAlgorithmBenchmark<
     TAnimationData
   > {
     const [selectedCaseId, setSelectedCaseId] = useState<string>(defaultCaseId);
-    const [availableCases, setAvailableCases] = useState<string[]>([defaultCaseId]);
+    const [availableCases, setAvailableCases] = useState<string[]>(defaultCaseId ? [defaultCaseId] : []);
     const [benchmarkResult, setBenchmarkResult] = useState<TBenchmarkResult | null>(null);
     const [circuitImage, setCircuitImage] = useState<TCircuitImage | null>(null);
     const [trace, setTrace] = useState<TTrace | null>(null);
@@ -80,6 +80,7 @@ export function createUseAlgorithmBenchmark<
 
     const loadCircuitImage = useCallback(
       async (caseId: string) => {
+        if (!caseId) return;
         try {
           const data = await api.getCircuitImage(caseId);
           setCircuitImage(data);
@@ -87,11 +88,12 @@ export function createUseAlgorithmBenchmark<
           setCircuitImage(null);
         }
       },
-      [api]
+      []
     );
 
     const loadTrace = useCallback(
       async (caseId: string) => {
+        if (!caseId) return;
         try {
           const data = await api.getTrace(caseId);
           setTrace(data);
@@ -99,12 +101,12 @@ export function createUseAlgorithmBenchmark<
           setTrace(null);
         }
       },
-      [api]
+      []
     );
 
     const loadAnimation = useCallback(
       async (caseId: string) => {
-        if (!api.getAnimation) return;
+        if (!caseId || !api.getAnimation) return;
         setIsLoadingAnimation(true);
         try {
           const data = await api.getAnimation(caseId, defaultShots);
@@ -115,7 +117,7 @@ export function createUseAlgorithmBenchmark<
           setIsLoadingAnimation(false);
         }
       },
-      [api, defaultShots]
+      []
     );
 
     useEffect(() => {
@@ -124,37 +126,43 @@ export function createUseAlgorithmBenchmark<
         try {
           const cases = await api.getCases();
           if (cancelled) return;
-          const ids = sortCaseIds(
-            cases.map((c) => c.case_id).filter((id): id is string => Boolean(id))
-          );
+          const ids = getSortedCaseIds(cases);
           if (ids.length > 0) {
             setAvailableCases(ids);
             setSelectedCaseId((cur) => (ids.includes(cur) ? cur : ids[0]));
           }
         } catch {
-          // keep default
+          setAvailableCases(defaultCaseId ? [defaultCaseId] : []);
         }
       };
       void load();
       return () => {
         cancelled = true;
       };
-    }, [api]);
+    }, []);
 
     useEffect(() => {
-      if (activeTab === 'animation') {
-        void loadAnimation(selectedCaseId);
+      if (selectedCaseId && activeTab === 'animation') {
+        queueMicrotask(() => void loadAnimation(selectedCaseId));
       }
     }, [activeTab, selectedCaseId, loadAnimation]);
 
     useEffect(() => {
-      void loadCircuitImage(selectedCaseId);
-      void loadTrace(selectedCaseId);
+      if (!selectedCaseId) return;
+      queueMicrotask(() => {
+        void loadCircuitImage(selectedCaseId);
+        void loadTrace(selectedCaseId);
+      });
     }, [selectedCaseId, loadCircuitImage, loadTrace]);
 
     const handleRun = useCallback(async () => {
       setIsLoading(true);
       setError(null);
+      if (!selectedCaseId) {
+        setError('Dataset case belum tersedia.');
+        setIsLoading(false);
+        return;
+      }
       try {
         const data = await api.runBenchmark({
           case_id: selectedCaseId,
@@ -168,14 +176,15 @@ export function createUseAlgorithmBenchmark<
       } finally {
         setIsLoading(false);
       }
-    }, [api, selectedCaseId, defaultShots, loadCircuitImage, loadTrace]);
+    }, [selectedCaseId, loadCircuitImage, loadTrace]);
 
     const handleDownload = useCallback(async () => {
       if (!captureId) {
         throw new Error('captureId not configured');
       }
+      if (!selectedCaseId) return;
       await downloadElementAsPNG(captureId, `${config.algorithmId}_${selectedCaseId}.png`);
-    }, [captureId, config.algorithmId, selectedCaseId]);
+    }, [selectedCaseId]);
 
     return {
       selectedCaseId,

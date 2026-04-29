@@ -4,7 +4,8 @@ import { FormulaExplorer } from './explore';
 import { StudioCanvas } from './studio';
 import { StoriesTab } from './stories';
 import { FormulaDetailPanel } from './shared/FormulaDetailPanel';
-import { FormulaStudioProvider, useFormulaStudioSync } from './FormulaStudioContext';
+import { FormulaStudioProvider } from './FormulaStudioContext';
+import { useFormulaStudioSync } from './FormulaStudioSyncContext';
 import type { FormulaDefinition } from './types';
 import { FORMULA_REGISTRY } from './registry';
 
@@ -26,7 +27,7 @@ const FormulaStudioPageContent: React.FC<FormulaStudioPageProps> = ({ initialTab
   const { requestFormulaHighlight } = useFormulaStudioSync();
 
   useEffect(() => {
-    setActiveTab(initialTab);
+    queueMicrotask(() => setActiveTab(initialTab));
   }, [initialTab]);
 
   const handleSelectFormula = (formula: FormulaDefinition) => {

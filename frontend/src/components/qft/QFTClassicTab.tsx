@@ -25,6 +25,7 @@ export function QFTClassicTab({ result }: QFTClassicTabProps) {
           nPointsOriginal={result.n_points_original}
           nPointsPadded={result.n_points_padded || result.n_points_original}
           dominantBins={result.fft.dominant_bins}
+          paddedSignal={result.padded_signal}
         />
 
         <MetricsGrid columns={3}>

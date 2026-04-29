@@ -1,6 +1,7 @@
 from datetime import datetime
 from flask import jsonify, request
 from api import api_bp
+from api.shared.request_helpers import json_body, no_cases_response, parse_int, resolve_case_id
 from services.qft_service import (
     get_qft_cases,
     get_qft_case_or_none,
@@ -24,9 +25,11 @@ def qft_dataset(case_id):
 
 @api_bp.route('/qft/benchmark', methods=['POST'])
 def qft_run():
-    data = request.get_json() or {}
-    case_id = data.get('case_id', 'QFT-01')
-    shots = int(data.get('shots', 1024))
+    data = json_body()
+    case_id = resolve_case_id(data.get('case_id'), get_qft_cases())
+    if case_id is None:
+        return no_cases_response('QFT')
+    shots = parse_int(data.get('shots'), 1024)
     payload = run_qft_payload(case_id=case_id, shots=shots)
     if payload is None:
         return jsonify({'error': f'Case {case_id} not found'}), 404
@@ -59,8 +62,10 @@ def qft_trace(case_id):
 
 @api_bp.route('/qft/classical-run', methods=['POST'])
 def qft_classical_run():
-    data = request.get_json() or {}
-    case_id = data.get('case_id', 'QFT-01')
+    data = json_body()
+    case_id = resolve_case_id(data.get('case_id'), get_qft_cases())
+    if case_id is None:
+        return no_cases_response('QFT')
     payload = get_qft_classical_payload(case_id=case_id)
     if payload is None:
         return jsonify({'error': f'Case {case_id} not found'}), 404
@@ -69,7 +74,7 @@ def qft_classical_run():
 
 @api_bp.route('/qft/animation/<case_id>', methods=['GET'])
 def qft_animation(case_id):
-    shots = request.args.get('shots', 1024, type=int)
+    shots = parse_int(request.args.get('shots'), 1024)
     payload = get_qft_animation_payload(case_id=case_id, shots=shots)
     if payload is None:
         return jsonify({'error': f'Case {case_id} not found'}), 404

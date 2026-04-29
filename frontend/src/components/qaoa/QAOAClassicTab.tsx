@@ -5,6 +5,7 @@ import { CutHistoryChart } from '../charts/CutHistoryChart';
 import { InlineEmptyState, SectionCard } from '../layout';
 import { BookOpen } from 'lucide-react';
 import { SURFACE_CLASSES, UI_MESSAGES } from '../../constants/ui';
+import { QAOASimulatedAnnealingFlow } from './QAOASimulatedAnnealingFlow';
 
 interface QAOAClassicTabProps {
   result: QAOABenchmarkResult | null;
@@ -76,6 +77,8 @@ export function QAOAClassicTab({ result }: QAOAClassicTabProps) {
           />
         )}
       </SectionCard>
+
+      <QAOASimulatedAnnealingFlow result={result} />
     </div>
   );
 }

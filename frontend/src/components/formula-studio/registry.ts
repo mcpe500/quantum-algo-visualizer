@@ -446,7 +446,7 @@ const BASE_FORMULA_REGISTRY: FormulaDefinition[] = [
   },
   {
     id: 'qft-circuit-construction',
-    latex: 'QFT_n = H_1 CR_2 CR_3 \cdots SWAP',
+    latex: 'QFT_n = H_1 CR_2 CR_3 \\cdots SWAP',
     title: 'QFT Circuit Construction',
     category: 'qft',
     tags: ['qft', 'circuit', 'construction', 'swap', 'crk'],

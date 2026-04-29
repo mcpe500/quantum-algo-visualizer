@@ -37,7 +37,7 @@ export default function DJCombinedPage({ initialTab = 'classic' }: DJCombinedPag
   } = useDJBenchmark();
 
   useEffect(() => {
-    setActiveTab(initialTab);
+    queueMicrotask(() => setActiveTab(initialTab));
   }, [initialTab, setActiveTab]);
 
   return (

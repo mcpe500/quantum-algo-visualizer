@@ -6,9 +6,9 @@ import type {
   VQETrace,
 } from '../types/vqe';
 import type { VQECircuitImage } from '../services/api';
-import { sortCaseIds } from '../utils/sorting';
 import { downloadElementAsPNG } from '../utils/download';
 import { CAPTURE_IDS, DEFAULT_SHOTS } from '../constants/app';
+import { getSortedCaseIds } from '../utils/cases';
 
 export interface UseVQEReturn {
   selectedCaseId: string;
@@ -28,8 +28,8 @@ export interface UseVQEReturn {
 }
 
 export function useVQE(): UseVQEReturn {
-  const [selectedCaseId, setSelectedCaseId] = useState<string>('VQE-01');
-  const [availableCases, setAvailableCases] = useState<string[]>(['VQE-01']);
+  const [selectedCaseId, setSelectedCaseId] = useState<string>('');
+  const [availableCases, setAvailableCases] = useState<string[]>([]);
   const [benchmarkResult, setBenchmarkResult] = useState<VQEBenchmarkResult | null>(null);
   const [circuitImage, setCircuitImage] = useState<VQECircuitImage | null>(null);
   const [trace, setTrace] = useState<VQETrace | null>(null);
@@ -45,15 +45,13 @@ export function useVQE(): UseVQEReturn {
       try {
         const cases = await vqeApi.getCases();
         if (cancelled) return;
-        const ids = sortCaseIds(
-          cases.map((c) => c.case_id).filter((id): id is string => Boolean(id))
-        );
+        const ids = getSortedCaseIds(cases);
         if (ids.length > 0) {
           setAvailableCases(ids);
           setSelectedCaseId((cur) => (ids.includes(cur) ? cur : ids[0]));
         }
       } catch {
-        // keep default
+        setAvailableCases([]);
       }
     };
     void load();
@@ -63,6 +61,7 @@ export function useVQE(): UseVQEReturn {
   }, []);
 
   const loadCircuitImage = useCallback(async (caseId: string) => {
+    if (!caseId) return;
     try {
       const data = await vqeApi.getCircuitImage(caseId);
       setCircuitImage(data);
@@ -72,6 +71,7 @@ export function useVQE(): UseVQEReturn {
   }, []);
 
   const loadTrace = useCallback(async (caseId: string) => {
+    if (!caseId) return;
     try {
       const data = await vqeApi.getTrace(caseId);
       setTrace(data);
@@ -81,13 +81,21 @@ export function useVQE(): UseVQEReturn {
   }, []);
 
   useEffect(() => {
-    void loadCircuitImage(selectedCaseId);
-    void loadTrace(selectedCaseId);
+    if (!selectedCaseId) return;
+    queueMicrotask(() => {
+      void loadCircuitImage(selectedCaseId);
+      void loadTrace(selectedCaseId);
+    });
   }, [selectedCaseId, loadCircuitImage, loadTrace]);
 
   const handleRun = useCallback(async () => {
     setIsLoading(true);
     setError(null);
+    if (!selectedCaseId) {
+      setError('Dataset case belum tersedia.');
+      setIsLoading(false);
+      return;
+    }
     try {
       const params: VQEBenchmarkParams = { case_id: selectedCaseId, shots };
       const data = await vqeApi.runBenchmark(params);
@@ -102,6 +110,7 @@ export function useVQE(): UseVQEReturn {
   }, [selectedCaseId, shots, loadCircuitImage, loadTrace]);
 
   const handleDownload = useCallback(async () => {
+    if (!selectedCaseId) return;
     await downloadElementAsPNG(CAPTURE_IDS.vqe, `vqe_${selectedCaseId}.png`);
   }, [selectedCaseId]);
 

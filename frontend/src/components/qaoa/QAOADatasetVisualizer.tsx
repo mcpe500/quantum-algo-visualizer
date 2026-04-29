@@ -136,7 +136,7 @@ export function QAOADatasetVisualizer() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    setMounted(true);
+    queueMicrotask(() => setMounted(true));
   }, []);
 
   useEffect(() => {

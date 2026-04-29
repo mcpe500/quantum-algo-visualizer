@@ -98,8 +98,10 @@ function InputInspector({
   const [value, setValue] = useState(node.varValue ?? '0');
 
   useEffect(() => {
-    setName(node.varName ?? 'x');
-    setValue(node.varValue ?? '0');
+    queueMicrotask(() => {
+      setName(node.varName ?? 'x');
+      setValue(node.varValue ?? '0');
+    });
   }, [node.id, node.varName, node.varValue]);
 
   const commit = () => onUpdateInputVar(node.id, name.trim() || 'x', value);
@@ -214,7 +216,7 @@ function ExpressionInspector({
   const [expr, setExpr] = useState(node.nodeExpression ?? '');
 
   useEffect(() => {
-    setExpr(node.nodeExpression ?? '');
+    queueMicrotask(() => setExpr(node.nodeExpression ?? ''));
   }, [node.id, node.nodeExpression]);
 
   const commit = () => onUpdateExpression(node.id, expr);
@@ -347,18 +349,20 @@ function FormulaInspector({
   // Pre-populate params from global varScope
   useEffect(() => {
     if (!node || !formula) return;
-    const init: Record<string, string> = {};
-    for (const p of params) {
-      init[p] = varScope[p] !== undefined ? String(varScope[p]) : '';
-    }
-    setParamValues(init);
-    setCalcResult(null);
-    setCalcError(null);
-    setCustomLatexInput(node.customLatex ?? formula.latex);
-    setPreviewLatex(node.customLatex ?? formula.latex);
-    setShowEdit(false);
-    setShowAdvanced(false);
-  }, [node.id, formula.id, varScope]);
+    queueMicrotask(() => {
+      const init: Record<string, string> = {};
+      for (const p of params) {
+        init[p] = varScope[p] !== undefined ? String(varScope[p]) : '';
+      }
+      setParamValues(init);
+      setCalcResult(null);
+      setCalcError(null);
+      setCustomLatexInput(node.customLatex ?? formula.latex);
+      setPreviewLatex(node.customLatex ?? formula.latex);
+      setShowEdit(false);
+      setShowAdvanced(false);
+    });
+  }, [node, formula, varScope, params]);
 
   const varDescMap = useMemo(
     () => Object.fromEntries((formula.variables ?? []).map((v) => [v.symbol, v])),
