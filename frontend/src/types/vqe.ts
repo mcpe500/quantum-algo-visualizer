@@ -21,19 +21,30 @@ export interface VQECase {
     };
     preprocessing?: {
       mapping?: string;
+      initial_qubits?: number;
+      qubit_reduction?: string;
       target_qubits?: number;
+      hamiltonian_format?: string;
     };
     experiment?: {
+      algorithm?: string;
       ansatz_type?: string;
+      ansatz_family?: string;
+      rotation_gate?: string;
+      entanglement?: string;
       n_layers?: number;
       shots?: number;
+      optimizer?: string;
       classical_reference?: string;
     };
   };
   transform?: {
     source?: string;
     mapping?: string;
+    initial_qubits?: number;
+    qubit_reduction?: string;
     target_qubits?: number;
+    hamiltonian_format?: string;
     canonical_terms?: number;
     note?: string;
   };

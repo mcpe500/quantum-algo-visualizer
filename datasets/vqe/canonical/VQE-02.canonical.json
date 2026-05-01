@@ -25,5 +25,15 @@
       "ZIZI": 0.2752861221,
       "ZZII": 0.4138937639
     }
+  },
+  "preprocessing_result": {
+    "mapping": "jordan_wigner",
+    "z2_tapering": {
+      "enabled": false,
+      "source_qubits": 4,
+      "target_qubits": 4,
+      "symmetry_sector": null,
+      "removed_qubits": []
+    }
   }
 }

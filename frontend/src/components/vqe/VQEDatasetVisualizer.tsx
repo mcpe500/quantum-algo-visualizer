@@ -29,6 +29,26 @@ function formatNumber(value: number | undefined, digits = 3): string {
   return value.toFixed(digits).replace(/0+$/, "").replace(/\.$/, "");
 }
 
+function formatFormula(value: string | undefined): string {
+  const subscripts: Record<string, string> = {
+    "0": "₀",
+    "1": "₁",
+    "2": "₂",
+    "3": "₃",
+    "4": "₄",
+    "5": "₅",
+    "6": "₆",
+    "7": "₇",
+    "8": "₈",
+    "9": "₉",
+  };
+  return (value ?? "-").replace(/[0-9]/g, (digit) => subscripts[digit] ?? digit);
+}
+
+function formatBasis(value: string | undefined): string {
+  return value ? value.toUpperCase() : "-";
+}
+
 function summarizeHamiltonian(data: VQECase): HamiltonianSummary {
   const terms = Object.entries(data.hamiltonian.terms)
     .map(([pauli, coeff]) => ({ pauli, coeff }))
@@ -43,10 +63,19 @@ function summarizeHamiltonian(data: VQECase): HamiltonianSummary {
   };
 }
 
-function transformLabel(data: VQECase): string {
-  if (data.transform?.source === "verified_2q_coefficients") return "verified 2q";
-  if (data.transform?.source === "jordan_wigner_mapping") return "Jordan-Wigner";
-  return data.qubits === 2 ? "verified 2q" : "Jordan-Wigner";
+function formatCode(value: string | undefined): string {
+  return value ? value.replace(/_/g, " ") : "-";
+}
+
+function mappingLabel(mapping: string | undefined): string {
+  if (mapping === "jordan_wigner") return "Jordan-Wigner";
+  return formatCode(mapping);
+}
+
+function reductionLabel(reduction: string | undefined): string {
+  if (reduction === "z2_tapering") return "Z2 tapering";
+  if (reduction === "none") return "none";
+  return formatCode(reduction);
 }
 
 function Pill({ children, tone = "slate" }: { children: React.ReactNode; tone?: "slate" | "dark" | "sky" | "violet" | "amber" | "green" }) {
@@ -66,6 +95,22 @@ function Pill({ children, tone = "slate" }: { children: React.ReactNode; tone?: 
   );
 }
 
+function MiniPill({ children, tone = "slate", className = "" }: { children: React.ReactNode; tone?: "slate" | "sky" | "violet" | "amber" | "green"; className?: string }) {
+  const tones = {
+    slate: "bg-slate-100 text-slate-600",
+    sky: "bg-sky-50 text-sky-600",
+    violet: "bg-violet-50 text-violet-600",
+    amber: "bg-amber-50 text-amber-600",
+    green: "bg-emerald-50 text-emerald-600",
+  };
+
+  return (
+    <span className={`inline-flex min-h-6 items-center rounded-full px-2 text-[10px] font-black ${tones[tone]} ${className}`}>
+      {children}
+    </span>
+  );
+}
+
 function Arrow() {
   return (
     <div className="flex w-10 shrink-0 items-center justify-center">
@@ -76,9 +121,13 @@ function Arrow() {
 
 function RawVisual({ data }: { data: VQECase }) {
   const molecule = data.raw_spec?.molecule_spec ?? {};
-  const formula = molecule.formula ?? data.molecule;
-  const distance = molecule.interatomic_distance_angstrom ?? 0.735;
-  const basis = molecule.basis ?? "sto-3g";
+  const experiment = data.raw_spec?.experiment ?? {};
+  const formula = formatFormula(molecule.formula ?? data.molecule);
+  const distance = molecule.interatomic_distance_angstrom;
+  const basis = formatBasis(molecule.basis);
+  const shots = experiment.shots ?? 1024;
+  const reference = experiment.classical_reference ?? "FCI";
+  const optimizer = experiment.optimizer ?? "COBYLA";
 
   return (
     <div className="relative flex h-[250px] w-[245px] shrink-0 flex-col items-center rounded-[20px] border border-slate-100 bg-white p-4 shadow-sm">
@@ -92,7 +141,7 @@ function RawVisual({ data }: { data: VQECase }) {
         </div>
         <div className="-mx-1 flex h-[2px] w-14 items-center justify-center bg-slate-200">
           <div className="absolute top-16 whitespace-nowrap rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[9px] font-black text-slate-500 shadow-sm">
-            {formatNumber(distance)} A
+            {formatNumber(distance)} Å
           </div>
         </div>
         <div className="z-10 flex h-12 w-12 items-center justify-center rounded-full border-2 border-sky-100 bg-sky-50">
@@ -100,24 +149,35 @@ function RawVisual({ data }: { data: VQECase }) {
         </div>
       </div>
 
-      <div className="mt-auto flex gap-2">
-        <Pill tone="dark">{formula}</Pill>
-        <Pill>{basis}</Pill>
+      <div className="mt-auto flex flex-col items-center gap-2">
+        <div className="flex gap-2">
+          <Pill tone="dark">{formula}</Pill>
+          <Pill>{basis}</Pill>
+        </div>
+        <div className="flex gap-1.5">
+          <MiniPill tone="sky">{shots} shots</MiniPill>
+          <MiniPill tone="green">{reference}</MiniPill>
+          <MiniPill tone="amber">{optimizer}</MiniPill>
+        </div>
       </div>
     </div>
   );
 }
 
 function TransformVisual({ data }: { data: VQECase }) {
-  const targetQubits = data.raw_spec?.preprocessing?.target_qubits ?? data.qubits;
+  const preprocessing = data.raw_spec?.preprocessing ?? {};
+  const targetQubits = data.transform?.target_qubits ?? preprocessing.target_qubits ?? data.qubits;
+  const initialQubits = data.transform?.initial_qubits ?? preprocessing.initial_qubits ?? targetQubits;
+  const mapping = data.transform?.mapping ?? preprocessing.mapping;
+  const reduction = data.transform?.qubit_reduction ?? preprocessing.qubit_reduction ?? "none";
 
   return (
-    <div className="relative flex h-[250px] w-[245px] shrink-0 flex-col items-center rounded-[20px] border border-slate-100 bg-white p-4 shadow-sm">
+    <div className="relative flex h-[300px] w-[245px] shrink-0 flex-col items-center rounded-[20px] border border-slate-100 bg-white p-4 shadow-sm">
       <div className="absolute left-4 top-4 rounded-full bg-slate-100 px-2.5 py-1 text-[9px] font-black uppercase tracking-wider text-slate-500">
         TRANSFORM
       </div>
 
-      <div className="relative mb-4 mt-11 flex h-[64px] w-[86px] items-center justify-center rounded-2xl border border-[#f3eefe] bg-[#f8f5ff]">
+      <div className="relative mb-2 mt-9 flex h-[52px] w-[86px] items-center justify-center rounded-2xl border border-[#f3eefe] bg-[#f8f5ff]">
         <div className="absolute h-[3px] w-[52px] rounded-full bg-[#e9d5ff]" />
         <div className="absolute h-[42px] w-[3px] rounded-full bg-[#e9d5ff]" />
         <div className="relative z-10 grid grid-cols-2 gap-x-[18px] gap-y-[10px]">
@@ -128,16 +188,13 @@ function TransformVisual({ data }: { data: VQECase }) {
         </div>
       </div>
 
-      <div className="mb-4 flex gap-2">
-        <span className="inline-flex h-8 items-center rounded-full bg-[#f3e8ff] px-4 text-[13px] font-black text-[#7c3aed]">
-          {transformLabel(data)}
-        </span>
-        <span className="inline-flex h-8 items-center rounded-full bg-slate-100 px-3 text-[13px] font-black text-slate-600">
-          {targetQubits}q
-        </span>
+      <div className="mb-3 flex w-full flex-col items-center gap-1.5">
+        <MiniPill tone="sky" className="w-full justify-center">Mapping: {mappingLabel(mapping)}</MiniPill>
+        <MiniPill tone="violet" className="w-full justify-center">Qubits: {initialQubits} → {targetQubits}</MiniPill>
+        <MiniPill tone="amber" className="w-full justify-center">Reduction: {reductionLabel(reduction)}</MiniPill>
       </div>
 
-      <div className="mt-auto flex w-full flex-col gap-2">
+      <div className="mt-auto flex w-full flex-col gap-1 pb-2">
         {Array.from({ length: targetQubits }).map((_, index) => (
           <div key={index} className="flex items-center gap-2">
             <span className="w-[14px] text-[10px] font-black text-slate-400">q{index}</span>
@@ -157,13 +214,15 @@ function HamiltonianVisual({ summary }: { summary: HamiltonianSummary }) {
       </div>
 
       <div className="mb-2 mt-9 flex items-center justify-between">
-        <div className="font-mono text-[11px] font-black text-slate-800">H = Σ cP</div>
+        <div className="font-mono text-[11px] font-black text-slate-800">
+          H = Σ<sub>i</sub> c<sub>i</sub> P<sub>i</sub>
+        </div>
         <div className="flex gap-1.5">
           <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[9px] font-black text-amber-600">
             {summary.terms.length} terms
           </span>
           <span className="rounded-full bg-sky-50 px-2 py-0.5 text-[9px] font-black text-sky-500">
-            {summary.zOnly} Z
+            {summary.zOnly} I/Z
           </span>
           <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[9px] font-black text-emerald-500">
             {summary.xyMixed} X/Y

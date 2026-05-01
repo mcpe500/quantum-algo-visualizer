@@ -1,4 +1,4 @@
-import { VQEDatasetVisualizer } from '../components/vqe';
+import VQEDatasetVisualizer from '../components/vqe/VQEDatasetVisualizer';
 
 export default function VQEDatasetPage() {
   return <VQEDatasetVisualizer />;

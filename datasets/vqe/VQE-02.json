@@ -10,12 +10,20 @@
   },
   "preprocessing": {
     "mapping": "jordan_wigner",
-    "target_qubits": 4
+    "initial_qubits": 4,
+    "qubit_reduction": "none",
+    "target_qubits": 4,
+    "hamiltonian_format": "pauli_sum"
   },
   "experiment": {
+    "algorithm": "VQE",
     "ansatz_type": "ry_linear",
+    "ansatz_family": "hardware_efficient",
+    "rotation_gate": "ry",
+    "entanglement": "linear_cnot",
     "n_layers": 2,
     "shots": 1024,
+    "optimizer": "COBYLA",
     "classical_reference": "FCI"
   }
 }

@@ -16,5 +16,18 @@
       "XX": 0.1809,
       "YY": 0.1809
     }
+  },
+  "preprocessing_result": {
+    "mapping": "jordan_wigner",
+    "z2_tapering": {
+      "enabled": true,
+      "source_qubits": 4,
+      "target_qubits": 2,
+      "symmetry_sector": "H2 singlet parity sector",
+      "removed_qubits": [
+        2,
+        3
+      ]
+    }
   }
 }
