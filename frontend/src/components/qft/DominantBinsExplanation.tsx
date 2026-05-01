@@ -1,5 +1,6 @@
 import { Info, HelpCircle, ArrowRightLeft, Calculator } from 'lucide-react';
 import { useState } from 'react';
+import { buildDominantMirrorPairs } from './dominantPairs';
 
 interface DominantBinsExplanationProps {
   dominantBins: number[];
@@ -13,17 +14,13 @@ export function DominantBinsExplanation({
   nPoints 
 }: DominantBinsExplanationProps) {
   const [expandedSection, setExpandedSection] = useState<string | null>(null);
+  const dominantPairs = buildDominantMirrorPairs(dominantBins, dominantMagnitudes, nPoints);
 
   const toggleSection = (section: string) => {
     setExpandedSection(expandedSection === section ? null : section);
   };
 
-  // Calculate frequency for each bin
-  const getFrequency = (bin: number) => {
-    // For real FFT, frequency = bin * sampling_rate / N
-    // Assuming sampling rate = 1 (normalized), frequency = bin / N
-    return (bin / nPoints).toFixed(4);
-  };
+  const getNormalizedFrequency = (bin: number) => (bin / nPoints).toFixed(4);
 
   return (
     <div className="bg-gradient-to-br from-amber-50 to-orange-50 border border-amber-200 rounded-xl p-5 mb-6">
@@ -140,43 +137,32 @@ export function DominantBinsExplanation({
 
       {/* Current Analysis */}
       <div className="bg-white border border-amber-300 rounded-lg p-4 mt-4">
-        <h4 className="text-xs font-bold text-gray-800 mb-3">Analisis Hasil FFT Saat Ini:</h4>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-          {dominantBins.map((bin, idx) => {
-            const magnitude = dominantMagnitudes[idx];
-            const isMirror = dominantBins.some((_b, i) => 
-              i !== idx && Math.abs(magnitude - dominantMagnitudes[i]) < 0.01
-            );
-            
-            return (
-              <div 
-                key={bin} 
-                className={`p-2 rounded border text-center ${
-                  isMirror 
-                    ? 'bg-amber-100 border-amber-300' 
-                    : 'bg-blue-50 border-blue-200'
-                }`}
-              >
-                <p className="text-xs font-mono font-bold text-gray-800">
-                  Bin {bin}
-                </p>
-                <p className="text-[10px] text-gray-600">
-                  {magnitude.toFixed(2)}
-                </p>
-                <p className="text-[9px] text-gray-400">
-                  f ≈ {getFrequency(bin)} Hz
-                </p>
-                {isMirror && (
-                  <span className="text-[8px] text-amber-600 font-medium">
-                    (mirror)
-                  </span>
-                )}
-              </div>
-            );
-          })}
+        <h4 className="text-xs font-bold text-gray-800 mb-3">Analisis Pasangan Bin Dominan Saat Ini:</h4>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+          {dominantPairs.map((pair) => (
+            <div
+              key={pair.label}
+              className="p-3 rounded border border-amber-300 bg-amber-100"
+            >
+              <p className="text-xs font-mono font-bold text-gray-800">
+                {pair.label}
+              </p>
+              <p className="text-[10px] text-gray-600">
+                |X[k]| = {pair.magnitude.toFixed(2)}
+              </p>
+              <p className="text-[9px] text-gray-500">
+                f_norm = {getNormalizedFrequency(pair.canonicalBin)} cycles/sample
+              </p>
+              {pair.canonicalBin !== pair.mirrorBin && (
+                <span className="text-[8px] text-amber-700 font-medium">
+                  pasangan mirror FFT real
+                </span>
+              )}
+            </div>
+          ))}
         </div>
         <p className="text-[10px] text-gray-500 mt-3 italic">
-          * f = frekuensi = bin / {nPoints} (asumsikan sampling rate = 1)
+          * f_norm = bin / {nPoints} dalam satuan cycles/sample. Label Hz baru valid jika dataset memiliki sampling_rate_hz.
         </p>
       </div>
     </div>
