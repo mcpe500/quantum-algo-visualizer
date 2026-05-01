@@ -1,531 +1,56 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { QAOABenchmarkResult } from '../../types/qaoa';
-
-type Matrix = number[][];
-
-interface Edge {
-  u: number;
-  v: number;
-  weight: number;
-}
-
-interface CutDetail {
-  u: number;
-  v: number;
-  weight: number;
-  isCut: boolean;
-  contribution: number;
-}
-
-interface CutDetailsResult {
-  cut: number;
-  expression: string;
-  details: CutDetail[];
-}
-
-type StatusColor = 'slate' | 'emerald' | 'yellow' | 'red';
-
-interface TraceStep {
-  step: number;
-  action: string;
-  flipNode?: number;
-  temperature: number;
-  newTemperature: number | null;
-  minTemperature: number;
-  currentState: string;
-  candidateState: string;
-  resultState: string;
-  currentCut: number;
-  candidateCut: number;
-  resultCut: number;
-  deltaCut: number;
-  randomValue: number | null;
-  probability: number | null;
-  accepted: boolean;
-  status: string;
-  color: StatusColor;
-  stopAfter: boolean;
-  cutDetails: CutDetailsResult;
-}
-
-interface SimulatedAnnealingResult {
-  trace: TraceStep[];
-  best: {
-    state: string;
-    cut: number;
-    step: number;
-  };
-  finalState: string;
-  finalCut: number;
-  stopReason: {
-    type: 'temperature' | 'maxStep';
-    text: string;
-  };
-}
-
-interface SimulationConfig {
-  matrix: Matrix;
-  initialTemperature: number;
-  alpha: number;
-  minTemperature: number;
-  maxSteps: number;
-  seed: number;
-}
-
-interface JsonPayload {
-  case_id?: string;
-  description?: string;
-  problem?: string;
-  graph?: {
-    adjacency_matrix?: unknown;
-  };
-  adjacency_matrix?: unknown;
-}
+import { formatNumber, createTemplateFromResult, getMatrixFromPayload, validateMatrix, toMatrix, getEdges } from './simulated-annealing/utils';
+import { simulate } from './simulated-annealing/simulation';
+import { GraphSvg, Arrow, statusStyleMap, CutDetails, ProbabilityLogic } from './simulated-annealing/subcomponents';
+import type { Matrix, SimulationConfig, SimulatedAnnealingResult, TraceStep, JsonPayload } from './simulated-annealing/types';
 
 interface QAOASimulatedAnnealingFlowProps {
   result: QAOABenchmarkResult;
 }
 
-function formatNumber(value: unknown, digits = 5) {
-  if (value === null || value === undefined) return '-';
-  const number = Number(value);
-  if (!Number.isFinite(number)) return String(value);
-  if (Number.isInteger(number)) return String(number);
-  return Number(number.toFixed(digits)).toString();
-}
-
-function createTemplateFromResult(result: QAOABenchmarkResult) {
-  return JSON.stringify(
-    {
-      case_id: result.case_id,
-      description: result.description,
-      problem: result.problem,
-      graph: {
-        adjacency_matrix: result.adjacency_matrix,
-      },
-    },
-    null,
-    2,
-  );
-}
-
-function getMatrixFromPayload(payload: unknown): unknown {
-  if (Array.isArray(payload)) return payload;
-  if (payload && typeof payload === 'object') {
-    const data = payload as JsonPayload;
-    if (data.graph?.adjacency_matrix) return data.graph.adjacency_matrix;
-    if (data.adjacency_matrix) return data.adjacency_matrix;
-  }
-  throw new Error('JSON harus memiliki graph.adjacency_matrix atau adjacency_matrix.');
-}
-
-function validateMatrix(matrix: Matrix) {
-  if (!Array.isArray(matrix) || matrix.length === 0) {
-    throw new Error('Adjacency matrix harus berupa array 2D dan tidak boleh kosong.');
-  }
-
-  const n = matrix.length;
-  if (n > 10) {
-    throw new Error('Maksimal 10 node agar visual graf tetap terbaca.');
-  }
-
-  matrix.forEach((row, i) => {
-    if (!Array.isArray(row) || row.length !== n) {
-      throw new Error(`Baris ke-${i} harus memiliki panjang ${n}.`);
-    }
-
-    row.forEach((value, j) => {
-      const number = Number(value);
-      if (!Number.isFinite(number)) {
-        throw new Error(`Nilai matrix[${i}][${j}] harus angka.`);
-      }
-      if (number < 0) {
-        throw new Error(`Nilai matrix[${i}][${j}] tidak boleh negatif.`);
-      }
-    });
-  });
-
-  for (let i = 0; i < n; i += 1) {
-    if (Number(matrix[i][i]) !== 0) {
-      throw new Error(`Diagonal matrix[${i}][${i}] harus 0.`);
-    }
-
-    for (let j = i + 1; j < n; j += 1) {
-      if (Number(matrix[i][j]) !== Number(matrix[j][i])) {
-        throw new Error(`Matrix harus simetris: matrix[${i}][${j}] harus sama dengan matrix[${j}][${i}].`);
-      }
-    }
-  }
-}
-
-function toMatrix(rawMatrix: unknown): Matrix {
-  if (!Array.isArray(rawMatrix)) {
-    throw new Error('Adjacency matrix harus berupa array 2D.');
-  }
-
-  return rawMatrix.map((row) => {
-    if (!Array.isArray(row)) {
-      throw new Error('Adjacency matrix harus berupa array 2D.');
-    }
-    return row.map(Number);
-  });
-}
-
-function getEdges(matrix: Matrix) {
-  const edges: Edge[] = [];
-  for (let i = 0; i < matrix.length; i += 1) {
-    for (let j = i + 1; j < matrix.length; j += 1) {
-      const weight = Number(matrix[i][j]);
-      if (weight !== 0) edges.push({ u: i, v: j, weight });
-    }
-  }
-  return edges;
-}
-
-function calcCutDetails(matrix: Matrix, bits: number[]): CutDetailsResult {
-  const edges = getEdges(matrix);
-  let cut = 0;
-  const terms: string[] = [];
-  const details: CutDetail[] = [];
-
-  edges.forEach(({ u, v, weight }) => {
-    const isCut = bits[u] !== bits[v];
-    const contribution = isCut ? weight : 0;
-    cut += contribution;
-    terms.push(formatNumber(contribution));
-    details.push({ u, v, weight, isCut, contribution });
-  });
-
-  return {
-    cut,
-    expression: terms.length ? `${terms.join('+')} = ${formatNumber(cut)}` : '0 = 0',
-    details,
-  };
-}
-
-function flipOneBit(bits: number[], nodeIndex: number) {
-  const next = [...bits];
-  next[nodeIndex] = next[nodeIndex] === 0 ? 1 : 0;
-  return next;
-}
-
-function createSeededRandom(seed: number) {
-  let state = Math.trunc(seed) || 1;
-  return () => {
-    state += 0x6d2b79f5;
-    let value = state;
-    value = Math.imul(value ^ (value >>> 15), value | 1);
-    value ^= value + Math.imul(value ^ (value >>> 7), value | 61);
-    return ((value ^ (value >>> 14)) >>> 0) / 4294967296;
-  };
-}
-
-function simulate({ matrix, initialTemperature, alpha, minTemperature, maxSteps, seed }: SimulationConfig): SimulatedAnnealingResult {
-  const n = matrix.length;
-  const random = createSeededRandom(seed);
-  let currentBits = Array(n).fill(0) as number[];
-  let currentTemperature = initialTemperature;
-  let currentCut = calcCutDetails(matrix, currentBits).cut;
-  let best = { state: currentBits.join(''), cut: currentCut, step: 0 };
-  const trace: TraceStep[] = [];
-
-  trace.push({
-    step: 0,
-    action: 'Kondisi Awal',
-    temperature: currentTemperature,
-    newTemperature: null,
-    minTemperature,
-    currentState: currentBits.join(''),
-    candidateState: currentBits.join(''),
-    resultState: currentBits.join(''),
-    currentCut,
-    candidateCut: currentCut,
-    resultCut: currentCut,
-    deltaCut: 0,
-    randomValue: null,
-    probability: null,
-    accepted: true,
-    status: 'START',
-    color: 'slate',
-    stopAfter: false,
-    cutDetails: calcCutDetails(matrix, currentBits),
-  });
-
-  let step = 1;
-  let stoppedByTemperature = false;
-
-  while (currentTemperature >= minTemperature && step <= maxSteps) {
-    const flipNode = Math.floor(random() * n);
-    const candidateBits = flipOneBit(currentBits, flipNode);
-    const candidateCutDetails = calcCutDetails(matrix, candidateBits);
-    const candidateCut = candidateCutDetails.cut;
-    const deltaCut = candidateCut - currentCut;
-
-    let accepted = false;
-    let randomValue: number | null = null;
-    let probability: number | null = null;
-    let status = '';
-    let color: StatusColor = 'slate';
-
-    if (deltaCut >= 0) {
-      accepted = true;
-      status = 'ACCEPT (LEBIH BAIK / SAMA)';
-      color = 'emerald';
-    } else {
-      probability = Math.exp(deltaCut / currentTemperature);
-      randomValue = random();
-
-      if (randomValue < probability) {
-        accepted = true;
-        status = 'ACCEPT (EKSPLORASI)';
-        color = 'yellow';
-      } else {
-        accepted = false;
-        status = 'REJECT (BURUK)';
-        color = 'red';
-      }
-    }
-
-    const previousState = currentBits.join('');
-    const previousCut = currentCut;
-
-    if (accepted) {
-      currentBits = candidateBits;
-      currentCut = candidateCut;
-
-      if (currentCut > best.cut) {
-        best = { state: currentBits.join(''), cut: currentCut, step };
-      }
-    }
-
-    const newTemperature = currentTemperature * alpha;
-    const stopAfter = newTemperature < minTemperature;
-
-    trace.push({
-      step,
-      action: `Flip Node ${flipNode}`,
-      flipNode,
-      temperature: currentTemperature,
-      newTemperature,
-      minTemperature,
-      currentState: previousState,
-      candidateState: candidateBits.join(''),
-      resultState: currentBits.join(''),
-      currentCut: previousCut,
-      candidateCut,
-      resultCut: currentCut,
-      deltaCut,
-      randomValue,
-      probability,
-      accepted,
-      status,
-      color,
-      stopAfter,
-      cutDetails: candidateCutDetails,
-    });
-
-    if (stopAfter) {
-      stoppedByTemperature = true;
-      break;
-    }
-
-    currentTemperature = newTemperature;
-    step += 1;
-  }
-
-  const lastStep = trace[trace.length - 1];
-  const stopReason = stoppedByTemperature
-    ? {
-        type: 'temperature' as const,
-        text: `Suhu telah melewati batas minimum: T_baru ${formatNumber(lastStep.newTemperature)} < T_min ${formatNumber(minTemperature)}. Algoritma berhenti karena sudah terlalu dingin untuk eksplorasi berikutnya.`,
-      }
-    : {
-        type: 'maxStep' as const,
-        text: `Simulasi berhenti karena mencapai Max Step Limit (${maxSteps} step).`,
-      };
-
-  return {
-    trace,
-    best,
-    finalState: currentBits.join(''),
-    finalCut: currentCut,
-    stopReason,
-  };
-}
-
-function getNodeCoordinates(n: number) {
-  const svgSize = 200;
-  const center = svgSize / 2;
-  const radius = 70;
-
-  if (n === 1) return [{ x: center, y: center }];
-
-  return Array.from({ length: n }, (_, i) => {
-    const angle = (Math.PI * 2 * i) / n - Math.PI / 2;
-    return {
-      x: center + radius * Math.cos(angle),
-      y: center + radius * Math.sin(angle),
-    };
-  });
-}
-
-function GraphSvg({ matrix, stateString }: { matrix: Matrix; stateString: string }) {
-  const bits = stateString.split('').map(Number);
-  const edges = getEdges(matrix);
-  const coords = getNodeCoordinates(bits.length);
-
-  return (
-    <svg
-      viewBox="0 0 200 200"
-      className="w-full h-auto max-w-[150px] mx-auto overflow-visible"
-      role="img"
-      aria-label={`Graf state ${stateString}`}
-    >
-      {edges.map(({ u, v, weight }) => {
-        const isCut = bits[u] !== bits[v];
-        const midX = (coords[u].x + coords[v].x) / 2;
-        const midY = (coords[u].y + coords[v].y) / 2;
-
-        return (
-          <g key={`${u}-${v}`}>
-            <line
-              x1={coords[u].x}
-              y1={coords[u].y}
-              x2={coords[v].x}
-              y2={coords[v].y}
-              className={isCut ? 'qaoa-sa-edge-cut' : 'qaoa-sa-edge-uncut'}
-            />
-            {weight !== 1 && (
-              <text x={midX} y={midY} textAnchor="middle" fill="#64748b" fontSize="9" fontWeight="700">
-                {formatNumber(weight)}
-              </text>
-            )}
-          </g>
-        );
-      })}
-
-      {coords.map((point, i) => (
-        <g key={i} transform={`translate(${point.x}, ${point.y})`}>
-          <circle cx="0" cy="0" r="16" className={bits[i] === 0 ? 'qaoa-sa-node-0' : 'qaoa-sa-node-1'} stroke="white" strokeWidth="2" />
-          <text x="0" y="5" textAnchor="middle" fill="white" fontWeight="bold" fontSize="12">
-            {i}
-          </text>
-        </g>
-      ))}
-    </svg>
-  );
-}
-
-function Arrow() {
-  return (
-    <div className="flex justify-center -my-6 relative z-0" aria-hidden="true">
-      <div className="w-1 h-16 bg-gray-300" />
-      <div className="absolute bottom-0 w-4 h-4 border-b-4 border-r-4 border-gray-300 rotate-45 translate-y-1" />
-    </div>
-  );
-}
-
-const statusStyleMap: Record<StatusColor, { card: string; badge: string }> = {
-  slate: {
-    card: 'border-slate-200 bg-slate-50',
-    badge: 'bg-slate-700 text-white',
-  },
-  emerald: {
-    card: 'border-emerald-200 bg-emerald-50',
-    badge: 'bg-emerald-500 text-white',
-  },
-  yellow: {
-    card: 'border-yellow-200 bg-yellow-50',
-    badge: 'bg-yellow-500 text-white',
-  },
-  red: {
-    card: 'border-red-200 bg-red-50',
-    badge: 'bg-red-500 text-white',
-  },
-};
-
-function CutDetails({ details }: { details: CutDetail[] }) {
-  return (
-    <div className="text-[11px] text-slate-500 bg-white border border-slate-200 p-2 rounded mt-2 leading-relaxed">
-      {details.length === 0 ? (
-        <span>Tidak ada edge.</span>
-      ) : (
-        details.map((item, index) => (
-          <div key={`${item.u}-${item.v}`}>
-            e({item.u},{item.v}): {item.isCut ? 'berbeda' : 'sama'} -&gt; {formatNumber(item.contribution)}
-            {index < details.length - 1 ? ';' : ''}
-          </div>
-        ))
-      )}
-    </div>
-  );
-}
-
-function ProbabilityLogic({ data }: { data: TraceStep }) {
-  if (data.deltaCut >= 0) {
-    return (
-      <div className="p-2 bg-emerald-100/50 rounded border border-emerald-200 text-emerald-800 text-sm mt-3">
-        Karena <span className="font-mono font-bold text-emerald-900">Delta C &gt;= 0</span>, solusi baru <strong>DITERIMA</strong> tanpa hitung probabilitas.
-      </div>
-    );
-  }
-
-  const acceptedByProbability = data.accepted;
-  const boxClass = acceptedByProbability
-    ? 'mt-2 p-2 bg-yellow-100 text-yellow-800 rounded font-semibold text-xs border border-yellow-200'
-    : 'mt-2 p-2 bg-red-100 text-red-800 rounded font-semibold text-xs border border-red-200';
-
-  return (
-    <div className="p-3 bg-white rounded border border-slate-200 space-y-2 text-sm shadow-sm mt-3">
-      <p className="text-xs text-gray-500 uppercase font-bold mb-1">Peluang Acceptance</p>
-      <div className="font-mono text-gray-700 flex flex-col gap-1 text-xs">
-        <span>P_accept = e^(Delta C/T)</span>
-        <span>
-          P_accept = e^({formatNumber(data.deltaCut)} / {formatNumber(data.temperature, 4)}) = <span className="font-bold text-indigo-600">{formatNumber(data.probability, 4)}</span>
-        </span>
-        <span>
-          Random r = <span className="font-bold text-indigo-600">{formatNumber(data.randomValue, 4)}</span>
-        </span>
-      </div>
-      <div className={boxClass}>
-        {acceptedByProbability ? (
-          <>
-            {formatNumber(data.randomValue, 4)} &lt; {formatNumber(data.probability, 4)} -&gt; TETAP DITERIMA! Mencegah jebakan lokal.
-          </>
-        ) : (
-          <>
-            {formatNumber(data.randomValue, 4)} &gt;= {formatNumber(data.probability, 4)} -&gt; DITOLAK. Kembali ke state lama.
-          </>
-        )}
-      </div>
-    </div>
-  );
-}
-
 function StartCard({ data, matrix }: { data: TraceStep; matrix: Matrix }) {
+  const nodeCount = matrix.length;
+  const edgeCount = getEdges(matrix).length;
+
   return (
     <>
-      <article className="relative bg-white rounded-xl shadow-lg border border-gray-200 p-6 flex flex-col md:flex-row items-center gap-6 z-10 w-full lg:w-3/4 mx-auto">
-        <div className="bg-gray-800 text-white w-16 h-16 rounded-full flex items-center justify-center font-bold text-xl shrink-0 border-4 border-white shadow-md">
+      <article className="relative bg-white rounded-xl shadow-lg border border-gray-200 p-4 md:p-5 flex flex-col gap-4 z-10 w-full h-full">
+        <div className="bg-gray-800 text-white w-12 h-12 rounded-full flex items-center justify-center font-bold text-sm shrink-0 border-4 border-white shadow-md self-center md:self-start">
           Mulai
         </div>
-        <div className="flex-1 w-full flex flex-col md:flex-row items-center gap-6">
-          <div className="bg-gray-50 p-4 rounded-lg border border-gray-100 flex-1 text-center w-full">
-            <p className="text-xs text-gray-500 uppercase font-bold mb-2">State Awal</p>
-            <GraphSvg matrix={matrix} stateString={data.currentState} />
-            <p className="font-mono font-bold text-2xl mt-3 tracking-widest">{data.currentState}</p>
+        <div className="flex-1 w-full grid grid-cols-1 gap-3 items-stretch">
+          <div className="bg-gradient-to-b from-gray-50 to-slate-100 p-3 rounded-lg border border-gray-100 w-full flex flex-col">
+            <p className="text-xs text-gray-500 uppercase font-bold mb-2 text-center">State Awal</p>
+            <div className="flex-1 flex flex-col justify-center">
+              <GraphSvg matrix={matrix} stateString={data.currentState} />
+              <p className="font-mono font-bold text-xl mt-2 tracking-widest text-center">{data.currentState}</p>
+            </div>
+            <div className="mt-3 grid grid-cols-3 gap-2 text-center">
+              <div className="bg-white border border-slate-200 rounded-md py-1">
+                <p className="text-[10px] uppercase text-slate-400 font-bold">Node</p>
+                <p className="font-mono text-sm font-bold text-slate-700">{nodeCount}</p>
+              </div>
+              <div className="bg-white border border-slate-200 rounded-md py-1">
+                <p className="text-[10px] uppercase text-slate-400 font-bold">Edge</p>
+                <p className="font-mono text-sm font-bold text-slate-700">{edgeCount}</p>
+              </div>
+              <div className="bg-white border border-slate-200 rounded-md py-1">
+                <p className="text-[10px] uppercase text-slate-400 font-bold">Cut</p>
+                <p className="font-mono text-sm font-bold text-emerald-700">{formatNumber(data.currentCut)}</p>
+              </div>
+            </div>
           </div>
 
-          <div className="flex-1 w-full space-y-3">
-            <div className="bg-indigo-50 p-3 rounded text-sm border border-indigo-100">
-              <span className="font-bold text-indigo-800 block text-xs uppercase mb-1">Rumus Substitusi Nilai Cut</span>
-              <span className="font-mono text-gray-700">C({data.currentState}) = {data.cutDetails.expression}</span>
-              <CutDetails details={data.cutDetails.details} />
-            </div>
-            <div className="bg-emerald-50 p-3 rounded border border-emerald-100 flex justify-between items-center">
-              <span className="font-bold text-emerald-800 text-xs uppercase">Nilai Cut Awal</span>
-              <span className="font-mono text-2xl font-bold text-emerald-600">C = {formatNumber(data.currentCut)}</span>
-            </div>
+          <div className="bg-indigo-50 p-3 rounded text-sm border border-indigo-100">
+            <span className="font-bold text-indigo-800 block text-xs uppercase mb-1">Rumus Substitusi Nilai Cut</span>
+            <span className="font-mono text-gray-700">C({data.currentState}) = {data.cutDetails.expression}</span>
+            <CutDetails details={data.cutDetails.details} />
+          </div>
+
+          <div className="bg-emerald-50 p-3 rounded border border-emerald-100 flex justify-between items-center">
+            <span className="font-bold text-emerald-800 text-xs uppercase">Nilai Cut Awal</span>
+            <span className="font-mono text-2xl font-bold text-emerald-600">C = {formatNumber(data.currentCut)}</span>
           </div>
         </div>
       </article>
@@ -543,39 +68,39 @@ function StepCard({ data, matrix, alpha, isLast }: { data: TraceStep; matrix: Ma
 
   return (
     <>
-      <article className="relative bg-white rounded-xl shadow-lg border border-gray-200 p-6 z-10 flex flex-col md:flex-row gap-6 w-full lg:w-11/12 mx-auto">
-        <div className="flex md:flex-col items-center justify-start gap-3 md:gap-4 shrink-0">
-          <div className="bg-indigo-600 text-white w-14 h-14 rounded-full flex items-center justify-center font-bold text-xl shadow-md z-10">
+      <article className="relative bg-white rounded-xl shadow-lg border border-gray-200 p-4 md:p-5 z-10 flex flex-col gap-3 w-full h-full">
+        <div className="flex items-center justify-start gap-2 shrink-0">
+          <div className="bg-indigo-600 text-white w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm shadow-md z-10">
             {data.step}
           </div>
-          <div className="bg-gray-100 border border-gray-200 px-3 py-1 rounded text-center w-full">
+          <div className="bg-gray-100 border border-gray-200 px-3 py-1 rounded text-center max-w-[140px]">
             <span className="block text-[10px] text-gray-500 font-bold uppercase">Suhu (T)</span>
-            <span className="font-mono font-bold text-indigo-700 text-base">{formatNumber(data.temperature, 4)}</span>
+            <span className="font-mono font-bold text-indigo-700 text-sm">{formatNumber(data.temperature, 4)}</span>
           </div>
         </div>
 
-        <div className="flex-1 w-full grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <section className="bg-gray-50 p-4 rounded-lg border border-gray-100 flex flex-col items-center justify-center relative w-full min-h-64">
+        <div className="flex-1 w-full grid grid-cols-1 md:grid-cols-2 gap-3">
+          <section className="bg-gray-50 p-3 rounded-lg border border-gray-100 flex flex-col items-center justify-center relative w-full min-h-[190px]">
             <div className="absolute top-2 left-2 right-2 flex justify-between gap-2">
               <span className="text-[10px] font-bold text-gray-400 uppercase">Try Next State</span>
               <span className="text-[10px] font-bold text-indigo-500 uppercase bg-indigo-50 px-2 py-0.5 rounded text-right">
                 {data.action} <span className="text-gray-400 font-normal ml-1">(acak dari seed)</span>
               </span>
             </div>
-            <div className="mt-6 w-full">
+            <div className="mt-5 w-full">
               <GraphSvg matrix={matrix} stateString={data.candidateState} />
             </div>
-            <p className="font-mono font-bold text-2xl mt-4 tracking-widest text-gray-800">{data.candidateState}</p>
+            <p className="font-mono font-bold text-xl mt-3 tracking-widest text-gray-800">{data.candidateState}</p>
           </section>
 
-          <section className="flex flex-col justify-center space-y-3 w-full">
+          <section className="flex flex-col justify-center space-y-2 w-full">
             <div className="border-l-4 border-indigo-500 pl-3">
               <p className="text-xs font-bold text-indigo-500 uppercase mb-1">C({data.candidateState})</p>
               <p className="font-mono text-xs text-gray-700 bg-gray-100 p-2 rounded">C(next) = {data.cutDetails.expression}</p>
               <CutDetails details={data.cutDetails.details} />
             </div>
 
-            <div className="border-l-4 border-purple-500 pl-3 mt-2">
+            <div className="border-l-4 border-purple-500 pl-3 mt-1">
               <p className="text-xs font-bold text-purple-500 uppercase mb-1">Perubahan Nilai Cut (Delta C)</p>
               <p className="font-mono text-xs text-gray-700 bg-gray-100 p-2 rounded leading-relaxed">
                 Delta C = C(next) - C(curr)
@@ -587,13 +112,13 @@ function StepCard({ data, matrix, alpha, isLast }: { data: TraceStep; matrix: Ma
             <ProbabilityLogic data={data} />
           </section>
 
-          <section className="flex flex-col justify-between w-full h-full gap-4">
+          <section className="md:col-span-2 grid grid-cols-1 lg:grid-cols-2 gap-3">
             <div className={`border-2 ${style.card} rounded-lg p-4 flex flex-col justify-center items-center text-center flex-1 transition-all duration-300`}>
               <div className="mb-3">
                 <span className={`${style.badge} px-3 py-1 rounded-full text-xs font-bold shadow-sm`}>{data.status}</span>
               </div>
               <p className="text-[11px] text-gray-500 uppercase font-bold mb-1">State Terkini Menjadi</p>
-              <p className="font-mono font-black text-2xl md:text-3xl text-gray-800 tracking-widest mb-1">{data.resultState}</p>
+              <p className="font-mono font-black text-xl md:text-2xl text-gray-800 tracking-widest mb-1">{data.resultState}</p>
               <p className="text-xs font-semibold text-gray-600 bg-white px-3 py-1 rounded-full border shadow-sm">
                 Cut Value: <span className="font-mono text-base text-gray-800">{formatNumber(data.resultCut)}</span>
               </p>
@@ -625,7 +150,7 @@ function Summary({ result, matrix }: { result: SimulatedAnnealingResult; matrix:
   const { best, finalState, finalCut, stopReason } = result;
 
   return (
-    <section className="mt-16 bg-emerald-900 text-white p-6 md:p-8 rounded-2xl shadow-xl border-4 border-emerald-500 relative z-10 w-full lg:w-4/5 mx-auto">
+    <section className="mt-8 bg-emerald-900 text-white p-6 md:p-8 rounded-2xl shadow-xl border-4 border-emerald-500 relative z-10 w-full lg:w-[96%] mx-auto">
       <div className="text-center mb-8">
         <h2 className="text-2xl font-bold uppercase tracking-widest mb-2">Simulasi Selesai</h2>
         <p className="text-emerald-200 text-sm md:text-base border border-emerald-700 bg-emerald-800 inline-block px-4 py-2 rounded-lg mt-2 font-mono">
@@ -702,6 +227,44 @@ export function QAOASimulatedAnnealingFlow({ result: benchmarkResult }: QAOASimu
     };
   }, [matrix]);
 
+  const desktopFlow = useMemo(() => {
+    if (!result) return null;
+
+    const nodes = result.trace.map((item, index) => {
+      if (index === 0) return { item, index, row: 0, col: 0 as 0 | 1 };
+      if (index === 1) return { item, index, row: 0, col: 1 as 0 | 1 };
+
+      const j = index - 2;
+      const row = 1 + Math.floor(j / 2);
+      const slot = j % 2;
+      const leftToRight = row % 2 === 0;
+      const col = (leftToRight ? slot : 1 - slot) as 0 | 1;
+      return { item, index, row, col };
+    });
+
+    const maxRow = nodes.reduce((acc, node) => Math.max(acc, node.row), 0);
+    const rows = Array.from({ length: maxRow + 1 }, (_, row) => {
+      const left = nodes.find((node) => node.row === row && node.col === 0) || null;
+      const right = nodes.find((node) => node.row === row && node.col === 1) || null;
+      return { row, left, right };
+    });
+
+    const horizontal = new Map<number, 'lr' | 'rl'>();
+    const vertical = new Map<number, 0 | 1>();
+    for (let i = 0; i < nodes.length - 1; i += 1) {
+      const a = nodes[i];
+      const b = nodes[i + 1];
+      if (a.row === b.row && a.col !== b.col) {
+        horizontal.set(a.row, a.col < b.col ? 'lr' : 'rl');
+      } else if (b.row === a.row + 1 && a.col === b.col) {
+        vertical.set(a.row, a.col);
+      }
+    }
+
+    const last = nodes[nodes.length - 1];
+    return { rows, horizontal, vertical, lastCol: last.col };
+  }, [result]);
+
   function loadBenchmarkCase() {
     setJsonInput(defaultTemplate);
     setMatrix(benchmarkResult.adjacency_matrix);
@@ -748,8 +311,6 @@ export function QAOASimulatedAnnealingFlow({ result: benchmarkResult }: QAOASimu
         .qaoa-sa-edge-uncut { stroke: #cbd5e1; stroke-width: 2; transition: all 0.3s; stroke-linecap: round; }
         .qaoa-sa-node-0 { fill: #ef4444; }
         .qaoa-sa-node-1 { fill: #3b82f6; }
-        .qaoa-sa-timeline-line { position: absolute; left: 50%; top: 0; bottom: 0; width: 4px; background: #cbd5e1; transform: translateX(-50%); z-index: 0; }
-        @media (max-width: 1024px) { .qaoa-sa-timeline-line { display: none; } }
         @media print {
           .qaoa-sa-no-print { display: none !important; }
           .shadow-2xl, .shadow-xl, .shadow-lg, .shadow-md, .shadow-sm { box-shadow: none !important; }
@@ -836,19 +397,86 @@ export function QAOASimulatedAnnealingFlow({ result: benchmarkResult }: QAOASimu
         </section>
       </header>
 
-      <section className="relative py-12 px-4 md:px-12 bg-slate-50 min-h-[400px]">
-        {result && <div className="qaoa-sa-timeline-line hidden lg:block" aria-hidden="true" />}
+      <section className="relative py-8 px-3 md:px-8 bg-slate-50 min-h-[320px]">
+        {!result && <EmptyState />}
 
-        <div className="space-y-12 relative z-10">
-          {!result && <EmptyState />}
-          {result?.trace.map((item, index) =>
-            index === 0 ? (
-              <StartCard key={item.step} data={item} matrix={matrix} />
-            ) : (
-              <StepCard key={item.step} data={item} matrix={matrix} alpha={Number(alpha)} isLast={index === result.trace.length - 1} />
-            ),
-          )}
-        </div>
+        {result && (
+          <>
+            <div className="space-y-5 relative z-10 lg:hidden">
+              {result.trace.map((item, index) =>
+                index === 0 ? (
+                  <StartCard key={`mobile-start-${item.step}`} data={item} matrix={matrix} />
+                ) : (
+                  <StepCard key={`mobile-step-${item.step}`} data={item} matrix={matrix} alpha={Number(alpha)} isLast={index === result.trace.length - 1} />
+                ),
+              )}
+            </div>
+
+            <div className="hidden lg:block relative z-10">
+              {desktopFlow?.rows.map((rowData) => (
+                <div key={`desk-row-${rowData.row}`} className="relative mb-5 last:mb-0">
+                  <div
+                    className="grid gap-x-8 items-stretch"
+                    style={{ gridTemplateColumns: 'repeat(2, minmax(360px, 1fr))', gridAutoRows: '1fr' }}
+                  >
+                    <div className="relative z-10 h-full">
+                      {rowData.left ? (
+                        rowData.left.index === 0 ? (
+                          <StartCard data={rowData.left.item} matrix={matrix} />
+                        ) : (
+                          <StepCard data={rowData.left.item} matrix={matrix} alpha={Number(alpha)} isLast={false} />
+                        )
+                      ) : (
+                        <div />
+                      )}
+                    </div>
+                    <div className="relative z-10 h-full">
+                      {rowData.right ? (
+                        rowData.right.index === 0 ? (
+                          <StartCard data={rowData.right.item} matrix={matrix} />
+                        ) : (
+                          <StepCard data={rowData.right.item} matrix={matrix} alpha={Number(alpha)} isLast={false} />
+                        )
+                      ) : (
+                        <div />
+                      )}
+                    </div>
+                  </div>
+
+                  {desktopFlow.horizontal.has(rowData.row) && (
+                    <div className="absolute left-0 right-0 top-1/2 -translate-y-1/2 h-0 pointer-events-none" aria-hidden="true">
+                      <div className="absolute left-[24%] right-[24%] h-[2px] bg-slate-300 rounded-full" />
+                      {desktopFlow.horizontal.get(rowData.row) === 'lr' ? (
+                        <div className="absolute right-[24%] -translate-y-[4px] w-0 h-0 border-y-[5px] border-y-transparent border-l-[8px] border-l-slate-400" />
+                      ) : (
+                        <div className="absolute left-[24%] -translate-y-[4px] w-0 h-0 border-y-[5px] border-y-transparent border-r-[8px] border-r-slate-400" />
+                      )}
+                    </div>
+                  )}
+
+                  {desktopFlow.vertical.has(rowData.row) && (
+                    <div className="h-0 relative pointer-events-none" aria-hidden="true">
+                      <div className={`absolute top-full h-4 w-[2px] bg-slate-300 rounded-full ${desktopFlow.vertical.get(rowData.row) === 1 ? 'right-[24%]' : 'left-[24%]'}`} />
+                      <div className={`absolute top-[calc(100%+1rem)] -translate-x-1/2 w-0 h-0 border-x-[5px] border-x-transparent border-t-[8px] border-t-slate-400 ${desktopFlow.vertical.get(rowData.row) === 1 ? 'right-[24%]' : 'left-[24%]'}`} />
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+
+            <div className="lg:hidden flex justify-center -my-1 relative z-10" aria-hidden="true">
+              <div className="w-[2px] h-8 bg-slate-300 rounded-full" />
+              <div className="absolute bottom-0 translate-y-[3px] w-0 h-0 border-x-[5px] border-x-transparent border-t-[8px] border-t-slate-400" />
+            </div>
+
+            <div className="hidden lg:block h-8 relative z-10" aria-hidden="true">
+              <div className={`absolute top-0 h-4 w-[2px] bg-slate-300 rounded-full ${desktopFlow?.lastCol === 1 ? 'right-[24%]' : 'left-[24%]'}`} />
+              <div className={`absolute top-4 h-[2px] bg-slate-300 rounded-full ${desktopFlow?.lastCol === 1 ? 'left-1/2 right-[24%]' : 'left-[24%] right-1/2'}`} />
+              <div className="absolute left-1/2 top-4 h-4 w-[2px] bg-slate-300 rounded-full" />
+              <div className="absolute left-1/2 top-[1.95rem] -translate-x-1/2 w-0 h-0 border-x-[5px] border-x-transparent border-t-[8px] border-t-slate-400" />
+            </div>
+          </>
+        )}
 
         {result && <Summary result={result} matrix={matrix} />}
       </section>

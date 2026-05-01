@@ -9,6 +9,7 @@ import { QubitStatePreview } from '../components/qubit-playground/QubitStatePrev
 import { useQubitState } from '../components/qubit-playground/useQubitState';
 import { useCircuitBuilder } from '../components/qubit-playground/useCircuitBuilder';
 import { PAGE_BACKGROUND_CLASS } from '../constants/ui';
+import { useInitialTabSync } from './hooks/useInitialTabSync';
 
 const SINGLE_GATE_NAMES = ['H', 'X', 'Y', 'Z', 'S', 'T', 'Rx', 'Ry', 'Rz'];
 const TWO_QUBIT_GATE_NAMES = ['CNOT', 'SWAP', 'CPhase'];
@@ -20,9 +21,7 @@ interface QubitPlaygroundPageProps {
 export default function QubitPlaygroundPage({ initialTab = 'state' }: QubitPlaygroundPageProps) {
   const [activeTab, setActiveTab] = useState<'state' | 'circuit'>(initialTab);
 
-  useEffect(() => {
-    queueMicrotask(() => setActiveTab(initialTab));
-  }, [initialTab]);
+  useInitialTabSync(initialTab, setActiveTab);
 
   useEffect(() => {
     const originalWarn = console.warn;

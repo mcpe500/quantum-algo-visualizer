@@ -1,6 +1,7 @@
 import { useState, useCallback } from 'react';
 import { djApi } from '../services/api';
 import type { DJDataset, ClassicalResult } from '../types/classical';
+import { getErrorMessage } from '../utils/async';
 
 interface UseClassicalDJReturn {
   dataset: DJDataset | null;
@@ -24,7 +25,7 @@ export function useClassicalDJ(): UseClassicalDJReturn {
       const data = await djApi.getDataset(caseId);
       setDataset(data);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load dataset');
+      setError(getErrorMessage(err, 'Failed to load dataset'));
     } finally {
       setIsLoading(false);
     }
@@ -37,7 +38,7 @@ export function useClassicalDJ(): UseClassicalDJReturn {
       const data = await djApi.runClassicalDJ(caseId);
       setResult(data);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to run classical algorithm');
+      setError(getErrorMessage(err, 'Failed to run classical algorithm'));
     } finally {
       setIsLoading(false);
     }

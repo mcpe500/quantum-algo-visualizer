@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { djApi } from '../services/api';
 import type {
+  DJCase,
   DJBenchmarkResult,
   DJBenchmarkParams,
   DJQuantumTrace,
@@ -8,9 +9,9 @@ import type {
 } from '../types/dj';
 import type { DJCircuitImage } from '../services/api';
 import type { ClassicalResult } from '../types/classical';
-import { downloadElementAsPNG } from '../utils/download';
 import { CAPTURE_IDS, DEFAULT_SHOTS } from '../constants/app';
-import { getSortedCaseIds } from '../utils/cases';
+import { fetchNullable } from '../utils/async';
+import { useBaseAlgorithmBenchmark } from './useAlgorithmBenchmark';
 
 export interface UseDJBenchmarkReturn {
   selectedCaseId: string;
@@ -33,119 +34,75 @@ export interface UseDJBenchmarkReturn {
 }
 
 export function useDJBenchmark(): UseDJBenchmarkReturn {
-  const [selectedCaseId, setSelectedCaseId] = useState<string>('');
-  const [availableCases, setAvailableCases] = useState<string[]>([]);
-  const [benchmarkResult, setBenchmarkResult] = useState<DJBenchmarkResult | null>(null);
-  const [circuitImage, setCircuitImage] = useState<DJCircuitImage | null>(null);
+  const base = useBaseAlgorithmBenchmark<DJCase, DJBenchmarkParams, DJBenchmarkResult, DJCircuitImage>({
+    api: {
+      getCases: djApi.getCases,
+      runBenchmark: djApi.runBenchmark,
+      getCircuitImage: djApi.getCircuitImage,
+    },
+    getDefaultParams: (caseId) => ({ case_id: caseId, shots: DEFAULT_SHOTS }),
+    getCaptureId: () => CAPTURE_IDS.djQuantum,
+  });
+
   const [boxedCircuitImage, setBoxedCircuitImage] = useState<DJCircuitImage | null>(null);
   const [trace, setTrace] = useState<DJQuantumTrace | null>(null);
   const [animationData, setAnimationData] = useState<DJAnimationPayload | null>(null);
   const [classicalResult, setClassicalResult] = useState<ClassicalResult | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'classic' | 'quantum' | 'animation'>('classic');
   const [isVideoExporting, setIsVideoExporting] = useState(false);
 
-  useEffect(() => {
-    let cancelled = false;
-    const load = async () => {
-      try {
-        const cases = await djApi.getCases();
-        if (cancelled) return;
-        const ids = getSortedCaseIds(cases);
-        if (ids.length > 0) {
-          setAvailableCases(ids);
-          setSelectedCaseId((cur) => (ids.includes(cur) ? cur : ids[0]));
-        }
-      } catch {
-        setAvailableCases([]);
-      }
-    };
-    void load();
-    return () => { cancelled = true; };
-  }, []);
-
-  const loadCircuitImage = useCallback(async (caseId: string) => {
-    if (!caseId) return;
-    try { setCircuitImage(await djApi.getCircuitImage(caseId)); } catch { setCircuitImage(null); }
-  }, []);
-
   const loadBoxedCircuitImage = useCallback(async (caseId: string) => {
     if (!caseId) return;
-    try { setBoxedCircuitImage(await djApi.getCircuitImageBoxed(caseId)); } catch { setBoxedCircuitImage(null); }
+    setBoxedCircuitImage(await fetchNullable(() => djApi.getCircuitImageBoxed(caseId)));
   }, []);
 
   const loadTrace = useCallback(async (caseId: string) => {
     if (!caseId) return;
-    try { setTrace(await djApi.getQuantumTrace(caseId)); } catch { setTrace(null); }
+    setTrace(await fetchNullable(() => djApi.getQuantumTrace(caseId)));
   }, []);
 
   const loadAnimation = useCallback(async (caseId: string) => {
     if (!caseId) return;
-    try { setAnimationData(await djApi.getAnimation(caseId, DEFAULT_SHOTS)); } catch { setAnimationData(null); }
+    setAnimationData(await fetchNullable(() => djApi.getAnimation(caseId, DEFAULT_SHOTS)));
   }, []);
 
   const loadClassical = useCallback(async (caseId: string) => {
     if (!caseId) return;
-    try { setClassicalResult(await djApi.runClassicalDJ(caseId)); } catch { /* ignore */ }
+    const classical = await fetchNullable(() => djApi.runClassicalDJ(caseId));
+    if (classical) {
+      setClassicalResult(classical);
+    }
   }, []);
 
   useEffect(() => {
-    if (!selectedCaseId) return;
+    if (!base.selectedCaseId) return;
     queueMicrotask(() => {
-      void loadClassical(selectedCaseId);
-      void loadCircuitImage(selectedCaseId);
-      void loadBoxedCircuitImage(selectedCaseId);
-      void loadTrace(selectedCaseId);
-      void loadAnimation(selectedCaseId);
+      void loadClassical(base.selectedCaseId);
+      void loadBoxedCircuitImage(base.selectedCaseId);
+      void loadTrace(base.selectedCaseId);
+      void loadAnimation(base.selectedCaseId);
     });
-  }, [selectedCaseId, loadClassical, loadCircuitImage, loadBoxedCircuitImage, loadTrace, loadAnimation]);
+  }, [base.selectedCaseId, loadClassical, loadBoxedCircuitImage, loadTrace, loadAnimation]);
 
   const handleRun = useCallback(async () => {
-    setIsLoading(true);
-    setError(null);
-    if (!selectedCaseId) {
-      setError('Dataset case belum tersedia.');
-      setIsLoading(false);
-      return;
+    await base.handleRun();
+    if (base.selectedCaseId) {
+      await loadClassical(base.selectedCaseId);
+      await loadBoxedCircuitImage(base.selectedCaseId);
+      void loadAnimation(base.selectedCaseId);
     }
-    try {
-      const params: DJBenchmarkParams = { case_id: selectedCaseId, shots: DEFAULT_SHOTS };
-      const data = await djApi.runBenchmark(params);
-      setBenchmarkResult(data);
-      await loadClassical(selectedCaseId);
-      await loadCircuitImage(selectedCaseId);
-      await loadBoxedCircuitImage(selectedCaseId);
-      void loadAnimation(selectedCaseId);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Benchmark failed');
-    } finally {
-      setIsLoading(false);
-    }
-  }, [selectedCaseId, loadClassical, loadCircuitImage, loadBoxedCircuitImage, loadAnimation]);
-
-  const handleDownload = useCallback(async () => {
-    if (!selectedCaseId) return;
-    await downloadElementAsPNG(CAPTURE_IDS.djQuantum, `dj_combined_${selectedCaseId}.png`);
-  }, [selectedCaseId]);
+  }, [base.handleRun, base.selectedCaseId, loadClassical, loadBoxedCircuitImage, loadAnimation]);
 
   return {
-    selectedCaseId,
-    availableCases,
-    benchmarkResult,
-    circuitImage,
+    ...base,
     boxedCircuitImage,
     trace,
     animationData,
     classicalResult,
-    isLoading,
-    error,
     activeTab,
     isVideoExporting,
     setIsVideoExporting,
-    setSelectedCaseId,
     setActiveTab,
     handleRun,
-    handleDownload,
   };
 }

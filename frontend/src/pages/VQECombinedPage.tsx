@@ -3,6 +3,7 @@ import { useVQE } from '../hooks/useVQE';
 import { AlgorithmPageShell } from '../shared/components/AlgorithmPageShell';
 import { VQEClassicTab, VQEQuantumTab } from '../components/vqe';
 import { CAPTURE_IDS } from '../constants/app';
+import { useInitialTabSync } from './hooks/useInitialTabSync';
 
 const SHOTS_OPTIONS = [1024, 2048, 4096, 8192];
 
@@ -23,6 +24,8 @@ export default function VQECombinedPage() {
     handleRun,
     handleDownload,
   } = useVQE();
+
+  useInitialTabSync('classic', setActiveTab);
 
   return (
     <AlgorithmPageShell

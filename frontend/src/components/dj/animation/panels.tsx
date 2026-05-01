@@ -1,4 +1,5 @@
 import type { DJAnimationPayload, DJAnimationStep } from '../../../types/dj';
+import type { ReactNode } from 'react';
 import { MARKER_STYLE, PROFILE_LABEL } from './constants';
 import { formatPercent } from './helpers';
 import { getContextGlossary, getStepExplanation, getStepHeadline } from './narration';
@@ -7,6 +8,60 @@ export { DetailCard } from '../../../shared/components/DetailCard';
 export { PhaseStepper } from '../../../shared/components/PhaseStepper';
 import { ReadingGuideCard as SharedReadingGuideCard } from '../../../shared/components/ReadingGuideCard';
 import { ProbabilityBarList } from '../../../shared/components/ProbabilityBarList';
+
+interface ReadingGuideCardProps {
+  step: DJAnimationStep;
+  nQubits: number;
+  totalSteps: number;
+}
+
+interface StateSummaryPanelProps {
+  step: DJAnimationStep;
+  nQubits: number;
+}
+
+interface TruthTablePanelProps {
+  data: DJAnimationPayload;
+  activeBits: string | null;
+}
+
+interface OracleConstructionPanelProps {
+  data: DJAnimationPayload;
+  activeBits: string | null;
+}
+
+interface MeasurementPanelProps {
+  data: DJAnimationPayload;
+}
+
+interface PanelCardProps {
+  title: string;
+  children: ReactNode;
+  accent?: 'slate' | 'gray';
+}
+
+function PanelCard({ title, children, accent = 'slate' }: PanelCardProps) {
+  const borderColor = accent === 'gray' ? 'border-gray-200' : 'border-slate-200';
+  const headerBorderColor = accent === 'gray' ? 'border-gray-100' : 'border-slate-100';
+  const headerBg = accent === 'gray' ? 'bg-gray-50' : 'bg-slate-50';
+  const headerText = accent === 'gray' ? 'text-gray-400' : 'text-slate-400';
+  return (
+    <div className={`rounded-xl border ${borderColor} bg-white overflow-hidden`}>
+      <div className={`px-4 py-2.5 border-b ${headerBorderColor} ${headerBg}`}>
+        <h3 className={`text-[10px] font-bold uppercase tracking-widest ${headerText}`}>{title}</h3>
+      </div>
+      {children}
+    </div>
+  );
+}
+
+function ActiveStatePill({ active }: { active: boolean }) {
+  return (
+    <span className={`inline-flex px-2 py-0.5 rounded text-[10px] font-medium ${active ? 'bg-slate-200 text-slate-800' : 'bg-slate-50 text-slate-500'}`}>
+      {active ? 'aktif' : 'dataset'}
+    </span>
+  );
+}
 
 export function MarkerBadge({ marker }: { marker: string }) {
   const value = marker || '-';
@@ -32,7 +87,7 @@ export function ActiveMarkerStrip({ step, nQubits }: { step: DJAnimationStep; nQ
   );
 }
 
-export function ReadingGuideCard({ step, nQubits, totalSteps }: { step: DJAnimationStep; nQubits: number; totalSteps: number }) {
+export function ReadingGuideCard({ step, nQubits, totalSteps }: ReadingGuideCardProps) {
   return (
     <SharedReadingGuideCard
       title="Cara Baca Animasi"
@@ -44,14 +99,11 @@ export function ReadingGuideCard({ step, nQubits, totalSteps }: { step: DJAnimat
   );
 }
 
-export function StateSummaryPanel({ step, nQubits }: { step: DJAnimationStep; nQubits: number }) {
+export function StateSummaryPanel({ step, nQubits }: StateSummaryPanelProps) {
   if (!step.bloch_states || step.bloch_states.length === 0) return null;
 
   return (
-    <div className="rounded-xl border border-gray-200 bg-white overflow-hidden">
-      <div className="px-4 py-2.5 border-b border-gray-100 bg-gray-50 flex justify-between items-center">
-        <h3 className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Ringkasan State</h3>
-      </div>
+    <PanelCard title="Ringkasan State" accent="gray">
       <table className="w-full text-left">
         <thead>
           <tr className="text-[10px] text-gray-400 border-b border-gray-100 bg-white">
@@ -79,22 +131,16 @@ export function StateSummaryPanel({ step, nQubits }: { step: DJAnimationStep; nQ
           })}
         </tbody>
       </table>
-    </div>
+    </PanelCard>
   );
 }
 
 export function TruthTablePanel({
   data,
   activeBits,
-}: {
-  data: DJAnimationPayload;
-  activeBits: string | null;
-}) {
+}: TruthTablePanelProps) {
   return (
-    <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
-      <div className="px-4 py-2.5 border-b border-slate-100 bg-slate-50">
-        <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Dataset JSON Render</p>
-      </div>
+    <PanelCard title="Dataset JSON Render">
       <div className="p-3 grid grid-cols-2 gap-3 border-b border-slate-100">
         <div>
           <p className="text-[10px] font-bold text-slate-400 uppercase">Profil</p>
@@ -134,7 +180,7 @@ export function TruthTablePanel({
 
                   <td className="px-2 py-2 text-right text-[10px] text-slate-400 align-middle">
                     <div className="inline-flex items-center justify-end">
-                      <span className={`inline-flex px-2 py-0.5 rounded text-[10px] font-medium ${isActive ? 'bg-slate-200 text-slate-800' : 'bg-slate-50 text-slate-500'}`}>{isActive ? 'aktif' : 'dataset'}</span>
+                      <ActiveStatePill active={isActive} />
                     </div>
                   </td>
                 </tr>
@@ -143,17 +189,14 @@ export function TruthTablePanel({
           </tbody>
         </table>
       </div>
-    </div>
+    </PanelCard>
   );
 }
 
 export function OracleConstructionPanel({
   data,
   activeBits,
-}: {
-  data: DJAnimationPayload;
-  activeBits: string | null;
-}) {
+}: OracleConstructionPanelProps) {
   const model = buildOracleConstructionModel(data, activeBits);
 
   return (
@@ -241,17 +284,14 @@ export function OracleConstructionPanel({
   );
 }
 
-export function MeasurementPanel({ data }: { data: DJAnimationPayload }) {
+export function MeasurementPanel({ data }: MeasurementPanelProps) {
   const topStates = [...data.input_probabilities]
     .sort((a, b) => b.probability - a.probability)
     .slice(0, 4)
     .map((entry) => ({ key: entry.input_bits, label: entry.input_bits, probability: entry.probability }));
 
   return (
-    <div className="rounded-xl border border-gray-200 bg-white overflow-hidden">
-      <div className="px-4 py-2.5 border-b border-gray-100 bg-gray-50">
-        <h3 className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Measurement</h3>
-      </div>
+    <PanelCard title="Measurement" accent="gray">
       <div className="p-3 flex flex-wrap items-center gap-2 border-b border-gray-100">
         <span className={`rounded-md px-2.5 py-1 text-[11px] font-bold text-white ${data.measurement.classification === 'CONSTANT' ? 'bg-blue-600' : 'bg-orange-600'}`}>
           {data.measurement.classification}
@@ -261,6 +301,6 @@ export function MeasurementPanel({ data }: { data: DJAnimationPayload }) {
       <div className="p-3">
         <ProbabilityBarList items={topStates} barColor="bg-indigo-500" />
       </div>
-    </div>
+    </PanelCard>
   );
 }

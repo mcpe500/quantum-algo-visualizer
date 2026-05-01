@@ -78,9 +78,9 @@ export function degreesToRadians(deg: number) {
 }
 
 export function normalizeAngle(angle: number) {
-  while (angle < 0) angle += 2 * Math.PI;
-  while (angle >= 2 * Math.PI) angle -= 2 * Math.PI;
-  return angle;
+  const tau = 2 * Math.PI;
+  const normalized = angle % tau;
+  return normalized < 0 ? normalized + tau : normalized;
 }
 
 export function getLaneYs(total: number) {

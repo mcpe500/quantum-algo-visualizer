@@ -31,21 +31,72 @@ import type {
   QAOAAggregateResult,
 } from "../types/qaoa";
 
-// Re-export some types so other modules can import them from services/api
 export type { QAOACircuitImage, VQECircuitImage };
 
 const API_BASE = "http://127.0.0.1:5000/api";
+const JSON_HEADERS = { "Content-Type": "application/json" } as const;
+
+type QueryValue = string | number | boolean | Array<string | number | boolean> | undefined;
+
+interface CasesResponse<TCase> {
+  cases?: TCase[];
+}
 
 async function readApiError(response: Response, fallback: string): Promise<string> {
   try {
     const data = await response.json();
-    if (data?.error && typeof data.error === 'string') {
+    if (data?.error && typeof data.error === "string") {
       return data.error;
     }
   } catch {
     // ignore JSON parse errors
   }
   return fallback;
+}
+
+function createUrl(path: string, query?: Record<string, QueryValue>): string {
+  const params = new URLSearchParams();
+  if (query) {
+    for (const [key, value] of Object.entries(query)) {
+      if (value === undefined) continue;
+      params.set(key, Array.isArray(value) ? value.join(",") : String(value));
+    }
+  }
+  const suffix = params.toString();
+  return `${API_BASE}${path}${suffix ? `?${suffix}` : ""}`;
+}
+
+async function requestJson<TResponse>(
+  path: string,
+  options?: RequestInit,
+  errorMessage = "Request failed",
+  query?: Record<string, QueryValue>,
+): Promise<TResponse> {
+  const response = await fetch(createUrl(path, query), options);
+  if (!response.ok) {
+    throw new Error(await readApiError(response, errorMessage));
+  }
+  return response.json() as Promise<TResponse>;
+}
+
+function requestCases<TCase>(path: string): Promise<TCase[]> {
+  return requestJson<CasesResponse<TCase>>(path).then((data) => data.cases ?? []);
+}
+
+function postJson<TResponse>(
+  path: string,
+  payload: unknown,
+  errorMessage: string,
+): Promise<TResponse> {
+  return requestJson<TResponse>(
+    path,
+    {
+      method: "POST",
+      headers: JSON_HEADERS,
+      body: JSON.stringify(payload),
+    },
+    errorMessage,
+  );
 }
 
 export interface DJCircuitImage {
@@ -55,88 +106,6 @@ export interface DJCircuitImage {
   depth: number;
   gate_count: number;
 }
-
-export const djApi = {
-  async getCases(): Promise<DJCase[]> {
-    const res = await fetch(`${API_BASE}/dj/cases`);
-    const data = await res.json();
-    return data.cases || [];
-  },
-
-  async runBenchmark(params: DJBenchmarkParams): Promise<DJBenchmarkResult> {
-    const res = await fetch(`${API_BASE}/dj/benchmark`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(params),
-    });
-    if (!res.ok) {
-      throw new Error("Benchmark failed");
-    }
-    return res.json();
-  },
-
-  async getCircuit(n: number): Promise<DJCircuit> {
-    const res = await fetch(`${API_BASE}/dj/circuit/${n}`);
-    return res.json();
-  },
-
-  async getCircuitImage(caseId: string): Promise<DJCircuitImage> {
-    const res = await fetch(`${API_BASE}/dj/circuit-image/${caseId}`);
-    if (!res.ok) {
-      throw new Error(await readApiError(res, "Circuit image not found"));
-    }
-    return res.json();
-  },
-
-  async getCircuitImageBoxed(caseId: string): Promise<DJCircuitImage> {
-    const res = await fetch(`${API_BASE}/dj/circuit-image-boxed/${caseId}`);
-    if (!res.ok) {
-      throw new Error(await readApiError(res, "Boxed circuit image not found"));
-    }
-    return res.json();
-  },
-
-  async healthCheck(): Promise<{ status: string; message: string }> {
-    const res = await fetch(`${API_BASE}/health`);
-    return res.json();
-  },
-
-  async getDataset(caseId: string): Promise<DJDataset> {
-    const res = await fetch(`${API_BASE}/dj/dataset/${caseId}`);
-    if (!res.ok) {
-      throw new Error("Dataset not found");
-    }
-    return res.json();
-  },
-
-  async runClassicalDJ(caseId: string): Promise<ClassicalResult> {
-    const res = await fetch(`${API_BASE}/dj/classic-run`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ case_id: caseId }),
-    });
-    if (!res.ok) {
-      throw new Error("Classic run failed");
-    }
-    return res.json();
-  },
-
-  async getQuantumTrace(caseId: string): Promise<DJQuantumTrace> {
-    const res = await fetch(`${API_BASE}/dj/trace/${caseId}`);
-    if (!res.ok) {
-      throw new Error("Trace not found");
-    }
-    return res.json();
-  },
-
-  async getAnimation(caseId: string, shots = 1024): Promise<DJAnimationPayload> {
-    const res = await fetch(`${API_BASE}/dj/animation/${caseId}?shots=${shots}`);
-    if (!res.ok) {
-      throw new Error("Animation data not found");
-    }
-    return res.json();
-  },
-};
 
 export interface QFTCircuitImage {
   case_id: string;
@@ -148,156 +117,142 @@ export interface QFTCircuitImage {
   gate_count: number;
 }
 
-// (QFTCircuitImage is exported via the interface declaration above)
+export const djApi = {
+  getCases(): Promise<DJCase[]> {
+    return requestCases<DJCase>("/dj/cases");
+  },
 
+  runBenchmark(params: DJBenchmarkParams): Promise<DJBenchmarkResult> {
+    return postJson<DJBenchmarkResult>("/dj/benchmark", params, "Benchmark failed");
+  },
+
+  getCircuit(n: number): Promise<DJCircuit> {
+    return requestJson<DJCircuit>(`/dj/circuit/${n}`);
+  },
+
+  getCircuitImage(caseId: string): Promise<DJCircuitImage> {
+    return requestJson<DJCircuitImage>(`/dj/circuit-image/${caseId}`, undefined, "Circuit image not found");
+  },
+
+  getCircuitImageBoxed(caseId: string): Promise<DJCircuitImage> {
+    return requestJson<DJCircuitImage>(`/dj/circuit-image-boxed/${caseId}`, undefined, "Boxed circuit image not found");
+  },
+
+  healthCheck(): Promise<{ status: string; message: string }> {
+    return requestJson<{ status: string; message: string }>("/health");
+  },
+
+  getDataset(caseId: string): Promise<DJDataset> {
+    return requestJson<DJDataset>(`/dj/dataset/${caseId}`, undefined, "Dataset not found");
+  },
+
+  runClassicalDJ(caseId: string): Promise<ClassicalResult> {
+    return postJson<ClassicalResult>("/dj/classic-run", { case_id: caseId }, "Classic run failed");
+  },
+
+  getQuantumTrace(caseId: string): Promise<DJQuantumTrace> {
+    return requestJson<DJQuantumTrace>(`/dj/trace/${caseId}`, undefined, "Trace not found");
+  },
+
+  getAnimation(caseId: string, shots = 1024): Promise<DJAnimationPayload> {
+    return requestJson<DJAnimationPayload>(`/dj/animation/${caseId}`, undefined, "Animation data not found", { shots });
+  },
+};
 
 export const qftApi = {
-  async getCases(): Promise<QFTCase[]> {
-    const res = await fetch(`${API_BASE}/qft/cases`);
-    const data = await res.json();
-    return data.cases || [];
+  getCases(): Promise<QFTCase[]> {
+    return requestCases<QFTCase>("/qft/cases");
   },
 
-  async runBenchmark(params: QFTBenchmarkParams): Promise<QFTBenchmarkResult> {
-    const res = await fetch(`${API_BASE}/qft/benchmark`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(params),
-    });
-    if (!res.ok) {
-      throw new Error("Benchmark failed");
-    }
-    return res.json();
+  runBenchmark(params: QFTBenchmarkParams): Promise<QFTBenchmarkResult> {
+    return postJson<QFTBenchmarkResult>("/qft/benchmark", params, "Benchmark failed");
   },
 
-  async getCircuitImage(caseId: string): Promise<QFTCircuitImage> {
-    const res = await fetch(`${API_BASE}/qft/circuit-image/${caseId}`);
-    if (!res.ok) {
-      throw new Error("Circuit image not found");
-    }
-    return res.json();
+  getCircuitImage(caseId: string): Promise<QFTCircuitImage> {
+    return requestJson<QFTCircuitImage>(`/qft/circuit-image/${caseId}`, undefined, "Circuit image not found");
   },
 
-  async getDataset(caseId: string): Promise<QFTCase> {
-    const res = await fetch(`${API_BASE}/qft/dataset/${caseId}`);
-    if (!res.ok) {
-      throw new Error("Dataset not found");
-    }
-    return res.json();
+  getDataset(caseId: string): Promise<QFTCase> {
+    return requestJson<QFTCase>(`/qft/dataset/${caseId}`, undefined, "Dataset not found");
   },
 
-  async getQuantumTrace(caseId: string): Promise<QFTQuantumTrace> {
-    const res = await fetch(`${API_BASE}/qft/trace/${caseId}`);
-    if (!res.ok) {
-      throw new Error("Trace not found");
-    }
-    return res.json();
+  getQuantumTrace(caseId: string): Promise<QFTQuantumTrace> {
+    return requestJson<QFTQuantumTrace>(`/qft/trace/${caseId}`, undefined, "Trace not found");
   },
 
-  async getAnimation(caseId: string, shots = 1024): Promise<QFTAnimationPayload> {
-    const res = await fetch(`${API_BASE}/qft/animation/${caseId}?shots=${shots}`);
-    if (!res.ok) {
-      throw new Error("Animation data not found");
-    }
-    return res.json();
+  getAnimation(caseId: string, shots = 1024): Promise<QFTAnimationPayload> {
+    return requestJson<QFTAnimationPayload>(`/qft/animation/${caseId}`, undefined, "Animation data not found", { shots });
   },
 };
 
 export const vqeApi = {
-  async getCases(): Promise<VQECase[]> {
-    const res = await fetch(`${API_BASE}/vqe/cases`);
-    const data = await res.json();
-    return data.cases || [];
+  getCases(): Promise<VQECase[]> {
+    return requestCases<VQECase>("/vqe/cases");
   },
 
-  async runBenchmark(params: VQEBenchmarkParams): Promise<VQEBenchmarkResult> {
-    const res = await fetch(`${API_BASE}/vqe/benchmark`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(params),
-    });
-    if (!res.ok) throw new Error("VQE benchmark failed");
-    return res.json();
+  runBenchmark(params: VQEBenchmarkParams): Promise<VQEBenchmarkResult> {
+    return postJson<VQEBenchmarkResult>("/vqe/benchmark", params, "VQE benchmark failed");
   },
 
-  async getCircuitImage(caseId: string): Promise<VQECircuitImage> {
-    const res = await fetch(`${API_BASE}/vqe/circuit-image/${caseId}`);
-    if (!res.ok) throw new Error("Circuit image not found");
-    return res.json();
+  getCircuitImage(caseId: string): Promise<VQECircuitImage> {
+    return requestJson<VQECircuitImage>(`/vqe/circuit-image/${caseId}`, undefined, "Circuit image not found");
   },
 
-  async getDataset(caseId: string): Promise<VQECase> {
-    const res = await fetch(`${API_BASE}/vqe/dataset/${caseId}`);
-    if (!res.ok) throw new Error("Dataset not found");
-    return res.json();
+  getDataset(caseId: string): Promise<VQECase> {
+    return requestJson<VQECase>(`/vqe/dataset/${caseId}`, undefined, "Dataset not found");
   },
 
-  async getTrace(caseId: string): Promise<VQETrace> {
-    const res = await fetch(`${API_BASE}/vqe/trace/${caseId}`);
-    if (!res.ok) throw new Error("Trace not found");
-    return res.json();
+  getTrace(caseId: string): Promise<VQETrace> {
+    return requestJson<VQETrace>(`/vqe/trace/${caseId}`, undefined, "Trace not found");
   },
 };
 
+type QAOAAngleValue = number[] | number | undefined;
+
+function getQAOAAngleQuery(gamma?: QAOAAngleValue, beta?: QAOAAngleValue): Record<string, QueryValue> {
+  return { gamma, beta };
+}
+
 export const qaoaApi = {
-  async getCases(): Promise<QAOACase[]> {
-    const res = await fetch(`${API_BASE}/qaoa/cases`);
-    const data = await res.json();
-    return data.cases || [];
+  getCases(): Promise<QAOACase[]> {
+    return requestCases<QAOACase>("/qaoa/cases");
   },
 
-  async runBenchmark(
-    params: QAOABenchmarkParams,
-  ): Promise<QAOABenchmarkResult> {
-    const res = await fetch(`${API_BASE}/qaoa/benchmark`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(params),
+  runBenchmark(params: QAOABenchmarkParams): Promise<QAOABenchmarkResult> {
+    return postJson<QAOABenchmarkResult>("/qaoa/benchmark", params, "QAOA benchmark failed");
+  },
+
+  getCircuitImage(caseId: string, gamma?: QAOAAngleValue, beta?: QAOAAngleValue): Promise<QAOACircuitImage> {
+    return requestJson<QAOACircuitImage>(
+      `/qaoa/circuit-image/${caseId}`,
+      undefined,
+      "Circuit image not found",
+      getQAOAAngleQuery(gamma, beta),
+    );
+  },
+
+  getDataset(caseId: string): Promise<QAOACase> {
+    return requestJson<QAOACase>(`/qaoa/dataset/${caseId}`, undefined, "Dataset not found");
+  },
+
+  getTrace(caseId: string, gamma?: QAOAAngleValue, beta?: QAOAAngleValue): Promise<QAOATrace> {
+    return requestJson<QAOATrace>(
+      `/qaoa/trace/${caseId}`,
+      undefined,
+      "Trace not found",
+      getQAOAAngleQuery(gamma, beta),
+    );
+  },
+
+  getAnimation(caseId: string, shots = 1024): Promise<QAOAAnimationPayload> {
+    return requestJson<QAOAAnimationPayload>(`/qaoa/animation/${caseId}`, undefined, "Animation data not found", { shots });
+  },
+
+  getAggregate(caseId: string, seedCount = 8, seedStart = 0, maxiter = 120): Promise<QAOAAggregateResult> {
+    return requestJson<QAOAAggregateResult>(`/qaoa/aggregate/${caseId}`, undefined, "QAOA aggregate data not found", {
+      seed_count: seedCount,
+      seed_start: seedStart,
+      maxiter,
     });
-    if (!res.ok) throw new Error("QAOA benchmark failed");
-    return res.json();
-  },
-
-  async getCircuitImage(caseId: string, gamma?: number[] | number, beta?: number[] | number): Promise<QAOACircuitImage> {
-    const params = new URLSearchParams();
-    if (gamma !== undefined) params.set("gamma", Array.isArray(gamma) ? gamma.join(",") : String(gamma));
-    if (beta !== undefined) params.set("beta", Array.isArray(beta) ? beta.join(",") : String(beta));
-    const suffix = params.toString() ? `?${params.toString()}` : "";
-    const res = await fetch(`${API_BASE}/qaoa/circuit-image/${caseId}${suffix}`);
-    if (!res.ok) throw new Error("Circuit image not found");
-    return res.json();
-  },
-
-  async getDataset(caseId: string): Promise<QAOACase> {
-    const res = await fetch(`${API_BASE}/qaoa/dataset/${caseId}`);
-    if (!res.ok) throw new Error("Dataset not found");
-    return res.json();
-  },
-
-  async getTrace(caseId: string, gamma?: number[] | number, beta?: number[] | number): Promise<QAOATrace> {
-    const params = new URLSearchParams();
-    if (gamma !== undefined) params.set("gamma", Array.isArray(gamma) ? gamma.join(",") : String(gamma));
-    if (beta !== undefined) params.set("beta", Array.isArray(beta) ? beta.join(",") : String(beta));
-    const suffix = params.toString() ? `?${params.toString()}` : "";
-    const res = await fetch(`${API_BASE}/qaoa/trace/${caseId}${suffix}`);
-    if (!res.ok) throw new Error("Trace not found");
-    return res.json();
-  },
-
-  async getAnimation(caseId: string, shots = 1024): Promise<QAOAAnimationPayload> {
-    const res = await fetch(`${API_BASE}/qaoa/animation/${caseId}?shots=${shots}`);
-    if (!res.ok) throw new Error("Animation data not found");
-    return res.json();
-  },
-
-  async getAggregate(caseId: string, seedCount = 8, seedStart = 0, maxiter = 120): Promise<QAOAAggregateResult> {
-    const params = new URLSearchParams({
-      seed_count: String(seedCount),
-      seed_start: String(seedStart),
-      maxiter: String(maxiter),
-    });
-    const res = await fetch(`${API_BASE}/qaoa/aggregate/${caseId}?${params.toString()}`);
-    if (!res.ok) throw new Error("QAOA aggregate data not found");
-    return res.json();
   },
 };

@@ -2,6 +2,7 @@ import type {
   QFTAnimationPayload,
   QFTAnimationStep,
 } from '../../../types/qft';
+import type { ReactNode } from 'react';
 import { SIGNAL_TYPE_LABEL } from './constants';
 import { formatRadians } from '../../../shared/utils/animation-helpers';
 import { getContextGlossary, getStepExplanation, getStepHeadline } from './narration';
@@ -12,31 +13,85 @@ export { PhaseStepper } from '../../../shared/components/PhaseStepper';
 import { ReadingGuideCard as SharedReadingGuideCard } from '../../../shared/components/ReadingGuideCard';
 import { ProbabilityBarList } from '../../../shared/components/ProbabilityBarList';
 
-export function SignalInputPanel({ data }: { data: QFTAnimationPayload }) {
+interface SignalInputPanelProps {
+  data: QFTAnimationPayload;
+}
+
+interface PhaseCascadePanelProps {
+  data: QFTAnimationPayload;
+  activeStep: QFTAnimationStep;
+}
+
+interface FFTvsQFTComparisonPanelProps {
+  data: QFTAnimationPayload;
+}
+
+interface FrequencySpectrumPanelProps {
+  data: QFTAnimationPayload;
+}
+
+interface ReadingGuideCardProps {
+  step: QFTAnimationStep;
+  nQubits: number;
+}
+
+interface PanelCardProps {
+  title: string;
+  children: ReactNode;
+  footer?: ReactNode;
+}
+
+function PanelCard({ title, children, footer }: PanelCardProps) {
+  return (
+    <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
+      <div className="px-4 py-2.5 border-b border-slate-100 bg-slate-50">
+        <h3 className="text-[10px] font-bold uppercase tracking-widest text-slate-400">{title}</h3>
+      </div>
+      {children}
+      {footer}
+    </div>
+  );
+}
+
+function PanelStat({
+  label,
+  value,
+  note,
+}: {
+  label: string;
+  value: ReactNode;
+  note?: ReactNode;
+}) {
+  return (
+    <div>
+      <p className="text-[10px] font-bold text-slate-400 uppercase">{label}</p>
+      <p className="text-sm font-bold text-slate-900">{value}</p>
+      {note}
+    </div>
+  );
+}
+
+export function SignalInputPanel({ data }: SignalInputPanelProps) {
   const signalType = SIGNAL_TYPE_LABEL[data.signal_type] || data.signal_type;
   const maxAmp = Math.max(...data.input_signal.map(Math.abs));
 
   return (
-    <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
-      <div className="px-4 py-2.5 border-b border-slate-100 bg-slate-50">
-        <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Signal Input</p>
+    <PanelCard title="Signal Input" footer={(
+      <div className="px-3 pb-3 flex flex-wrap gap-2 text-[10px] text-slate-500">
+        <span className="rounded bg-slate-100 px-2 py-1">Max: {maxAmp.toFixed(3)}</span>
+        <span className="rounded bg-slate-100 px-2 py-1">Min: {Math.min(...data.input_signal).toFixed(3)}</span>
       </div>
+    )}>
       <div className="p-3 grid grid-cols-3 gap-3 border-b border-slate-100">
-        <div>
-          <p className="text-[10px] font-bold text-slate-400 uppercase">Type</p>
-          <p className="text-sm font-bold text-slate-900">{signalType}</p>
-        </div>
-        <div>
-          <p className="text-[10px] font-bold text-slate-400 uppercase">Qubits</p>
-          <p className="text-sm font-bold text-slate-900">{data.n_qubits}</p>
-        </div>
-        <div>
-          <p className="text-[10px] font-bold text-slate-400 uppercase">Raw Points</p>
-          <p className="text-sm font-bold text-slate-900">{data.n_points_original}</p>
-          {data.n_points_original !== data.n_points_padded && (
+        <PanelStat label="Type" value={signalType} />
+        <PanelStat label="Qubits" value={data.n_qubits} />
+        <PanelStat
+          label="Raw Points"
+          value={data.n_points_original}
+          note={data.n_points_original !== data.n_points_padded ? (
             <p className="text-[9px] text-slate-400">(→ {data.n_points_padded} padded)</p>
-          )}
-        </div>
+          ) : undefined}
+        />
       </div>
       <div className="p-3">
         <p className="text-[10px] font-semibold text-slate-500 mb-2">Signal Amplitude (Time Domain)</p>
@@ -61,15 +116,11 @@ export function SignalInputPanel({ data }: { data: QFTAnimationPayload }) {
         </div>
         <p className="text-[9px] text-slate-400 mt-1 text-center">showing first {Math.min(16, data.input_signal.length)} samples</p>
       </div>
-      <div className="px-3 pb-3 flex flex-wrap gap-2 text-[10px] text-slate-500">
-        <span className="rounded bg-slate-100 px-2 py-1">Max: {maxAmp.toFixed(3)}</span>
-        <span className="rounded bg-slate-100 px-2 py-1">Min: {Math.min(...data.input_signal).toFixed(3)}</span>
-      </div>
-    </div>
+    </PanelCard>
   );
 }
 
-export function PhaseCascadePanel({ data, activeStep }: { data: QFTAnimationPayload; activeStep: QFTAnimationStep }) {
+export function PhaseCascadePanel({ data, activeStep }: PhaseCascadePanelProps) {
   const activeQubit = activeStep.target_qubit ?? null;
   const model = buildPhaseCascadeModel(data, activeQubit);
 
@@ -152,17 +203,25 @@ export function PhaseCascadePanel({ data, activeStep }: { data: QFTAnimationPayl
   );
 }
 
-export function FFTvsQFTComparisonPanel({ data }: { data: QFTAnimationPayload }) {
+export function FFTvsQFTComparisonPanel({ data }: FFTvsQFTComparisonPanelProps) {
   const n = data.n_qubits;
   const nPoints = data.n_points_padded;
   const quantumComplexity = `O(${n}²)`;
   const classicalComplexity = `O(${nPoints} log ${nPoints})`;
 
   return (
-    <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
-      <div className="px-4 py-2.5 border-b border-slate-100 bg-slate-50">
-        <h3 className="text-[10px] font-bold uppercase tracking-widest text-slate-400">FFT vs QFT Comparison</h3>
+    <PanelCard title="FFT vs QFT Comparison" footer={(
+      <div className="px-3 pb-3">
+        <div className="rounded-lg border border-amber-100 bg-amber-50 p-3">
+          <p className="text-[11px] font-semibold text-amber-700">Speedup</p>
+          <p className="text-[10px] text-amber-600 mt-1 leading-relaxed">
+            Untuk N = 2^{n} = {nPoints} poin: FFT membutuhkan ~{nPoints}·{n} = {nPoints * n} operasi,
+            sedangkan QFT hanya ~{n}² = {n * n} operasi.
+            Speedup faktor: ~{nPoints / n}x untuk setup ini.
+          </p>
+        </div>
       </div>
+    )}>
       <div className="p-3 grid grid-cols-2 gap-3">
         <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
           <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">FFT (Classical)</div>
@@ -181,21 +240,11 @@ export function FFTvsQFTComparisonPanel({ data }: { data: QFTAnimationPayload })
           </div>
         </div>
       </div>
-      <div className="px-3 pb-3">
-        <div className="rounded-lg border border-amber-100 bg-amber-50 p-3">
-          <p className="text-[11px] font-semibold text-amber-700">Speedup</p>
-          <p className="text-[10px] text-amber-600 mt-1 leading-relaxed">
-            Untuk N = 2^{n} = {nPoints} poin: FFT membutuhkan ~{nPoints}·{n} = {nPoints * n} operasi,
-            sedangkan QFT hanya ~{n}² = {n * n} operasi.
-            Speedup faktor: ~{nPoints / n}x untuk setup ini.
-          </p>
-        </div>
-      </div>
-    </div>
+    </PanelCard>
   );
 }
 
-export function FrequencySpectrumPanel({ data }: { data: QFTAnimationPayload }) {
+export function FrequencySpectrumPanel({ data }: FrequencySpectrumPanelProps) {
   const topStates = Object.entries(data.measurement.counts)
     .map(([state, count]) => ({
       key: state,
@@ -206,10 +255,7 @@ export function FrequencySpectrumPanel({ data }: { data: QFTAnimationPayload }) 
     .slice(0, 6);
 
   return (
-    <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
-      <div className="px-4 py-2.5 border-b border-slate-100 bg-slate-50">
-        <h3 className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Frequency Spectrum</h3>
-      </div>
+    <PanelCard title="Frequency Spectrum">
       <div className="p-3 flex flex-wrap items-center gap-2 border-b border-slate-100">
         <span className="rounded-md border border-slate-200 bg-slate-50 px-2.5 py-1 text-[10px] text-slate-600">
           {data.measurement.shots} shots
@@ -221,11 +267,11 @@ export function FrequencySpectrumPanel({ data }: { data: QFTAnimationPayload }) 
       <div className="p-3">
         <ProbabilityBarList items={topStates} barColor="bg-teal-500" />
       </div>
-    </div>
+    </PanelCard>
   );
 }
 
-export function ReadingGuideCard({ step, nQubits }: { step: QFTAnimationStep; nQubits: number }) {
+export function ReadingGuideCard({ step, nQubits }: ReadingGuideCardProps) {
   return (
     <SharedReadingGuideCard
       title="Cara Baca Animasi QFT"

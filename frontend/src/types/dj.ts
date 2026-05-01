@@ -1,5 +1,6 @@
-export interface DJCase {
-  case_id: string;
+import type { BaseCase, BaseBenchmarkResult, BaseBenchmarkParams, BaseTraceStage, BaseTracePartition } from './shared';
+
+export interface DJCase extends BaseCase {
   n_qubits: number;
   expected_classification: 'CONSTANT' | 'BALANCED';
   oracle_definition: {
@@ -24,12 +25,9 @@ export interface DJClassicResult {
   time_complexity: string;
 }
 
-export interface DJBenchmarkResult {
-  timestamp: string;
-  case_id: string;
+export interface DJBenchmarkResult extends BaseBenchmarkResult {
   n_qubits: number;
   expected_classification: string;
-  shots: number;
   quantum: DJQuantumResult;
   classic: DJClassicResult;
   accuracy: {
@@ -54,25 +52,13 @@ export interface DJCircuit {
   }>;
 }
 
-export interface DJBenchmarkParams {
-  case_id: string;
-  shots: number;
-}
+export interface DJBenchmarkParams extends BaseBenchmarkParams {}
 
-export interface DJTraceStage {
-  step: number;
-  operation: string;
-  wire_markers: Record<string, string>;
+export interface DJTraceStage extends BaseTraceStage {
   ancilla_marker: string;
-  phase: string;
 }
 
-export interface DJTracePartition {
-  stageId: string;
-  label: string;
-  start: number;
-  end: number;
-}
+export interface DJTracePartition extends BaseTracePartition {}
 
 export interface DJQuantumTrace {
   case_id: string;

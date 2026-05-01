@@ -1,9 +1,9 @@
-import { useEffect } from 'react';
 import { BookOpen, Cpu, GitBranch, LoaderCircle, PlayCircle } from 'lucide-react';
 import { useQAOA } from '../hooks/useQAOA';
 import { AlgorithmPageShell } from '../shared/components/AlgorithmPageShell';
 import { QAOAClassicTab, QAOAHybridAnimation, QAOAQuantumTab } from '../components/qaoa';
 import { CAPTURE_IDS } from '../constants/app';
+import { useInitialTabSync } from './hooks/useInitialTabSync';
 
 interface QAOACombinedPageProps {
   initialTab?: 'classic' | 'quantum' | 'animation';
@@ -27,9 +27,7 @@ export default function QAOACombinedPage({ initialTab = 'classic' }: QAOACombine
     handleDownload,
   } = useQAOA();
 
-  useEffect(() => {
-    queueMicrotask(() => setActiveTab(initialTab));
-  }, [initialTab, setActiveTab]);
+  useInitialTabSync(initialTab, setActiveTab);
 
   return (
     <AlgorithmPageShell

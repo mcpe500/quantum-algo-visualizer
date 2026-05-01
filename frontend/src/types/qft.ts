@@ -1,6 +1,6 @@
-export interface QFTCase {
-  case_id: string;
-  description: string;
+import type { BaseCase, BaseBenchmarkResult, BaseBenchmarkParams, BaseTraceStage, BaseTracePartition } from './shared';
+
+export interface QFTCase extends BaseCase {
   n_points: number;
   signal_data: number[];
   signal_type: string;
@@ -54,14 +54,11 @@ export interface QFTResult {
   bitstring_mapping_note: string;
 }
 
-export interface QFTBenchmarkResult {
-  timestamp: string;
-  case_id: string;
+export interface QFTBenchmarkResult extends BaseBenchmarkResult {
   signal_type: string;
   n_points_original: number;
   n_points_padded: number;
   n_qubits: number;
-  shots: number;
   input_signal: number[];
   padded_signal: number[];
   fft: FFTResult;
@@ -74,23 +71,14 @@ export interface QFTBenchmarkResult {
     fair_metric: string;
     fft_peak_bins: number[];
     qft_peak_bins: number[];
-    shared_peak_bins: number[];
   };
 }
 
-export interface QFTTraceStage {
-  step: number;
-  operation: string;
-  wire_markers: Record<string, string>;
-  phase: string;
-}
+export interface QFTBenchmarkParams extends BaseBenchmarkParams {}
 
-export interface QFTTracePartition {
-  stageId: string;
-  label: string;
-  start: number;
-  end: number;
-}
+export interface QFTTraceStage extends BaseTraceStage {}
+
+export interface QFTTracePartition extends BaseTracePartition {}
 
 export interface QFTQuantumTrace {
   case_id: string;
@@ -99,11 +87,6 @@ export interface QFTQuantumTrace {
   n_points_padded: number;
   stages: QFTTraceStage[];
   partitions: QFTTracePartition[];
-}
-
-export interface QFTBenchmarkParams {
-  case_id: string;
-  shots: number;
 }
 
 export interface QFTAnimationSnapshot {

@@ -1,4 +1,5 @@
 export const DEFAULT_SHOTS = 1024;
+export const NO_DATASET_CASE_ERROR = 'Dataset case belum tersedia.';
 
 export const CAPTURE_IDS = {
   qft: 'qft-capture',

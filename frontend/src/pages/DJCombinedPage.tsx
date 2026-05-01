@@ -1,4 +1,3 @@
-import { useEffect } from 'react';
 import { Cpu, BookOpen, Video } from 'lucide-react';
 import { useDJBenchmark } from '../hooks/useDJBenchmark';
 import { AlgorithmPageShell } from '../shared/components/AlgorithmPageShell';
@@ -7,9 +6,8 @@ import { QuantumVisualization } from '../components/dj/QuantumVisualization';
 import { ComparisonSection } from '../components/dj/ComparisonSection';
 import { QuantumTraceTable } from '../components/dj/QuantumTraceTable';
 import { DJQuantumAnimation } from '../components/dj/DJQuantumAnimation';
-import { InlineEmptyState } from '../components/layout';
-import { UI_MESSAGES } from '../constants/ui';
 import { CAPTURE_IDS } from '../constants/app';
+import { useInitialTabSync } from './hooks/useInitialTabSync';
 
 interface DJCombinedPageProps {
   initialTab?: 'classic' | 'quantum' | 'animation';
@@ -36,9 +34,7 @@ export default function DJCombinedPage({ initialTab = 'classic' }: DJCombinedPag
     handleDownload,
   } = useDJBenchmark();
 
-  useEffect(() => {
-    queueMicrotask(() => setActiveTab(initialTab));
-  }, [initialTab, setActiveTab]);
+  useInitialTabSync(initialTab, setActiveTab);
 
   return (
     <div className={isVideoExporting ? 'pointer-events-none opacity-90' : ''}>
@@ -62,12 +58,11 @@ export default function DJCombinedPage({ initialTab = 'classic' }: DJCombinedPag
         activeTab={activeTab}
         onTabChange={(tab) => setActiveTab(tab as 'classic' | 'quantum' | 'animation')}
         captureId={CAPTURE_IDS.djQuantum}
+        emptyMessage="Pilih kasus dan klik 'Jalankan' untuk memulai benchmarking Deutsch-Jozsa."
         classicTab={
           classicalResult ? (
             <ClassicalVisualization result={classicalResult} onDownload={handleDownload} />
-          ) : (
-            <InlineEmptyState message={UI_MESSAGES.emptyClassic} />
-          )
+          ) : null
         }
         quantumTab={
           benchmarkResult ? (
@@ -93,20 +88,12 @@ export default function DJCombinedPage({ initialTab = 'classic' }: DJCombinedPag
               )}
               <ComparisonSection result={benchmarkResult} />
             </>
-          ) : (
-            <InlineEmptyState message={UI_MESSAGES.emptyQuantum} />
-          )
+          ) : null
         }
         animationTab={
-          benchmarkResult ? (
-            animationData ? (
-              <DJQuantumAnimation data={animationData} onExportingChange={setIsVideoExporting} />
-            ) : (
-              <InlineEmptyState message="Animasi tidak tersedia untuk kasus ini." />
-            )
-          ) : (
-            <InlineEmptyState message={UI_MESSAGES.emptyQuantum} />
-          )
+          benchmarkResult && animationData ? (
+            <DJQuantumAnimation data={animationData} onExportingChange={setIsVideoExporting} />
+          ) : null
         }
       />
     </div>

@@ -1,6 +1,6 @@
-export interface VQECase {
-  case_id: string;
-  description: string;
+import type { BaseCase, BaseBenchmarkResult, BaseBenchmarkParams, BaseTraceStage, BaseTracePartition } from './shared';
+
+export interface VQECase extends BaseCase {
   molecule: string;
   qubits: number;
   ansatz: {
@@ -99,13 +99,10 @@ export interface VQEComparison {
   note: string;
 }
 
-export interface VQEBenchmarkResult {
-  timestamp: string;
-  case_id: string;
+export interface VQEBenchmarkResult extends BaseBenchmarkResult {
   molecule: string;
   description: string;
   n_qubits: number;
-  shots: number;
   ansatz_type: string;
   n_layers: number;
   hamiltonian_terms: Record<string, number>;
@@ -114,19 +111,9 @@ export interface VQEBenchmarkResult {
   comparison: VQEComparison;
 }
 
-export interface VQETraceStage {
-  step: number;
-  operation: string;
-  wire_markers: Record<string, string>;
-  phase: string;
-}
+export interface VQETraceStage extends BaseTraceStage {}
 
-export interface VQETracePartition {
-  stageId: string;
-  label: string;
-  start: number;
-  end: number;
-}
+export interface VQETracePartition extends BaseTracePartition {}
 
 export interface VQETrace {
   case_id: string;
@@ -137,10 +124,7 @@ export interface VQETrace {
   partitions: VQETracePartition[];
 }
 
-export interface VQEBenchmarkParams {
-  case_id: string;
-  shots: number;
-}
+export interface VQEBenchmarkParams extends BaseBenchmarkParams {}
 
 export interface VQECircuitImage {
   case_id: string;

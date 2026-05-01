@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import { downloadElementAsPNG } from '../../utils/download';
-import { DEFAULT_SHOTS } from '../../constants/app';
+import { DEFAULT_SHOTS, NO_DATASET_CASE_ERROR } from '../../constants/app';
 import { getSortedCaseIds } from '../../utils/cases';
+import { fetchNullable, getErrorMessage } from '../../utils/async';
 
 export interface AlgorithmBenchmarkConfig<
   TBenchmarkResult = unknown,
@@ -54,6 +55,7 @@ export function createUseAlgorithmBenchmark<
   config: AlgorithmBenchmarkConfig<TBenchmarkResult, TCircuitImage, TTrace, TAnimationData>
 ) {
   const {
+    algorithmId,
     defaultCaseId = '',
     defaultTab = 'classic',
     captureId,
@@ -78,47 +80,31 @@ export function createUseAlgorithmBenchmark<
     const [error, setError] = useState<string | null>(null);
     const [activeTab, setActiveTab] = useState<'classic' | 'quantum' | 'animation'>(defaultTab);
 
-    const loadCircuitImage = useCallback(
-      async (caseId: string) => {
-        if (!caseId) return;
-        try {
-          const data = await api.getCircuitImage(caseId);
-          setCircuitImage(data);
-        } catch {
-          setCircuitImage(null);
-        }
-      },
-      []
-    );
+      const loadCircuitImage = useCallback(
+        async (caseId: string) => {
+          if (!caseId) return;
+          setCircuitImage(await fetchNullable(() => api.getCircuitImage(caseId)));
+        },
+        []
+      );
 
-    const loadTrace = useCallback(
-      async (caseId: string) => {
-        if (!caseId) return;
-        try {
-          const data = await api.getTrace(caseId);
-          setTrace(data);
-        } catch {
-          setTrace(null);
-        }
-      },
-      []
-    );
+      const loadTrace = useCallback(
+        async (caseId: string) => {
+          if (!caseId) return;
+          setTrace(await fetchNullable(() => api.getTrace(caseId)));
+        },
+        []
+      );
 
-    const loadAnimation = useCallback(
-      async (caseId: string) => {
-        if (!caseId || !api.getAnimation) return;
-        setIsLoadingAnimation(true);
-        try {
-          const data = await api.getAnimation(caseId, defaultShots);
-          setAnimationData(data);
-        } catch {
-          setAnimationData(null);
-        } finally {
+      const loadAnimation = useCallback(
+        async (caseId: string) => {
+          if (!caseId || !api.getAnimation) return;
+          setIsLoadingAnimation(true);
+          setAnimationData(await fetchNullable(() => api.getAnimation!(caseId, defaultShots)));
           setIsLoadingAnimation(false);
-        }
-      },
-      []
-    );
+        },
+        []
+      );
 
     useEffect(() => {
       let cancelled = false;
@@ -155,36 +141,36 @@ export function createUseAlgorithmBenchmark<
       });
     }, [selectedCaseId, loadCircuitImage, loadTrace]);
 
-    const handleRun = useCallback(async () => {
-      setIsLoading(true);
-      setError(null);
-      if (!selectedCaseId) {
-        setError('Dataset case belum tersedia.');
-        setIsLoading(false);
-        return;
-      }
+      const handleRun = useCallback(async () => {
+        setIsLoading(true);
+        setError(null);
+        if (!selectedCaseId) {
+          setError(NO_DATASET_CASE_ERROR);
+          setIsLoading(false);
+          return;
+        }
       try {
         const data = await api.runBenchmark({
           case_id: selectedCaseId,
           shots: defaultShots,
         });
-        setBenchmarkResult(data);
-        await loadCircuitImage(selectedCaseId);
-        await loadTrace(selectedCaseId);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'Benchmark failed');
-      } finally {
-        setIsLoading(false);
-      }
-    }, [selectedCaseId, loadCircuitImage, loadTrace]);
+          setBenchmarkResult(data);
+          await loadCircuitImage(selectedCaseId);
+          await loadTrace(selectedCaseId);
+        } catch (err) {
+          setError(getErrorMessage(err, 'Benchmark failed'));
+        } finally {
+          setIsLoading(false);
+        }
+      }, [selectedCaseId, loadCircuitImage, loadTrace, api, defaultShots]);
 
-    const handleDownload = useCallback(async () => {
-      if (!captureId) {
-        throw new Error('captureId not configured');
-      }
-      if (!selectedCaseId) return;
-      await downloadElementAsPNG(captureId, `${config.algorithmId}_${selectedCaseId}.png`);
-    }, [selectedCaseId]);
+      const handleDownload = useCallback(async () => {
+        if (!captureId) {
+          throw new Error('captureId not configured');
+        }
+        if (!selectedCaseId) return;
+        await downloadElementAsPNG(captureId, `${algorithmId}_${selectedCaseId}.png`);
+      }, [algorithmId, captureId, selectedCaseId]);
 
     return {
       selectedCaseId,

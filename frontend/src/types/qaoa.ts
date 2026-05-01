@@ -4,9 +4,9 @@ export interface QAOAGraph {
   edges?: [number, number][];
 }
 
-export interface QAOACase {
-  case_id: string;
-  description: string;
+import type { BaseCase, BaseBenchmarkResult, BaseBenchmarkParams, BaseTraceStage, BaseTracePartition } from './shared';
+
+export interface QAOACase extends BaseCase {
   problem: string;
   graph: QAOAGraph;
   p_layers: number;
@@ -127,9 +127,7 @@ export interface QAOAComparison {
   note: string;
 }
 
-export interface QAOABenchmarkResult {
-  timestamp: string;
-  case_id: string;
+export interface QAOABenchmarkResult extends BaseBenchmarkResult {
   problem: string;
   description: string;
   n_nodes: number;
@@ -138,7 +136,6 @@ export interface QAOABenchmarkResult {
   nodes: number[];
   adjacency_matrix: number[][];
   p_layers: number;
-  shots: number;
   exact: QAOAExactResult;
   classical: QAOAClassicalResult;
   quantum: QAOAQuantumResult;
@@ -146,19 +143,9 @@ export interface QAOABenchmarkResult {
   aggregate?: QAOAAggregateResult | null;
 }
 
-export interface QAOATraceStage {
-  step: number;
-  operation: string;
-  wire_markers: Record<string, string>;
-  phase: string;
-}
+export interface QAOATraceStage extends BaseTraceStage {}
 
-export interface QAOATracePartition {
-  stageId: string;
-  label: string;
-  start: number;
-  end: number;
-}
+export interface QAOATracePartition extends BaseTracePartition {}
 
 export interface QAOATrace {
   case_id: string;
@@ -169,9 +156,7 @@ export interface QAOATrace {
   partitions: QAOATracePartition[];
 }
 
-export interface QAOABenchmarkParams {
-  case_id: string;
-  shots: number;
+export interface QAOABenchmarkParams extends BaseBenchmarkParams {
   optimizer_seed?: number;
   simulator_seed?: number;
   maxiter?: number;
