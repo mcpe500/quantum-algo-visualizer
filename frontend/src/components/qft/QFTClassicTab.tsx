@@ -3,10 +3,14 @@ import { MetricsGrid, MetricCard } from '../layout/MetricsGrid';
 import { SignalChart } from '../charts/SignalChart';
 import { SpectrumChart } from '../charts/SpectrumChart';
 import { InlineEmptyState, SectionCard } from '../layout';
-import { BookOpen, ArrowRight } from 'lucide-react';
+import { BookOpen, ArrowRight, Download } from 'lucide-react';
 import { UI_MESSAGES } from '../../constants/ui';
 import { QFTFlowDiagram } from './QFTFlowDiagram';
 import { DominantBinsExplanation } from './DominantBinsExplanation';
+import { downloadElementAsPNG } from '../../utils/download';
+import { QFTClassicBookFigure } from './QFTClassicBookFigure';
+import { getQFTBookFigureId } from './qftBookFigure';
+import { buildDominantMirrorPairs } from './dominantPairs';
 
 interface QFTClassicTabProps {
   result: QFTBenchmarkResult | null;
@@ -17,16 +21,48 @@ export function QFTClassicTab({ result }: QFTClassicTabProps) {
     return <InlineEmptyState message={UI_MESSAGES.emptyClassic} />;
   }
 
+  const dominantPairs = buildDominantMirrorPairs(
+    result.fft.dominant_bins,
+    result.fft.dominant_magnitudes,
+    result.fft.n_points
+  );
+
+  const handleDownloadBookFigure = async () => {
+    await downloadElementAsPNG(
+      getQFTBookFigureId(result.case_id),
+      `qft-fft-book-figure-${result.case_id}.png`
+    );
+  };
+
   return (
     <div className="space-y-6">
       <SectionCard title="Fast Fourier Transform (FFT)" icon={<BookOpen className="w-5 h-5" />}>
-        {/* Flow Diagram - Alur Transformasi */}
-        <QFTFlowDiagram 
-          nPointsOriginal={result.n_points_original}
-          nPointsPadded={result.n_points_padded || result.n_points_original}
-          dominantBins={result.fft.dominant_bins}
-          paddedSignal={result.padded_signal}
-        />
+        <div className="mb-6 rounded-2xl border border-cyan-200 bg-cyan-50/60 p-4">
+          <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+            <div>
+              <h3 className="text-base font-bold text-slate-900">Gambar Buku TA: Alur FFT Landscape</h3>
+              <p className="mt-1 text-sm text-slate-600">
+                Diagram akademik ringan: gelombang, array, divide, conquer butterfly, lalu output bin dalam satu alur yang lebih natural untuk buku.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => void handleDownloadBookFigure()}
+              className="inline-flex items-center justify-center gap-2 rounded-lg border border-cyan-300 bg-white px-4 py-2 text-sm font-semibold text-cyan-800 transition-colors hover:bg-cyan-100"
+            >
+              <Download className="h-4 w-4" />
+              Download Gambar Buku
+            </button>
+          </div>
+          <div className="rounded-xl bg-slate-100 p-3">
+            <div className="overflow-x-auto">
+              <QFTClassicBookFigure result={result} mode="screen" />
+            </div>
+            <div className="absolute -left-[100000px] top-0 pointer-events-none opacity-0" aria-hidden="true">
+              <QFTClassicBookFigure result={result} mode="export" />
+            </div>
+          </div>
+        </div>
 
         <MetricsGrid columns={3}>
           <MetricCard label="Data Points" value={result.n_points_original} />
@@ -43,6 +79,23 @@ export function QFTClassicTab({ result }: QFTClassicTabProps) {
             </p>
           </div>
         )}
+
+        <details className="mb-6 rounded-2xl border border-slate-200 bg-slate-50/80 p-4">
+          <summary className="cursor-pointer text-sm font-semibold text-slate-800">
+            Lihat detail trace FFT klasik
+          </summary>
+          <p className="mt-2 text-sm text-slate-600">
+            Bagian ini mempertahankan trace FFT versi detail untuk eksplorasi web, tetapi tidak lagi menjadi visual utama buku.
+          </p>
+          <div className="mt-4">
+            <QFTFlowDiagram
+              nPointsOriginal={result.n_points_original}
+              nPointsPadded={result.n_points_padded || result.n_points_original}
+              dominantBins={result.fft.dominant_bins}
+              paddedSignal={result.padded_signal}
+            />
+          </div>
+        </details>
 
         {/* Charts with Flow Arrow */}
         <div className="relative">
@@ -69,12 +122,12 @@ export function QFTClassicTab({ result }: QFTClassicTabProps) {
 
         {/* Dominant Bins with Full Explanation */}
         <div className="mb-4">
-          <h3 className="text-sm font-medium text-gray-700 mb-2">Dominant Frequency Bins</h3>
+          <h3 className="text-sm font-medium text-gray-700 mb-2">Dominant Frequency Bin Pairs</h3>
           <div className="flex flex-wrap gap-2 mb-4">
-            {result.fft.dominant_bins.map((bin, idx) => (
-              <div key={idx} className="bg-blue-50 border border-blue-200 px-3 py-1 rounded-lg">
+            {dominantPairs.map((pair) => (
+              <div key={pair.label} className="bg-blue-50 border border-blue-200 px-3 py-1 rounded-lg">
                 <span className="font-mono text-blue-900">
-                  Bin {bin}: {result.fft.dominant_magnitudes[idx].toFixed(2)}
+                  {pair.label}: {pair.magnitude.toFixed(2)}
                 </span>
               </div>
             ))}

@@ -4,6 +4,7 @@ import { InlineEmptyState, SectionCard } from '../layout';
 import { BookOpen } from 'lucide-react';
 import { UI_MESSAGES } from '../../constants/ui';
 import { VQESection, VQEMetricsGrid, VQECard, VQE_TYPOGRAPHY } from './layout';
+import { FCIBookFigure } from './fci/FCIBookFigure';
 
 interface VQEClassicTabProps {
   result: VQEBenchmarkResult | null;
@@ -17,6 +18,10 @@ export function VQEClassicTab({ result }: VQEClassicTabProps) {
   return (
     <div className="space-y-6">
       <SectionCard title="Full Configuration Interaction (FCI)" icon={<BookOpen className="w-5 h-5" />}>
+        <VQESection noPadding>
+          <FCIBookFigure result={result} />
+        </VQESection>
+
         <MetricsGrid>
           <MetricCard label="Molecule" value={result.molecule} />
           <MetricCard label="Matrix Size" value={result.classical.matrix_size} />
