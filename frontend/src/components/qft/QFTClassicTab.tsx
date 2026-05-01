@@ -3,7 +3,7 @@ import { MetricsGrid, MetricCard } from '../layout/MetricsGrid';
 import { SignalChart } from '../charts/SignalChart';
 import { SpectrumChart } from '../charts/SpectrumChart';
 import { InlineEmptyState, SectionCard } from '../layout';
-import { BookOpen, ArrowRight, Download } from 'lucide-react';
+import { BookOpen, Download } from 'lucide-react';
 import { UI_MESSAGES } from '../../constants/ui';
 import { QFTFlowDiagram } from './QFTFlowDiagram';
 import { DominantBinsExplanation } from './DominantBinsExplanation';
@@ -11,6 +11,7 @@ import { downloadElementAsPNG } from '../../utils/download';
 import { QFTClassicBookFigure } from './QFTClassicBookFigure';
 import { getQFTBookFigureId } from './qftBookFigure';
 import { buildDominantMirrorPairs } from './dominantPairs';
+import { ClassicFlowArrow } from '../classic-flow';
 
 interface QFTClassicTabProps {
   result: QFTBenchmarkResult | null;
@@ -113,10 +114,8 @@ export function QFTClassicTab({ result }: QFTClassicTabProps) {
           </div>
           
           {/* Flow Arrow between charts - desktop only */}
-          <div className="hidden md:flex absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-10">
-            <div className="bg-white border-2 border-blue-300 rounded-full p-2 shadow-lg">
-              <ArrowRight className="w-6 h-6 text-blue-500" />
-            </div>
+          <div className="hidden md:flex absolute top-1/2 left-1/2 z-10 -translate-x-1/2 -translate-y-1/2 transform">
+            <ClassicFlowArrow tone="blue" size="sm" boxed />
           </div>
         </div>
 

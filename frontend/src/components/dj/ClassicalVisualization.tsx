@@ -5,12 +5,14 @@ import { OraclePanel } from './OraclePanel';
 import { ResultPanel } from './ResultPanel';
 import { PseudocodeBlock } from './PseudocodeBlock';
 import { CAPTURE_IDS } from '../../constants/app';
+import { ClassicFlowArrow, ClassicFlowMobileArrow, ClassicFlowRail } from '../classic-flow';
 
 interface ClassicalVisualizationProps {
   result: ClassicalResult | null;
   onDownload: () => void;
   captureId?: string;
 }
+
 
 export function ClassicalVisualization({
   result,
@@ -56,25 +58,17 @@ export function ClassicalVisualization({
         <main className="flex flex-col lg:flex-row items-start justify-center mt-6 lg:mt-8 gap-6">
           <InputsPanel n_qubits={n_qubits} steps={steps} />
 
-          {/* ARROW */}
-          <div className="hidden lg:flex items-center shrink-0 self-center mt-6">
-            <svg width="40" height="16" viewBox="0 0 40 16" fill="none">
-              <path d="M0 8 H38" stroke="#9CA3AF" strokeWidth="1.5" strokeLinecap="round" />
-              <path d="M34 4 L40 8 L34 12" stroke="#9CA3AF" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-          </div>
-          <div className="lg:hidden w-px h-6 bg-gradient-to-b from-gray-400 to-gray-300" />
+          <ClassicFlowRail>
+            <ClassicFlowArrow />
+            <OraclePanel steps={steps} />
+            <ClassicFlowArrow />
+          </ClassicFlowRail>
 
-          <OraclePanel steps={steps} />
-
-          {/* ARROW */}
-          <div className="hidden lg:flex items-center shrink-0 self-center mt-6">
-            <svg width="40" height="16" viewBox="0 0 40 16" fill="none">
-              <path d="M0 8 H38" stroke="#9CA3AF" strokeWidth="1.5" strokeLinecap="round" />
-              <path d="M34 4 L40 8 L34 12" stroke="#9CA3AF" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
+          <ClassicFlowMobileArrow />
+          <div className="lg:hidden">
+            <OraclePanel steps={steps} />
           </div>
-          <div className="lg:hidden w-px h-6 bg-gradient-to-b from-gray-400 to-gray-300" />
+          <ClassicFlowMobileArrow />
 
           <ResultPanel result={result} />
         </main>

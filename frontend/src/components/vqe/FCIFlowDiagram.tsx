@@ -1,4 +1,4 @@
-import { useId } from 'react';
+import { ClassicFlowArrow } from '../classic-flow';
 import { VQECard, VQE_TYPOGRAPHY } from './layout';
 
 interface FCIFlowDiagramProps {
@@ -62,8 +62,6 @@ const FCI_STEPS = [
 ];
 
 export function FCIFlowDiagram({ activeCheckpoint = 0 }: FCIFlowDiagramProps) {
-  const uid = useId();
-
   // activeCheckpoint 0 = all steps shown (overview mode)
   // For classical tab, show all steps as the "pipeline"
   const maxActive = activeCheckpoint === 0 ? 6 : Math.min(activeCheckpoint, 6);
@@ -234,35 +232,9 @@ function FCIStepBox({
 }
 
 function FCIArrow({ isActive }: { isActive: boolean }) {
-  const color = isActive ? '#3b82f6' : '#cbd5e1';
-  return (
-    <div className="flex items-center justify-center w-6 shrink-0">
-      <svg width="24" height="16" viewBox="0 0 24 16" className="shrink-0">
-        <path
-          d="M0 8h20M14 2l6 6-6 6"
-          fill="none"
-          stroke={color}
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-      </svg>
-    </div>
-  );
+  return <ClassicFlowArrow tone={isActive ? 'blue' : 'slate'} size="sm" className="w-6" />;
 }
 
 function FCIVArrow({ isActive }: { isActive: boolean }) {
-  const color = isActive ? '#3b82f6' : '#cbd5e1';
-  return (
-    <svg width="16" height="24" viewBox="0 0 16 24" className="shrink-0 my-0.5">
-      <path
-        d="M8 0v20M2 14l6 6 6-6"
-        fill="none"
-        stroke={color}
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
+  return <ClassicFlowArrow direction="down" tone={isActive ? 'blue' : 'slate'} className="my-0.5" />;
 }

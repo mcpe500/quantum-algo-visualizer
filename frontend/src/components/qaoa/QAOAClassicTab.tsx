@@ -3,9 +3,10 @@ import { MetricsGrid, MetricCard } from '../layout/MetricsGrid';
 import { GraphVisualization } from '../charts/GraphVisualization';
 import { CutHistoryChart } from '../charts/CutHistoryChart';
 import { InlineEmptyState, SectionCard } from '../layout';
-import { BookOpen, GitBranch, Zap, Cpu } from 'lucide-react';
+import { BookOpen, GitBranch, Zap } from 'lucide-react';
 import { SURFACE_CLASSES, UI_MESSAGES } from '../../constants/ui';
 import { QAOASimulatedAnnealingFlow } from './QAOASimulatedAnnealingFlow';
+import { ClassicFlowArrow } from '../classic-flow';
 
 interface QAOAClassicTabProps {
   result: QAOABenchmarkResult | null;
@@ -40,16 +41,7 @@ export function QAOAClassicTab({ result }: QAOAClassicTabProps) {
               </div>
 
               {/* Arrow */}
-              <div className="flex items-center">
-                <svg width="60" height="24" viewBox="0 0 60 24" className="text-slate-400">
-                  <defs>
-                    <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
-                      <polygon points="0 0, 10 3.5, 0 7" fill="#94a3b8" />
-                    </marker>
-                  </defs>
-                  <line x1="0" y1="12" x2="50" y2="12" stroke="#94a3b8" strokeWidth="2" markerEnd="url(#arrowhead)" />
-                </svg>
-              </div>
+              <ClassicFlowArrow size="lg" />
 
               {/* QAOA Section */}
               <div className="flex-1 text-center">

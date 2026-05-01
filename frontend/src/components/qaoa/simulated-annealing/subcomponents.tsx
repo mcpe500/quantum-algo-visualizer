@@ -1,3 +1,4 @@
+import { ClassicFlowMobileArrow } from '../../classic-flow';
 import { formatNumber, getEdges } from './utils';
 import type { Matrix, StatusColor, TraceStep, CutDetail } from './types';
 
@@ -65,12 +66,7 @@ export function GraphSvg({ matrix, stateString }: { matrix: Matrix; stateString:
 }
 
 export function Arrow() {
-  return (
-    <div className="flex justify-center -my-3 relative z-0 lg:hidden" aria-hidden="true">
-      <div className="w-[2px] h-8 bg-slate-300 rounded-full" />
-      <div className="absolute bottom-0 translate-y-[3px] w-0 h-0 border-x-[5px] border-x-transparent border-t-[8px] border-t-slate-400" />
-    </div>
-  );
+  return <ClassicFlowMobileArrow className="-my-3" />;
 }
 
 export const statusStyleMap: Record<StatusColor, { card: string; badge: string }> = {

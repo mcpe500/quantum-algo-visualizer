@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { ArrowRight } from 'lucide-react';
+import { ClassicFlowArrow } from '../classic-flow';
 
 type Complex = { re: number; im: number };
 
@@ -113,7 +113,7 @@ function getFFTStages(nPoints: number): Array<{ stage: number; label: string; de
 }
 
 export function QFTFlowDiagram({ nPointsOriginal, nPointsPadded, dominantBins, paddedSignal }: QFTFlowDiagramProps) {
-  const signal = paddedSignal ?? [];
+  const signal = useMemo(() => paddedSignal ?? [], [paddedSignal]);
   const trace = useMemo(() => signal.length > 0 ? buildFFTTrace(signal) : null, [signal]);
   const mergeOrder = useMemo(() => trace ? collectMergeOrder(trace) : [], [trace]);
   const stages = useMemo(() => getFFTStages(nPointsPadded), [nPointsPadded]);
@@ -153,7 +153,7 @@ export function QFTFlowDiagram({ nPointsOriginal, nPointsPadded, dominantBins, p
             <p className="text-[10px] text-blue-600 mt-1">Domain: Time</p>
           </div>
 
-          <ArrowRight className="w-5 h-5 text-blue-400 flex-shrink-0 mx-1" />
+          <ClassicFlowArrow tone="blue" size="sm" className="mx-1" />
 
           {/* FFT Stage boxes */}
           {stages.map((s, idx) => (
@@ -166,11 +166,11 @@ export function QFTFlowDiagram({ nPointsOriginal, nPointsPadded, dominantBins, p
                   <p className="text-xs font-bold text-indigo-800">{s.label}</p>
                 </div>
               </div>
-              {idx < stages.length - 1 && <ArrowRight className="w-4 h-4 text-indigo-300 flex-shrink-0 mx-0.5" />}
+              {idx < stages.length - 1 && <ClassicFlowArrow tone="purple" size="sm" className="mx-0.5 scale-90" />}
             </div>
           ))}
 
-          <ArrowRight className="w-5 h-4 text-teal-400 flex-shrink-0 mx-1" />
+          <ClassicFlowArrow tone="emerald" size="sm" className="mx-1" />
 
           {/* Output box */}
           <div className="flex-shrink-0 bg-teal-50 border-2 border-teal-300 rounded-xl px-4 py-3 text-center min-w-[110px]">
