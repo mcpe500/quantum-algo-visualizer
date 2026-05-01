@@ -12,7 +12,6 @@ from qiskit.visualization import circuit_drawer
 from qiskit_aer import AerSimulator
 from qiskit.primitives import BackendEstimatorV2
 
-from api.shared.plotting import figure_to_base64
 from services.common import list_cases, load_case, load_case_canonical
 
 
@@ -26,8 +25,13 @@ def get_vqe_dataset_payload(case_id):
     if raw is None or canonical is None:
         return None
 
-    target_qubits = int(raw.get('preprocessing', {}).get('target_qubits', canonical.get('qubits', 0)))
-    if target_qubits == 2:
+    preprocessing = raw.get('preprocessing', {})
+    target_qubits = int(preprocessing.get('target_qubits', canonical.get('qubits', 0)))
+    initial_qubits = int(preprocessing.get('initial_qubits', target_qubits))
+    qubit_reduction = str(preprocessing.get('qubit_reduction', 'none'))
+    mapping = str(preprocessing.get('mapping', ''))
+
+    if qubit_reduction == 'z2_tapering':
         transform_source = 'z2_tapered_jordan_wigner'
         transform_note = (
             'Canonical 2-qubit Hamiltonian uses the H2/STO-3G Z2-tapered '
@@ -37,7 +41,7 @@ def get_vqe_dataset_payload(case_id):
         transform_source = 'jordan_wigner_mapping'
         transform_note = (
             'Canonical Hamiltonian is produced from the H2/STO-3G preprocessing pipeline '
-            'and Jordan-Wigner mapping into four qubits.'
+            'and Jordan-Wigner mapping into the target qubit register.'
         )
 
     payload = dict(canonical)
@@ -49,8 +53,11 @@ def get_vqe_dataset_payload(case_id):
     }
     payload['transform'] = {
         'source': transform_source,
-        'mapping': raw.get('preprocessing', {}).get('mapping'),
+        'mapping': mapping,
+        'initial_qubits': initial_qubits,
+        'qubit_reduction': qubit_reduction,
         'target_qubits': target_qubits,
+        'hamiltonian_format': preprocessing.get('hamiltonian_format'),
         'canonical_terms': len(canonical.get('hamiltonian', {}).get('terms', {})),
         'note': transform_note,
     }
@@ -170,6 +177,7 @@ def _generate_snapshot_circuit_image(n_qubits, ansatz_type, n_layers, theta_valu
     bound = qc.assign_parameters({params[i]: float(theta_values[i]) for i in range(len(params))})
     fig = circuit_drawer(bound, output='mpl')
     try:
+        from api.shared.plotting import figure_to_base64
         return figure_to_base64(fig)
     finally:
         import matplotlib.pyplot as plt
@@ -471,6 +479,7 @@ def get_vqe_circuit_image_payload(case_id):
 
     try:
         fig = circuit_drawer(bound, output='mpl')
+        from api.shared.plotting import figure_to_base64
         return {
             'case_id': case_id,
             'n_qubits': n_qubits,
