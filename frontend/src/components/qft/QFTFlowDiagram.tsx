@@ -1,4 +1,5 @@
-import { ArrowDown, GitBranch, Combine, FunctionSquare, BarChart3, Info } from 'lucide-react';
+import { useMemo } from 'react';
+import { ArrowRight } from 'lucide-react';
 
 type Complex = { re: number; im: number };
 
@@ -34,398 +35,261 @@ interface QFTFlowDiagramProps {
   paddedSignal?: number[];
 }
 
-const ZERO_COMPLEX: Complex = { re: 0, im: 0 };
+const ZERO: Complex = { re: 0, im: 0 };
 
-function complexAdd(a: Complex, b: Complex): Complex {
+function cmul(a: Complex, b: Complex): Complex {
+  return { re: a.re * b.re - a.im * b.im, im: a.re * b.im + a.im * b.re };
+}
+function cadd(a: Complex, b: Complex): Complex {
   return { re: a.re + b.re, im: a.im + b.im };
 }
-
-function complexSub(a: Complex, b: Complex): Complex {
+function csub(a: Complex, b: Complex): Complex {
   return { re: a.re - b.re, im: a.im - b.im };
 }
-
-function complexMul(a: Complex, b: Complex): Complex {
-  return {
-    re: a.re * b.re - a.im * b.im,
-    im: a.re * b.im + a.im * b.re,
-  };
+function cval(v: number): Complex { return { re: v, im: 0 }; }
+function cstr(c: Complex): string {
+  const r = Math.abs(c.re) < 1e-9 ? 0 : parseFloat(c.re.toFixed(3));
+  const i = Math.abs(c.im) < 1e-9 ? 0 : parseFloat(c.im.toFixed(3));
+  if (i === 0) return `${r}`;
+  if (r === 0) return `${i}j`;
+  return `${r} ${i >= 0 ? '+' : '-'} ${Math.abs(i)}j`;
 }
-
 function twiddle(n: number, k: number): Complex {
   const theta = (-2 * Math.PI * k) / n;
   return { re: Math.cos(theta), im: Math.sin(theta) };
 }
 
-function almostZero(value: number): boolean {
-  return Math.abs(value) < 1e-9;
-}
-
-function fmtReal(value: number): string {
-  if (almostZero(value)) return '0';
-  const rounded = Number(value.toFixed(4));
-  if (Number.isInteger(rounded)) return `${rounded}`;
-  return `${rounded}`;
-}
-
-function fmtComplex(value: Complex): string {
-  const re = almostZero(value.re) ? 0 : Number(value.re.toFixed(4));
-  const im = almostZero(value.im) ? 0 : Number(value.im.toFixed(4));
-
-  if (im === 0) return `${re}`;
-  if (re === 0) {
-    if (im === 1) return 'j';
-    if (im === -1) return '-j';
-    return `${im}j`;
-  }
-
-  const sign = im >= 0 ? '+' : '-';
-  const absIm = Math.abs(im);
-  const imPart = absIm === 1 ? 'j' : `${absIm}j`;
-  return `${re} ${sign} ${imPart}`;
-}
-
-function formatArrayReal(arr: number[], maxItems = 12): string {
-  if (arr.length === 0) return '[]';
-  const shown = arr.slice(0, maxItems).map((v) => fmtReal(v));
-  if (arr.length > maxItems) shown.push('...');
-  return `[${shown.join(', ')}]`;
-}
-
-function formatArrayComplex(arr: Complex[], maxItems = 12): string {
-  if (arr.length === 0) return '[]';
-  const shown = arr.slice(0, maxItems).map((v) => fmtComplex(v));
-  if (arr.length > maxItems) shown.push('...');
-  return `[${shown.join(', ')}]`;
-}
-
-function formatIndices(arr: number[], maxItems = 10): string {
-  if (arr.length === 0) return '[]';
-  const shown = arr.slice(0, maxItems).map((v) => `${v}`);
-  if (arr.length > maxItems) shown.push('...');
-  return `[${shown.join(', ')}]`;
-}
-
-function buildFFTTrace(signal: number[], indices: number[], depth = 0): FFTTraceNode {
+function buildFFTTrace(signal: number[]): FFTTraceNode {
   const n = signal.length;
   if (n === 1) {
-    return {
-      size: 1,
-      depth,
-      input: signal,
-      inputIndices: indices,
-      evenInput: signal,
-      evenIndices: indices,
-      oddInput: [],
-      oddIndices: [],
-      output: [{ re: signal[0] ?? 0, im: 0 }],
-      butterflyRows: [],
-    };
+    return { size: 1, depth: 0, input: signal, inputIndices: [0],
+      evenInput: signal, evenIndices: [0], oddInput: [], oddIndices: [],
+      output: [cval(signal[0])], butterflyRows: [] };
   }
-
   const evenInput = signal.filter((_, i) => i % 2 === 0);
   const oddInput = signal.filter((_, i) => i % 2 !== 0);
-  const evenIndices = indices.filter((_, i) => i % 2 === 0);
-  const oddIndices = indices.filter((_, i) => i % 2 !== 0);
-
-  const evenNode = buildFFTTrace(evenInput, evenIndices, depth + 1);
-  const oddNode = buildFFTTrace(oddInput, oddIndices, depth + 1);
-
-  const output: Complex[] = Array.from({ length: n }, () => ({ ...ZERO_COMPLEX }));
-  const butterflyRows: ButterflyRow[] = [];
-
-  for (let k = 0; k < n / 2; k += 1) {
-    const evenValue = evenNode.output[k] ?? ZERO_COMPLEX;
-    const oddValue = oddNode.output[k] ?? ZERO_COMPLEX;
-    const wk = twiddle(n, k);
-    const twiddledOdd = complexMul(wk, oddValue);
-    const top = complexAdd(evenValue, twiddledOdd);
-    const bottom = complexSub(evenValue, twiddledOdd);
-
-    output[k] = top;
-    output[k + n / 2] = bottom;
-    butterflyRows.push({
-      k,
-      twiddle: wk,
-      even: evenValue,
-      odd: oddValue,
-      twiddledOdd,
-      top,
-      bottom,
-    });
+  const evenIndices = signal.map((_, i) => i).filter((_, i) => i % 2 === 0);
+  const oddIndices = signal.map((_, i) => i).filter((_, i) => i % 2 !== 0);
+  const even = buildFFTTrace(evenInput);
+  const odd = buildFFTTrace(oddInput);
+  const rows: ButterflyRow[] = [];
+  const output: Complex[] = Array.from({ length: n }, () => ({ ...ZERO }));
+  for (let k = 0; k < n / 2; k++) {
+    const e = even.output[k] ?? ZERO;
+    const o = odd.output[k] ?? ZERO;
+    const w = twiddle(n, k);
+    const wo = cmul(w, o);
+    rows.push({ k, twiddle: w, even: e, odd: o, twiddledOdd: wo, top: cadd(e, wo), bottom: csub(e, wo) });
+    output[k] = cadd(e, wo);
+    output[k + n / 2] = csub(e, wo);
   }
-
-  return {
-    size: n,
-    depth,
-    input: signal,
-    inputIndices: indices,
-    evenInput,
-    evenIndices,
-    oddInput,
-    oddIndices,
-    output,
-    butterflyRows,
-    evenNode,
-    oddNode,
-  };
-}
-
-function collectNodesByDepth(root: FFTTraceNode): FFTTraceNode[][] {
-  const levels: FFTTraceNode[][] = [];
-  const queue: FFTTraceNode[] = [root];
-
-  while (queue.length > 0) {
-    const node = queue.shift();
-    if (!node) continue;
-    if (!levels[node.depth]) levels[node.depth] = [];
-    levels[node.depth].push(node);
-    if (node.evenNode) queue.push(node.evenNode);
-    if (node.oddNode) queue.push(node.oddNode);
-  }
-
-  return levels.filter((level) => level.length > 0);
+  return { size: n, depth: 0, input: signal, inputIndices: signal.map((_, i) => i),
+    evenInput, evenIndices, oddInput, oddIndices, output, butterflyRows: rows, evenNode: even, oddNode: odd };
 }
 
 function collectMergeOrder(node: FFTTraceNode): FFTTraceNode[] {
   if (node.size === 1) return [];
-  const left = node.evenNode ? collectMergeOrder(node.evenNode) : [];
-  const right = node.oddNode ? collectMergeOrder(node.oddNode) : [];
-  return [...left, ...right, node];
+  const l = node.evenNode ? collectMergeOrder(node.evenNode) : [];
+  const r = node.oddNode ? collectMergeOrder(node.oddNode) : [];
+  return [...l, ...r, node];
+}
+
+// Stages of Cooley-Tukey Radix-2 FFT
+function getFFTStages(nPoints: number): Array<{ stage: number; label: string; description: string }> {
+  const stages = [];
+  let size = nPoints;
+  let stage = 1;
+  while (size >= 2) {
+    const half = size / 2;
+    stages.push({
+      stage,
+      label: `Stage ${stage}: ${half}x 2-pt butterfly`,
+      description: `${half} parallel 2-point DFT butterflies, each: top=E+O·W, bot=E−O·W`,
+    });
+    size = half;
+    stage++;
+  }
+  return stages;
 }
 
 export function QFTFlowDiagram({ nPointsOriginal, nPointsPadded, dominantBins, paddedSignal }: QFTFlowDiagramProps) {
   const signal = paddedSignal ?? [];
-  const trace = signal.length > 0
-    ? buildFFTTrace(signal, signal.map((_, index) => index))
-    : null;
-  const levels = trace ? collectNodesByDepth(trace) : [];
-  const mergeOrder = trace ? collectMergeOrder(trace) : [];
+  const trace = useMemo(() => signal.length > 0 ? buildFFTTrace(signal) : null, [signal]);
+  const mergeOrder = useMemo(() => trace ? collectMergeOrder(trace) : [], [trace]);
+  const stages = useMemo(() => getFFTStages(nPointsPadded), [nPointsPadded]);
   const isPadded = nPointsOriginal !== nPointsPadded;
+  const isLarge = nPointsPadded > 16;
 
-  const shouldCompact = nPointsPadded > 16;
-  const butterflyRowsLimit = shouldCompact ? 2 : 6;
-  const previewLevels = levels.slice(0, shouldCompact ? 2 : 3);
-  const hiddenLevelsCount = Math.max(0, levels.length - previewLevels.length);
-  const butterflyFocusNodes = mergeOrder
-    .filter((node) => node.size > 1)
-    .sort((a, b) => b.size - a.size)
-    .slice(0, shouldCompact ? 2 : 3);
-  const hiddenButterflyCount = Math.max(0, mergeOrder.length - butterflyFocusNodes.length);
+  // Show only a compact butterfly diagram — largest merge nodes
+  const focusButterflies = useMemo(() => {
+    if (!trace) return [];
+    return mergeOrder.filter(n => n.size > 1).slice(0, isLarge ? 2 : 3);
+  }, [trace, mergeOrder, isLarge]);
+
+  const inputLabel = isPadded
+    ? `${nPointsOriginal} pts → padded ${nPointsPadded}`
+    : `${nPointsOriginal} pts`;
 
   return (
-    <div className="bg-gradient-to-br from-slate-50 via-white to-cyan-50 border border-slate-200 rounded-2xl p-6 mb-6 font-sans overflow-hidden">
-      <div className="flex items-center justify-between mb-8 pb-4 border-b border-blue-100">
+    <div className="bg-gradient-to-br from-slate-50 to-cyan-50 border border-slate-200 rounded-2xl p-5 mb-6 font-sans">
+      {/* Header */}
+      <div className="flex items-center justify-between mb-5 pb-3 border-b border-blue-200">
         <div>
-          <h3 className="text-xl font-bold text-gray-800 tracking-tight">
-            Alur FFT Klasik Dinamis (Cooley-Tukey Radix-2)
-          </h3>
-          <p className="text-sm text-gray-500 mt-1">
-            Penjelasan otomatis dibangun dari sinyal pada JSON case yang sedang dijalankan.
-          </p>
+          <h3 className="text-lg font-bold text-gray-800">FFT Pipeline — Cooley-Tukey Radix-2</h3>
+          <p className="text-xs text-gray-500 mt-0.5">Input signal → {stages.length} FFT stages → Frequency spectrum</p>
         </div>
-        <div className="hidden md:flex items-center gap-2 bg-cyan-100/70 px-3 py-1.5 rounded-lg border border-cyan-200">
-          <Info className="w-4 h-4 text-cyan-700" />
-          <span className="text-xs font-medium text-cyan-900">Kompleksitas: O(N log N)</span>
+        <div className="bg-cyan-100 border border-cyan-200 px-3 py-1.5 rounded-lg">
+          <span className="text-xs font-bold text-cyan-800">O(N log N) · N={nPointsPadded}</span>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 items-start relative">
-
-        <div className="w-full xl:col-span-4 bg-white border border-gray-200 rounded-xl p-5 shadow-sm hover:shadow-md transition-shadow relative z-10 flex flex-col gap-4">
-          <div className="bg-blue-100 p-3 rounded-lg">
-            <FunctionSquare className="w-6 h-6 text-blue-600" />
-          </div>
-          <div className="flex-1 text-center md:text-left">
-            <p className="text-base font-semibold text-gray-800">1. Sinyal Input (Domain Waktu)</p>
-            <p className="text-sm text-gray-600 mt-1 mb-2">
-              Sinyal asli memiliki <span className="font-semibold">{nPointsOriginal}</span> titik data.
-              {isPadded && ` Karena ${nPointsOriginal} bukan perpangkatan dua, dilakukan zero-padding menjadi ${nPointsPadded} titik.`}
-            </p>
-            <div className="bg-slate-50 border border-slate-200 rounded p-2 overflow-hidden">
-              <p className="text-xs text-slate-700 font-mono break-all">{formatArrayReal(signal)}</p>
-            </div>
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div className="bg-indigo-50 border border-indigo-100 px-4 py-2 rounded-lg text-center min-w-[80px]">
-              <span className="block text-[10px] text-indigo-500 font-bold uppercase tracking-wider">Ukuran</span>
-              <span className="block text-lg font-bold text-indigo-700">N={nPointsPadded}</span>
-            </div>
-            <div className="bg-cyan-50 border border-cyan-100 px-4 py-2 rounded-lg text-center min-w-[80px]">
-              <span className="block text-[10px] text-cyan-600 font-bold uppercase tracking-wider">Orientasi</span>
-              <span className="block text-sm font-bold text-cyan-800">Landscape</span>
-            </div>
-          </div>
-        </div>
-
-        {/* Arrow Down */}
-        <div className="flex xl:hidden flex-col items-center -my-2 relative z-0">
-          <div className="w-px h-8 bg-blue-300"></div>
-          <ArrowDown className="w-5 h-5 text-blue-400" />
-        </div>
-
-        <div className="w-full xl:col-span-8 bg-white border border-indigo-200 rounded-xl p-5 shadow-sm hover:shadow-md transition-shadow relative z-10">
-          <div className="flex items-start gap-4 mb-4">
-            <div className="bg-indigo-100 p-3 rounded-lg">
-              <GitBranch className="w-6 h-6 text-indigo-600" />
-            </div>
-            <div>
-              <p className="text-base font-semibold text-gray-800">2. Split Rekursif Genap-Ganjil (Divide)</p>
-              <p className="text-sm text-gray-600 mt-1">
-                Struktur split ditampilkan secara ringkas agar alur FFT terbaca lebih cepat. Detail penuh tetap direpresentasikan oleh trace dinamis dari data JSON aktif.
-              </p>
-            </div>
+      {/* STAGE FLOW — Single row of stages with arrows */}
+      <div className="mb-6">
+        <div className="flex items-center gap-0 overflow-x-auto pb-2">
+          {/* Input box */}
+          <div className="flex-shrink-0 bg-blue-50 border-2 border-blue-300 rounded-xl px-4 py-3 text-center min-w-[110px]">
+            <p className="text-[10px] text-blue-500 font-bold uppercase tracking-wider mb-1">1 · INPUT</p>
+            <p className="text-sm font-bold text-blue-800">{inputLabel}</p>
+            <p className="text-[10px] text-blue-600 mt-1">Domain: Time</p>
           </div>
 
-          <div className="space-y-3">
-            {previewLevels.map((nodes, depth) => (
-              <div key={`depth-${depth}`} className="rounded-lg border border-slate-200 bg-slate-50/70 p-3">
-                <p className="text-xs font-semibold text-slate-700 mb-2">
-                  Level {depth} {depth === 0 ? '(Root)' : ''}
-                </p>
-                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
-                  {nodes.map((node, index) => (
-                    <div key={`node-${depth}-${index}`} className="rounded-md border border-indigo-100 bg-white p-3">
-                      <p className="text-xs font-semibold text-indigo-900">Node N={node.size}</p>
-                      <p className="text-[11px] text-slate-600 mt-1">
-                        indeks: {formatIndices(node.inputIndices, shouldCompact ? 6 : 10)}
-                      </p>
-                      <p className="text-[11px] font-mono text-slate-700 mt-1 break-all">
-                        x = {formatArrayReal(node.input, shouldCompact ? 6 : 8)}
-                      </p>
-                      {node.size > 1 && (
-                        <div className="grid grid-cols-1 gap-1 mt-2">
-                          <p className="text-[11px] text-indigo-700">
-                            genap {formatIndices(node.evenIndices, shouldCompact ? 4 : 6)}: {formatArrayReal(node.evenInput, shouldCompact ? 4 : 6)}
-                          </p>
-                          <p className="text-[11px] text-purple-700">
-                            ganjil {formatIndices(node.oddIndices, shouldCompact ? 4 : 6)}: {formatArrayReal(node.oddInput, shouldCompact ? 4 : 6)}
-                          </p>
-                        </div>
-                      )}
-                    </div>
-                  ))}
+          <ArrowRight className="w-5 h-5 text-blue-400 flex-shrink-0 mx-1" />
+
+          {/* FFT Stage boxes */}
+          {stages.map((s, idx) => (
+            <div key={s.stage} className="flex items-center gap-0 flex-shrink-0">
+              <div className="flex flex-col items-center">
+                <div className="bg-indigo-50 border-2 border-indigo-300 rounded-xl px-3 py-3 text-center min-w-[120px]">
+                  <p className="text-[10px] text-indigo-500 font-bold uppercase tracking-wider mb-1">
+                    {idx + 2} · STAGE {s.stage}
+                  </p>
+                  <p className="text-xs font-bold text-indigo-800">{s.label}</p>
                 </div>
               </div>
-            ))}
-            {hiddenLevelsCount > 0 && (
-              <div className="rounded-lg border border-dashed border-indigo-200 bg-indigo-50/60 p-3">
-                <p className="text-[11px] text-indigo-800">
-                  {hiddenLevelsCount} level split lanjutan disingkat agar diagram tetap berbentuk landscape dan mudah dicapture.
-                </p>
+              {idx < stages.length - 1 && <ArrowRight className="w-4 h-4 text-indigo-300 flex-shrink-0 mx-0.5" />}
+            </div>
+          ))}
+
+          <ArrowRight className="w-5 h-4 text-teal-400 flex-shrink-0 mx-1" />
+
+          {/* Output box */}
+          <div className="flex-shrink-0 bg-teal-50 border-2 border-teal-300 rounded-xl px-4 py-3 text-center min-w-[110px]">
+            <p className="text-[10px] text-teal-500 font-bold uppercase tracking-wider mb-1">
+              {stages.length + 2} · OUTPUT
+            </p>
+            <p className="text-sm font-bold text-teal-800">FFT Spectrum</p>
+            <p className="text-[10px] text-teal-600 mt-1">Domain: Freq</p>
+          </div>
+        </div>
+      </div>
+
+      {/* BUTTERFLY DIAGRAM — Stage-by-stage visualization */}
+      <div className="bg-white border border-purple-200 rounded-xl p-4 mb-5">
+        <div className="flex items-center gap-3 mb-4">
+          <div className="bg-purple-100 p-2 rounded-lg">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+              <path d="M2 8 L6 4 M2 8 L6 12 M6 4 L10 2 M6 12 L10 14 M10 2 L14 8 M10 14 L14 8" stroke="#7c3aed" strokeWidth="1.5" strokeLinecap="round"/>
+            </svg>
+          </div>
+          <div>
+            <p className="text-sm font-bold text-gray-800">Butterfly Operation — Twiddle Factor</p>
+            <p className="text-xs text-gray-500">X[k] = E[k] + W_N^k · O[k] &nbsp;|&nbsp; X[k+N/2] = E[k] − W_N^k · O[k]</p>
+          </div>
+        </div>
+
+        <div className="flex items-start gap-4 overflow-x-auto">
+          {focusButterflies.map((node, ni) => (
+            <div key={ni} className="flex-shrink-0">
+              {/* Butterfly SVG diagram */}
+              <div className="bg-purple-50 border border-purple-200 rounded-lg px-3 py-2 mb-2 text-center">
+                <p className="text-[10px] font-bold text-purple-700">Butterfly N={node.size}</p>
               </div>
-            )}
-          </div>
-        </div>
+              <svg width="200" height={node.size > 4 ? 120 : 90} viewBox="0 0 200 90">
+                {/* Input lines */}
+                <line x1="0" y1="15" x2="60" y2="15" stroke="#6366f1" strokeWidth="2"/>
+                <line x1="0" y1="75" x2="60" y2="75" stroke="#6366f1" strokeWidth="2"/>
+                {/* Even label */}
+                <text x="5" y="11" fontSize="10" fill="#4338ca" fontFamily="monospace">E[{node.evenIndices.slice(0,3).join(',')}]</text>
+                {/* Odd label */}
+                <text x="5" y="85" fontSize="10" fill="#9333ea" fontFamily="monospace">O[{node.oddIndices.slice(0,3).join(',')}]</text>
 
-        <div className="flex xl:hidden flex-col items-center -my-2 relative z-0">
-          <div className="w-px h-8 bg-purple-300"></div>
-          <ArrowDown className="w-5 h-5 text-purple-400" />
-        </div>
+                {/* Center box */}
+                <rect x="60" y="5" width="80" height="80" rx="8" fill="#f5f3ff" stroke="#a78bfa" strokeWidth="2"/>
+                <text x="100" y="24" fontSize="9" fill="#6b21a8" fontFamily="monospace" textAnchor="middle">{`W_N^k=${cstr(node.butterflyRows[0]?.twiddle ?? ZERO)}`}</text>
+                <text x="100" y="38" fontSize="9" fill="#7c3aed" fontFamily="monospace" textAnchor="middle">top=E+O·W</text>
+                <text x="100" y="52" fontSize="9" fill="#7c3aed" fontFamily="monospace" textAnchor="middle">bot=E−O·W</text>
+                {/* Small butterfly lines inside */}
+                <line x1="70" y1="15" x2="120" y2="15" stroke="#6366f1" strokeWidth="1" strokeDasharray="3,2"/>
+                <line x1="70" y1="75" x2="120" y2="75" stroke="#6366f1" strokeWidth="1" strokeDasharray="3,2"/>
+                <line x1="70" y1="15" x2="120" y2="75" stroke="#9333ea" strokeWidth="1" strokeDasharray="3,2"/>
+                <line x1="70" y1="75" x2="120" y2="15" stroke="#9333ea" strokeWidth="1" strokeDasharray="3,2"/>
 
-        <div className="w-full xl:col-span-8 bg-white border border-purple-200 rounded-xl p-5 shadow-sm hover:shadow-md transition-shadow relative z-10">
-          <div className="flex flex-col md:flex-row gap-4 items-center mb-4">
-            <div className="bg-purple-100 p-3 rounded-lg">
-              <Combine className="w-6 h-6 text-purple-600" />
-            </div>
-            <div className="flex-1 text-center md:text-left">
-              <p className="text-base font-semibold text-gray-800">3. Butterfly Rekursif + Twiddle Factor (Conquer)</p>
-              <p className="text-sm text-gray-600 mt-1 mb-2">
-                Penggabungan ditampilkan pada node-node paling representatif. Pola perhitungannya tetap sama, tetapi contoh dibatasi agar tampilan tidak menjulur ke bawah.
-              </p>
-            </div>
-            <div className="bg-slate-50 border border-slate-200 px-4 py-2 rounded-lg text-center">
-              <p className="text-[11px] font-mono text-purple-700 font-semibold mb-1">X[k] = E[k] + W_N^k · O[k]</p>
-              <p className="text-[11px] font-mono text-purple-700 font-semibold">X[k+N/2] = E[k] - W_N^k · O[k]</p>
-            </div>
-          </div>
+                {/* Output lines */}
+                <line x1="140" y1="30" x2="200" y2="30" stroke="#059669" strokeWidth="2"/>
+                <line x1="140" y1="60" x2="200" y2="60" stroke="#059669" strokeWidth="2"/>
+                <text x="160" y="26" fontSize="10" fill="#047857" fontFamily="monospace">Y[k]=top</text>
+                <text x="160" y="74" fontSize="10" fill="#047857" fontFamily="monospace">Y[k+N/2]=bot</text>
+              </svg>
 
-          <div className="grid grid-cols-1 xl:grid-cols-2 gap-3">
-            {butterflyFocusNodes.map((node, nodeIndex) => {
-              const rows = node.butterflyRows.slice(0, butterflyRowsLimit);
-              const hasHidden = node.butterflyRows.length > rows.length;
-
-              return (
-                <div key={`merge-${node.size}-${node.depth}-${nodeIndex}`} className="rounded-lg border border-purple-100 bg-purple-50/40 p-3">
-                  <p className="text-xs font-semibold text-purple-900 mb-2">
-                    Merge Node N={node.size} (indeks [{node.inputIndices.join(', ')}])
-                  </p>
-                  <div className="space-y-2">
-                    {rows.map((row) => {
-                      const topIndex = row.k;
-                      const bottomIndex = row.k + node.size / 2;
-                      return (
-                        <div key={`row-${node.size}-${row.k}`} className="rounded-md border border-purple-200 bg-white p-2">
-                          <p className="text-[11px] font-semibold text-slate-700">k={row.k}, W_{node.size}^{row.k} = {fmtComplex(row.twiddle)}</p>
-                          <p className="text-[11px] font-mono text-slate-700 mt-1 break-all">
-                            X[{topIndex}] = {fmtComplex(row.even)} + ({fmtComplex(row.twiddle)})*({fmtComplex(row.odd)})
-                            {' = '}
-                            {fmtComplex(row.even)} + {fmtComplex(row.twiddledOdd)} = {fmtComplex(row.top)}
-                          </p>
-                          <p className="text-[11px] font-mono text-slate-700 mt-1 break-all">
-                            X[{bottomIndex}] = {fmtComplex(row.even)} - ({fmtComplex(row.twiddle)})*({fmtComplex(row.odd)})
-                            {' = '}
-                            {fmtComplex(row.even)} - {fmtComplex(row.twiddledOdd)} = {fmtComplex(row.bottom)}
-                          </p>
-                        </div>
-                      );
-                    })}
-                    {hasHidden && (
-                      <p className="text-[11px] text-purple-700 italic">
-                        ... {node.butterflyRows.length - rows.length} pasangan butterfly lain disingkat agar tampilan tetap terbaca.
-                      </p>
-                    )}
+              {/* Numeric detail */}
+              <div className="bg-slate-50 border border-slate-200 rounded p-2 mt-1">
+                {node.butterflyRows.slice(0, 2).map(row => (
+                  <div key={row.k} className="text-[10px] font-mono text-slate-700 leading-relaxed">
+                    k={row.k}: top={cstr(row.top)} bot={cstr(row.bottom)}
                   </div>
-                  <p className="text-[11px] font-mono text-purple-900 mt-3 break-all">
-                    Output node N={node.size}: {formatArrayComplex(node.output, shouldCompact ? 8 : 12)}
-                  </p>
-                </div>
-              );
-            })}
-          </div>
-          {hiddenButterflyCount > 0 && (
-            <div className="rounded-lg border border-dashed border-purple-200 bg-purple-50/50 p-3 mt-3">
-              <p className="text-[11px] text-purple-800">
-                {hiddenButterflyCount} node merge lain diringkas. Fokus utama diarahkan ke node terbesar karena paling relevan untuk pembacaan hasil akhir FFT.
-              </p>
+                ))}
+                {node.butterflyRows.length > 2 && (
+                  <div className="text-[10px] text-purple-500 italic mt-1">
+                    +{node.butterflyRows.length - 2} more pairs
+                  </div>
+                )}
+              </div>
             </div>
-          )}
+          ))}
         </div>
+      </div>
 
-        <div className="flex xl:hidden flex-col items-center -my-2 relative z-0">
-          <div className="w-px h-8 bg-teal-300"></div>
-          <ArrowDown className="w-5 h-5 text-teal-400" />
+      {/* TRANSFORM PIPELINE — What happens at each stage */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+        {([
+          { num: 1, bg: 'bg-blue-50', border: 'border-blue-200', label: 'text-blue-600', title: 'text-blue-800', desc: 'text-blue-600', title_text: 'Split Even/Odd', desc_text: `x_even = x[0,2,4,...], x_odd = x[1,3,5,...]` },
+          { num: 2, bg: 'bg-indigo-50', border: 'border-indigo-200', label: 'text-indigo-600', title: 'text-indigo-800', desc: 'text-indigo-600', title_text: 'Recursive FFT', desc_text: `Apply FFT to even & odd sub-signals independently` },
+          { num: 3, bg: 'bg-purple-50', border: 'border-purple-200', label: 'text-purple-600', title: 'text-purple-800', desc: 'text-purple-600', title_text: 'Twiddle Multiply', desc_text: `O[k] × W_N^k — phase rotation per frequency bin` },
+          { num: 4, bg: 'bg-teal-50', border: 'border-teal-200', label: 'text-teal-600', title: 'text-teal-800', desc: 'text-teal-600', title_text: 'Butterfly Combine', desc_text: `Y[k] = E[k] ± O[k]·W — add/subtract for 2 outputs` },
+        ] as const).map(item => (
+          <div key={item.num} className={`${item.bg} ${item.border} rounded-lg px-3 py-2`}>
+            <p className={`text-[10px] font-bold ${item.label} uppercase tracking-wider mb-1`}>Step {item.num}</p>
+            <p className={`text-xs font-semibold ${item.title}`}>{item.title_text}</p>
+            <p className={`text-[10px] ${item.desc} mt-0.5 leading-tight`}>{item.desc_text}</p>
+          </div>
+        ))}
+      </div>
+
+      {/* OUTPUT FREQUENCY BINS */}
+      <div className="bg-teal-50 border border-teal-200 rounded-xl p-4">
+        <div className="flex items-center justify-between mb-3">
+          <div>
+            <p className="text-sm font-bold text-teal-800">Dominant Frequency Bins</p>
+            <p className="text-xs text-teal-600">Peak bins from FFT output (magnitude spectrum)</p>
+          </div>
+          <div className="bg-white border border-teal-300 px-3 py-1.5 rounded-lg text-center">
+            <span className="text-[10px] text-teal-500 font-bold uppercase tracking-wider">Total Bins</span>
+            <span className="block text-lg font-bold text-teal-700">{nPointsPadded}</span>
+          </div>
         </div>
-
-        <div className="w-full xl:col-span-4 bg-white border-2 border-teal-200 rounded-xl p-5 shadow-sm hover:shadow-md transition-shadow relative z-10 flex flex-col gap-4">
-          <div className="bg-teal-100 p-3 rounded-lg">
-            <BarChart3 className="w-6 h-6 text-teal-600" />
-          </div>
-          <div className="flex-1 text-center md:text-left">
-            <p className="text-base font-semibold text-gray-800">4. Spektrum Akhir (Domain Frekuensi)</p>
-            <p className="text-sm text-gray-600 mt-1">
-              Setelah seluruh merge selesai, didapat FFT final untuk case aktif. Perubahan JSON input akan otomatis mengubah semua tahap split, butterfly, dan spektrum ini.
-            </p>
-            {trace && (
-              <p className="text-[11px] font-mono text-teal-900 mt-2 break-all">
-                FFT(x) = {formatArrayComplex(trace.output, shouldCompact ? 8 : 12)}
-              </p>
-            )}
-          </div>
-          <div className="bg-teal-50 border border-teal-100 px-4 py-3 rounded-lg text-center min-w-[120px]">
-            <span className="block text-[10px] text-teal-600 font-bold uppercase tracking-wider mb-1">Puncak Dominan</span>
-            <div className="flex flex-wrap justify-center gap-1">
-              {dominantBins.map((bin, i) => (
-                <span key={i} className="bg-white border border-teal-200 text-teal-800 px-2 py-0.5 rounded text-xs font-bold">
-                  Bin {bin}
-                </span>
-              ))}
-              {dominantBins.length === 0 && (
-                <span className="text-teal-400 text-xs italic">N/A</span>
-              )}
+        <div className="flex flex-wrap gap-2">
+          {dominantBins.length > 0 ? dominantBins.map((bin, i) => (
+            <div key={i} className="bg-white border-2 border-teal-400 text-teal-800 px-3 py-1.5 rounded-lg text-center">
+              <span className="text-xs font-bold">Bin {bin}</span>
             </div>
-          </div>
+          )) : <span className="text-teal-400 text-xs italic">No dominant bins computed</span>}
         </div>
-
+        {isPadded && (
+          <p className="text-[10px] text-teal-600 mt-2">
+            Note: Signal was zero-padded from {nPointsOriginal} → {nPointsPadded} for power-of-2 FFT compatibility.
+            Dominant bins are computed from the padded signal FFT.
+          </p>
+        )}
       </div>
     </div>
   );

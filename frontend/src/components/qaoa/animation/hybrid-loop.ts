@@ -7,7 +7,7 @@ export function buildHybridLoopModel(data: QAOAAnimationPayload, activeStep: QAO
   const firstExpected = data.checkpoints[0]?.expected_cut ?? 0;
 
   return {
-    intro: `QAOA memakai loop hybrid: optimizer klasik memilih parameter, sirkuit kuantum mengevaluasi expected cut, lalu hasilnya dipakai untuk memperbarui parameter berikutnya.`,
+    intro: `QAOA adalah algoritma HYBRID: optimizer klasik memilih parameter (γ, β), sirkuit kuantum menyiapkan state |ψ(γ,β)⟩, lalu hasil pengukuran dipakai untuk memperbarui parameter secara iteratif hingga konvergen ke optimum aproksimasi.`,
     activeCheckpoint,
     firstExpected,
     bestExpected,
