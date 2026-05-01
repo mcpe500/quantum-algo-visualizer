@@ -7,7 +7,7 @@ import { CutDistributionChart } from '../charts/CutDistributionChart';
 import { CircuitDisplay } from '../layout/CircuitDisplay';
 import { TraceTable } from '../layout/TraceTable';
 import { InlineEmptyState, SectionCard } from '../layout';
-import { Cpu } from 'lucide-react';
+import { Cpu, GitBranch, RefreshCw, ArrowRight } from 'lucide-react';
 import { SURFACE_CLASSES, UI_MESSAGES } from '../../constants/ui';
 
 interface QAOAQuantumTabProps {
@@ -23,7 +23,77 @@ export function QAOAQuantumTab({ result, circuitImage, trace }: QAOAQuantumTabPr
 
   return (
     <div className="space-y-6">
-      <SectionCard title="Quantum Approximate Optimization Algorithm (QAOA)" icon={<Cpu className="w-5 h-5" />}>
+      <SectionCard title="QAOA Hybrid Loop" icon={<GitBranch className="w-5 h-5" />}>
+        {/* Hybrid Loop Diagram */}
+        <div className="bg-gradient-to-br from-slate-50 to-purple-50 rounded-xl border border-slate-200 p-5 mb-6">
+          <p className="text-xs font-semibold uppercase tracking-widest text-slate-500 mb-4">Hybrid Classical-Quantum Loop</p>
+
+          <div className="flex items-center justify-between gap-3">
+            {/* Classical Init */}
+            <div className="flex-1 text-center p-3 bg-blue-50 rounded-lg border border-blue-200">
+              <div className="w-10 h-10 mx-auto mb-2 bg-blue-500 rounded-full flex items-center justify-center">
+                <span className="text-white font-bold text-sm">1</span>
+              </div>
+              <p className="text-xs font-bold text-blue-900 mb-1">Classical</p>
+              <p className="text-xs text-blue-700">Initialize γ, β</p>
+              <p className="text-xs text-blue-600 mt-1 font-mono">γ = [{result.quantum.initial_gamma.map(g => g.toFixed(2)).join(', ')}]</p>
+              <p className="text-xs text-blue-600 font-mono">β = [{result.quantum.initial_beta.map(b => b.toFixed(2)).join(', ')}]</p>
+            </div>
+
+            {/* Arrow */}
+            <ArrowRight className="w-5 h-5 text-slate-400 shrink-0" />
+
+            {/* Quantum Prepare */}
+            <div className="flex-1 text-center p-3 bg-purple-50 rounded-lg border border-purple-200">
+              <div className="w-10 h-10 mx-auto mb-2 bg-purple-500 rounded-full flex items-center justify-center">
+                <span className="text-white font-bold text-sm">2</span>
+              </div>
+              <p className="text-xs font-bold text-purple-900 mb-1">Quantum</p>
+              <p className="text-xs text-purple-700">Prepare |ψ(γ,β)⟩</p>
+              <p className="text-xs text-purple-600 mt-1 font-mono">|ψ⟩ = Π U_C U_B |+⟩</p>
+            </div>
+
+            {/* Arrow */}
+            <ArrowRight className="w-5 h-5 text-slate-400 shrink-0" />
+
+            {/* Quantum Measure */}
+            <div className="flex-1 text-center p-3 bg-emerald-50 rounded-lg border border-emerald-200">
+              <div className="w-10 h-10 mx-auto mb-2 bg-emerald-500 rounded-full flex items-center justify-center">
+                <span className="text-white font-bold text-sm">3</span>
+              </div>
+              <p className="text-xs font-bold text-emerald-900 mb-1">Quantum</p>
+              <p className="text-xs text-emerald-700">Measure samples</p>
+              <p className="text-xs text-emerald-600 mt-1">estimate cost</p>
+              <p className="text-xs text-emerald-600 font-mono">⟨ψ|H_C|ψ⟩</p>
+            </div>
+
+            {/* Arrow */}
+            <ArrowRight className="w-5 h-5 text-slate-400 shrink-0" />
+
+            {/* Classical Update */}
+            <div className="flex-1 text-center p-3 bg-amber-50 rounded-lg border border-amber-200">
+              <div className="w-10 h-10 mx-auto mb-2 bg-amber-500 rounded-full flex items-center justify-center">
+                <span className="text-white font-bold text-sm">4</span>
+              </div>
+              <p className="text-xs font-bold text-amber-900 mb-1">Classical</p>
+              <p className="text-xs text-amber-700">SPSA/COBYLA</p>
+              <p className="text-xs text-amber-600 mt-1">updates parameters</p>
+            </div>
+          </div>
+
+          {/* Loop indicator */}
+          <div className="mt-4 pt-4 border-t border-slate-200">
+            <div className="flex items-center justify-center gap-2">
+              <RefreshCw className="w-4 h-4 text-purple-500" />
+              <span className="text-xs text-slate-600 font-medium">Loop until converged</span>
+              <span className="text-xs text-slate-500">→</span>
+              <span className="px-3 py-1 bg-emerald-100 text-emerald-800 text-xs font-bold rounded-full border border-emerald-300">
+                Approximate optimum
+              </span>
+            </div>
+          </div>
+        </div>
+
         <MetricsGrid>
           <MetricCard label="Qubits" value={result.quantum.n_qubits} />
           <MetricCard label="p Layers" value={result.quantum.p_layers} />

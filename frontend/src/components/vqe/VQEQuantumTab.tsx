@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import type { VQEBenchmarkResult } from '../../types/vqe';
 import type { VQECircuitImage } from '../../services/api';
 import type { VQETrace } from '../../types/vqe';
@@ -7,12 +7,14 @@ import { ConvergenceChart } from '../charts/ConvergenceChart';
 import { CircuitDisplay } from '../layout/CircuitDisplay';
 import { TraceTable } from '../layout/TraceTable';
 import { InlineEmptyState, SectionCard } from '../layout';
-import { Cpu } from 'lucide-react';
+import { Cpu, Play, Pause, SkipForward } from 'lucide-react';
 import { UI_MESSAGES } from '../../constants/ui';
 import { VQEHybridSplitView } from './VQEHybridSplitView';
 import { VQECheckpointTimeline } from './VQECheckpointTimeline';
 import { VQEStepFlowDiagram } from './VQEStepFlowDiagram';
 import { VQESection, VQEMetricsGrid, VQECard, VQE_TYPOGRAPHY } from './layout';
+
+const ANIMATION_INTERVAL_MS = 120;
 
 interface VQEQuantumTabProps {
   result: VQEBenchmarkResult | null;
@@ -22,14 +24,20 @@ interface VQEQuantumTabProps {
 
 export function VQEQuantumTab({ result, circuitImage, trace }: VQEQuantumTabProps) {
   const [activeCheckpoint, setActiveCheckpoint] = useState(0);
+  const [isAnimating, setIsAnimating] = useState(false);
+  const [animatedIteration, setAnimatedIteration] = useState(0);
+  const animationRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   if (!result) {
     return <InlineEmptyState message={UI_MESSAGES.emptyQuantum} />;
   }
 
+  const convergenceHistory = result.quantum.convergence_history;
   const snapshots = result.quantum.iteration_snapshots || [];
   const hasSnapshots = snapshots.length > 0;
+  const totalIterations = convergenceHistory.length;
 
+  // Keep activeCheckpoint in bounds
   const safeActive = Math.min(activeCheckpoint, Math.max(0, snapshots.length - 1));
   const currentSnapshot = hasSnapshots ? snapshots[safeActive] : null;
 
@@ -39,6 +47,55 @@ export function VQEQuantumTab({ result, circuitImage, trace }: VQEQuantumTabProp
     0,
     Math.min(100, (1 - displayEnergyError / Math.max(Math.abs(result.classical.energy), 1e-10)) * 100)
   );
+
+  // Animation: advance through convergence history
+  useEffect(() => {
+    if (isAnimating && totalIterations > 0) {
+      animationRef.current = setInterval(() => {
+        setAnimatedIteration((prev) => {
+          const next = prev + 1;
+          if (next >= totalIterations - 1) {
+            setIsAnimating(false);
+            return totalIterations - 1;
+          }
+          return next;
+        });
+      }, ANIMATION_INTERVAL_MS);
+    }
+    return () => {
+      if (animationRef.current) clearInterval(animationRef.current);
+    };
+  }, [isAnimating, totalIterations]);
+
+  const handlePlay = () => {
+    setAnimatedIteration(0);
+    setIsAnimating(true);
+  };
+
+  const handlePause = () => {
+    setIsAnimating(false);
+  };
+
+  const handleStep = () => {
+    setIsAnimating(false);
+    setAnimatedIteration((prev) => Math.min(prev + 1, totalIterations - 1));
+  };
+
+  const handleReset = () => {
+    setIsAnimating(false);
+    setAnimatedIteration(0);
+  };
+
+  // Sync animatedIteration with checkpoint when user clicks a checkpoint
+  const handleCheckpointChange = (idx: number) => {
+    setIsAnimating(false);
+    setActiveCheckpoint(idx);
+    // Map checkpoint index to convergence history index
+    const convIdx = hasSnapshots
+      ? Math.min(snapshots[idx]?.iteration ?? idx * Math.ceil(totalIterations / snapshots.length), totalIterations - 1)
+      : idx;
+    setAnimatedIteration(convIdx);
+  };
 
   return (
     <div className="space-y-6">
@@ -97,20 +154,87 @@ export function VQEQuantumTab({ result, circuitImage, trace }: VQEQuantumTabProp
         {/* Step Flow Diagram */}
         {hasSnapshots && (
           <VQESection>
-            <VQEStepFlowDiagram activeCheckpoint={safeActive} />
+            <VQEStepFlowDiagram
+              activeCheckpoint={safeActive}
+              isAnimating={isAnimating}
+              animatedIteration={animatedIteration}
+              totalIterations={totalIterations}
+            />
           </VQESection>
         )}
 
         {/* Convergence Chart */}
-        {result.quantum.convergence_history.length > 0 && (
+        {convergenceHistory.length > 0 && (
           <VQESection>
+            {/* Current phase indicator + animation controls */}
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                  Animation
+                </span>
+                {/* Phase badge: shows which phase of the hybrid loop is active */}
+                <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
+                  isAnimating
+                    ? 'bg-purple-100 text-purple-700'
+                    : animatedIteration === 0
+                      ? 'bg-blue-100 text-blue-700'
+                      : animatedIteration >= totalIterations - 2
+                        ? 'bg-emerald-100 text-emerald-700'
+                        : 'bg-amber-100 text-amber-700'
+                }`}>
+                  {isAnimating
+                    ? 'Running...'
+                    : animatedIteration === 0
+                      ? 'Initializing θ'
+                      : animatedIteration >= totalIterations - 2
+                        ? 'Converged!'
+                        : 'Optimizing'}
+                </span>
+              </div>
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={handlePlay}
+                  disabled={isAnimating || animatedIteration >= totalIterations - 1}
+                  className="p-1.5 rounded-md bg-purple-100 text-purple-700 hover:bg-purple-200 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                  title="Play"
+                >
+                  <Play className="w-3.5 h-3.5" />
+                </button>
+                <button
+                  onClick={handlePause}
+                  disabled={!isAnimating}
+                  className="p-1.5 rounded-md bg-purple-100 text-purple-700 hover:bg-purple-200 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                  title="Pause"
+                >
+                  <Pause className="w-3.5 h-3.5" />
+                </button>
+                <button
+                  onClick={handleStep}
+                  disabled={animatedIteration >= totalIterations - 1}
+                  className="p-1.5 rounded-md bg-purple-100 text-purple-700 hover:bg-purple-200 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                  title="Step forward"
+                >
+                  <SkipForward className="w-3.5 h-3.5" />
+                </button>
+                <button
+                  onClick={handleReset}
+                  className="px-2 py-1 rounded-md bg-slate-100 text-slate-600 hover:bg-slate-200 transition-colors text-xs font-medium"
+                >
+                  Reset
+                </button>
+              </div>
+              <span className="text-xs font-mono text-slate-400">
+                iteration {animatedIteration} / {totalIterations - 1}
+              </span>
+            </div>
             <ConvergenceChart
-              data={result.quantum.convergence_history}
+              data={convergenceHistory}
               optimalValue={result.classical.energy}
               title="VQE Convergence (Energy vs Iteration)"
               yLabel="Energy (Ha)"
               optimalLabel="FCI (exact)"
               dataLabel="VQE energy"
+              animatedUpTo={animatedIteration}
             />
           </VQESection>
         )}
@@ -121,7 +245,7 @@ export function VQEQuantumTab({ result, circuitImage, trace }: VQEQuantumTabProp
             <VQECheckpointTimeline
               snapshots={snapshots}
               active={safeActive}
-              onChange={setActiveCheckpoint}
+              onChange={handleCheckpointChange}
             />
           </VQESection>
         )}

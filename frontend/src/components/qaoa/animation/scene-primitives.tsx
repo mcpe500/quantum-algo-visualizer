@@ -87,6 +87,30 @@ export function QAOAStoryScene({
             : 5;
   const gateSize = 0.42;
 
+  // Compute which edges are cut for the active partition
+  const cutEdges = useMemo(() => {
+    const cuts = new Set<string>();
+    if (activePartition) {
+      data.edges.forEach(([i, j]) => {
+        if (activePartition[i] !== activePartition[j]) {
+          cuts.add(`${i}-${j}`);
+        }
+      });
+    }
+    return cuts;
+  }, [activePartition, data.edges]);
+
+  // Compute cut evolution based on checkpoint iteration
+  const cutEvolutionPercent = useMemo(() => {
+    const checkpoint = data.checkpoints.find(c => c.key === activeStep.checkpoint_key);
+    if (!checkpoint || data.exact.optimal_cut === 0) return 0;
+    // Show progress from initial to best cut
+    const initialCheckpoint = data.checkpoints.find(c => c.kind === 'initial');
+    if (!initialCheckpoint) return 0;
+    const progress = checkpoint.expected_cut / data.exact.optimal_cut;
+    return Math.min(100, Math.max(0, progress * 100));
+  }, [activeStep.checkpoint_key, data.checkpoints, data.exact.optimal_cut]);
+
   return (
     <>
       <CameraRig mode={cameraMode} distance={22} fixedOffset={{ x: 0, y: 0.4 }} orbitOffset={{ x: 1.8, y: 2, z: 2 }} lookAtY={0} />
@@ -104,16 +128,30 @@ export function QAOAStoryScene({
         maxPolarAngle={Math.PI * 0.68}
       />
 
+      {/* Input Graph Label */}
       <Text position={[-8, 3.2, 0]} fontSize={0.24} color="#1e3a8a" anchorX="center" anchorY="middle">
         Graph Input
       </Text>
+      {/* Circuit Label */}
       <Text position={[0.9, 3.2, 0]} fontSize={0.24} color="#334155" anchorX="center" anchorY="middle">
         Quantum Circuit
       </Text>
+      {/* Cut Output Label */}
       <Text position={[8, 3.2, 0]} fontSize={0.24} color="#166534" anchorX="center" anchorY="middle">
         Cut Output
       </Text>
 
+      {/* Cut Evolution Indicator */}
+      <group position={[8, -3.0, 0]}>
+        <Text position={[0, 0.4, 0]} fontSize={0.14} color="#64748b" anchorX="center" anchorY="middle">
+          Cut Evolution
+        </Text>
+        <Text position={[0, 0.15, 0]} fontSize={0.18} color="#16a34a" anchorX="center" anchorY="middle">
+          {cutEvolutionPercent.toFixed(0)}%
+        </Text>
+      </group>
+
+      {/* Input Graph Edges */}
       {data.edges.map(([i, j]) => {
         const isActive = activeStep.phase === 'cost' && activeStep.edge && activeStep.edge[0] === i && activeStep.edge[1] === j;
         return (
@@ -126,18 +164,25 @@ export function QAOAStoryScene({
         );
       })}
 
+      {/* Result Graph Edges - Color coded by cut status */}
       {data.edges.map(([i, j]) => {
-        const isCut = activePartition[i] !== activePartition[j];
+        const isCut = cutEdges.has(`${i}-${j}`) || cutEdges.has(`${j}-${i}`);
+        const isActive = activeStep.phase === 'cost' && activeStep.edge && activeStep.edge[0] === i && activeStep.edge[1] === j;
         return (
           <Line
             key={`result-edge-${i}-${j}`}
             points={[[resultPositions[i].x, resultPositions[i].y, 0], [resultPositions[j].x, resultPositions[j].y, 0]]}
-            color={isCut ? '#16a34a' : '#94a3b8'}
-            lineWidth={isCut ? 2 : 1}
+            color={isCut ? '#16a34a' : isActive ? '#f97316' : '#94a3b8'}
+            lineWidth={isCut ? 2.5 : isActive ? 2 : 1}
+            dashed={isCut}
+            dashScale={isCut ? 1 : undefined}
+            dashSize={isCut ? 0.15 : undefined}
+            gapSize={isCut ? 0.08 : undefined}
           />
         );
       })}
 
+      {/* Input Nodes */}
       {data.nodes.map((node, index) => (
         <NodeSphere
           key={`input-node-${node}`}
@@ -149,6 +194,7 @@ export function QAOAStoryScene({
         />
       ))}
 
+      {/* Result Nodes - Color coded by partition */}
       {data.nodes.map((node, index) => (
         <NodeSphere
           key={`result-node-${node}`}
@@ -160,21 +206,25 @@ export function QAOAStoryScene({
         />
       ))}
 
+      {/* Quantum Circuit Wires */}
       {laneYs.map((y, index) => (
         <Line key={`wire-${index}`} points={[[-3.2, y, 0], [5.2, y, 0]]} color="#cbd5e1" lineWidth={1} />
       ))}
 
+      {/* Wire Labels */}
       {laneYs.map((y, index) => (
         <Text key={`label-${index}`} position={[-3.65, y, 0.04]} fontSize={0.18} color="#334155" anchorX="right" anchorY="middle">
           q{index}
         </Text>
       ))}
 
+      {/* Superposition Layer */}
       {activeStep.phase === 'superposition' &&
         laneYs.map((y, index) => (
           <HadamardGate key={`h-${index}`} x={-1.2} y={y} isActive size={gateSize} />
         ))}
 
+      {/* Cost Layer */}
       {activeStep.phase === 'cost' && activeStep.edge && (
         <>
           <Line
@@ -187,21 +237,25 @@ export function QAOAStoryScene({
         </>
       )}
 
+      {/* Mixer Layer */}
       {activeStep.phase === 'mixer' && activeStep.target_qubit !== undefined && (
         <LabeledBoxGate x={2.1} y={laneYs[activeStep.target_qubit]} label="RX" color={PHASE_COLOR.mixer} size={gateSize} isActive />
       )}
 
+      {/* Measurement Layer */}
       {(activeStep.phase === 'measurement' || activeStep.phase === 'update') &&
         laneYs.map((y, index) => (
           <LabeledBoxGate key={`m-${index}`} x={3.9} y={y} label="M" color={PHASE_COLOR.measurement} size={gateSize} isActive />
         ))}
 
+      {/* Optimizer Label */}
       {activeStep.phase === 'optimizer' && (
         <Text position={[-2.2, 2.35, 0]} fontSize={0.18} color={PHASE_COLOR.optimizer} anchorX="center" anchorY="middle">
           optimizer
         </Text>
       )}
 
+      {/* Bloch Spheres */}
       {blochQubits.map(({ summary, blochState, p0 }) => (
         <BlochQubitNode
           key={`orb-${summary.qubit}`}

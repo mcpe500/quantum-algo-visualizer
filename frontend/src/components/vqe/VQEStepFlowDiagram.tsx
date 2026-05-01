@@ -3,30 +3,51 @@ import { VQECard, VQE_TYPOGRAPHY, VQE_DIMENSIONS } from './layout';
 
 interface VQEStepFlowDiagramProps {
   activeCheckpoint?: number;
+  /** Whether animation is actively playing */
+  isAnimating?: boolean;
+  /** Current animated iteration index */
+  animatedIteration?: number;
+  /** Total iterations in the convergence history */
+  totalIterations?: number;
 }
 
 const STEPS = [
-  { id: 1, label: 'Initialize', desc: 'θ⁽⁰⁾', domain: 'classical' },
-  { id: 2, label: 'Build Circuit', desc: 'U(θ)', domain: 'quantum' },
-  { id: 3, label: 'Prepare State', desc: '|ψ(θ)⟩', domain: 'quantum' },
-  { id: 4, label: 'Measure Energy', desc: 'E(θ)', domain: 'quantum' },
-  { id: 5, label: 'Update Parameters', desc: 'θ⁽ᵗ⁺¹⁾', domain: 'classical' },
-  { id: 6, label: 'Check Convergence', desc: '|ΔE| < ε ?', domain: 'classical' },
+  { id: 1, label: 'Init θ', desc: 'θ⁽⁰⁾ = random', domain: 'classical', sublabel: 'Classical' },
+  { id: 2, label: 'Build Ansatz', desc: 'U(θ)|0⟩', domain: 'quantum', sublabel: 'Quantum' },
+  { id: 3, label: 'Prepare State', desc: '|ψ(θ)⟩', domain: 'quantum', sublabel: 'Quantum' },
+  { id: 4, label: 'Measure E', desc: '⟨ψ|H|ψ⟩', domain: 'quantum', sublabel: 'Quantum' },
+  { id: 5, label: 'Update θ', desc: 'θ⁽ᵗ⁺¹⁾', domain: 'classical', sublabel: 'Classical' },
+  { id: 6, label: 'Converged?', desc: '|ΔE| < ε', domain: 'classical', sublabel: 'Classical' },
 ];
 
-export function VQEStepFlowDiagram({ activeCheckpoint = 0 }: VQEStepFlowDiagramProps) {
+export function VQEStepFlowDiagram({
+  activeCheckpoint = 0,
+  isAnimating = false,
+  animatedIteration = 0,
+  totalIterations = 1,
+}: VQEStepFlowDiagramProps) {
   const uid = useId();
+
+  // During animation, show a pseudo-checkpoint based on iteration progress
+  // This makes the flow diagram respond to the animation in real-time
+  const animationProgress = totalIterations > 0 ? animatedIteration / (totalIterations - 1) : 0;
+  const effectiveCheckpoint = isAnimating
+    ? Math.min(4, Math.floor(animationProgress * 5))
+    : activeCheckpoint;
 
   // Determine which steps are "active" based on checkpoint
   // Checkpoint 0 (Start): steps 1-2
   // Checkpoint 1-3 (Optimizing): steps 2-5
   // Checkpoint 4 (Final): steps 1-6 (all)
   const maxActiveStep =
-    activeCheckpoint === 0
+    effectiveCheckpoint === 0
       ? 2
-      : activeCheckpoint >= 4
+      : effectiveCheckpoint >= 4
         ? 6
-        : activeCheckpoint + 2;
+        : effectiveCheckpoint + 2;
+
+  // Pulse animation for the active step during animation
+  const pulseClass = isAnimating ? 'animate-pulse' : '';
 
   return (
     <VQECard>
@@ -44,6 +65,7 @@ export function VQEStepFlowDiagram({ activeCheckpoint = 0 }: VQEStepFlowDiagramP
                 key={step.id}
                 step={step}
                 isActive={step.id <= maxActiveStep}
+                pulse={isAnimating && step.id === maxActiveStep}
                 uid={uid}
               />
             ))}
@@ -56,7 +78,7 @@ export function VQEStepFlowDiagram({ activeCheckpoint = 0 }: VQEStepFlowDiagramP
           </div>
 
           {/* Vertical connector: Step 3 → Step 4 */}
-          <div 
+          <div
             className="flex justify-end mb-2"
             style={{ paddingRight: `${VQE_DIMENSIONS.stepFlowConnectorPadding}px` }}
           >
@@ -70,6 +92,7 @@ export function VQEStepFlowDiagram({ activeCheckpoint = 0 }: VQEStepFlowDiagramP
                 key={step.id}
                 step={step}
                 isActive={step.id <= maxActiveStep}
+                pulse={isAnimating && step.id === maxActiveStep}
                 uid={uid}
               />
             ))}
@@ -171,9 +194,11 @@ export function VQEStepFlowDiagram({ activeCheckpoint = 0 }: VQEStepFlowDiagramP
 function StepBox({
   step,
   isActive,
+  pulse = false,
 }: {
-  step: { id: number; label: string; desc: string; domain: string };
+  step: { id: number; label: string; desc: string; domain: string; sublabel: string };
   isActive: boolean;
+  pulse?: boolean;
   uid?: string;
 }) {
   const isClassical = step.domain === 'classical';
@@ -189,7 +214,7 @@ function StepBox({
 
   return (
     <div
-      className={`rounded-lg border p-3 text-center transition-all ${baseClasses} ${activeClasses}`}
+      className={`rounded-lg border p-3 text-center transition-all ${baseClasses} ${activeClasses} ${pulse ? 'animate-pulse' : ''}`}
       style={{ width: VQE_DIMENSIONS.stepFlowNodeWidth }}
     >
       <div
@@ -199,6 +224,9 @@ function StepBox({
       </div>
       <div className={`text-xs font-semibold leading-tight ${titleColor}`}>{step.label}</div>
       <div className={`font-mono mt-0.5 ${VQE_TYPOGRAPHY.caption} ${descColor}`}>{step.desc}</div>
+      <div className={`text-[9px] mt-1 uppercase tracking-wider ${isClassical ? 'text-blue-400' : 'text-purple-400'}`}>
+        {step.sublabel}
+      </div>
     </div>
   );
 }

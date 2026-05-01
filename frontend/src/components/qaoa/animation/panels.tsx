@@ -191,6 +191,11 @@ export function CostMixerPanel({ activeStep }: { activeStep: QAOAAnimationStep }
 
 export function CutResultPanel({ data, activeStep }: { data: QAOAAnimationPayload; activeStep: QAOAAnimationStep }) {
   const activePartition = getPartitionFromBitstring(activeStep.candidate_bitstring, data.n_nodes);
+  const activeCheckpoint = data.checkpoints.find(c => c.key === activeStep.checkpoint_key);
+  const initialCheckpoint = data.checkpoints.find(c => c.kind === 'initial');
+  const cutProgress = activeCheckpoint && initialCheckpoint && data.exact.optimal_cut > 0
+    ? Math.min(100, Math.max(0, (activeCheckpoint.expected_cut / data.exact.optimal_cut) * 100))
+    : 0;
 
   return (
     <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
@@ -203,6 +208,24 @@ export function CutResultPanel({ data, activeStep }: { data: QAOAAnimationPayloa
           <DetailCard label="SA" value={`${data.classical.best_cut}`} hint="Comparator" />
           <DetailCard label="QAOA" value={`${data.quantum.best_cut}`} hint="Best quantum" />
         </div>
+
+        {/* Cut Evolution Progress */}
+        <div className="rounded-lg border border-emerald-100 bg-emerald-50 px-3 py-2.5">
+          <div className="flex items-center justify-between mb-1.5">
+            <span className="text-[11px] font-semibold text-emerald-700">Cut Evolution</span>
+            <span className="text-[11px] font-mono font-bold text-emerald-800">{cutProgress.toFixed(0)}%</span>
+          </div>
+          <div className="h-2 rounded-full bg-emerald-200">
+            <div
+              className="h-full rounded-full bg-emerald-500 transition-all duration-500"
+              style={{ width: `${cutProgress}%` }}
+            />
+          </div>
+          <p className="text-[10px] text-emerald-600 mt-1">
+            iter {activeCheckpoint?.eval_index ?? '-'} / best so far: {activeStep.best_so_far.toFixed(2)}
+          </p>
+        </div>
+
         <GraphVisualization nodes={data.nodes} edges={data.edges} partition={activePartition} />
         <div className="rounded-lg border border-slate-100 bg-slate-50 px-3 py-2.5">
           <div className="flex items-center justify-between">

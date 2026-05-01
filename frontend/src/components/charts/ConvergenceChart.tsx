@@ -5,6 +5,10 @@ interface ConvergenceChartProps {
   yLabel?: string;
   optimalLabel?: string;
   dataLabel?: string;
+  /** If set, the chart progressively reveals points up to this index, creating an animation effect */
+  animatedUpTo?: number;
+  /** Callback fired as each new point is revealed during animation */
+  onAnimationStep?: (index: number) => void;
 }
 
 const CHART_SIZE = {
@@ -26,6 +30,8 @@ export function ConvergenceChart({
   yLabel,
   optimalLabel = 'Optimal',
   dataLabel = 'Value',
+  animatedUpTo,
+  onAnimationStep,
 }: ConvergenceChartProps) {
   if (!data || data.length === 0) return null;
 
@@ -42,9 +48,25 @@ export function ConvergenceChart({
   const tx = (i: number) => pad.left + (i / Math.max(data.length - 1, 1)) * cw;
   const ty = (v: number) => pad.top + ch - ((v - minV) / span) * ch;
 
-  const d = data
+  // Animated reveal: only show data points up to animatedUpTo
+  const visibleCount = animatedUpTo !== undefined ? Math.min(animatedUpTo + 1, data.length) : data.length;
+  const visibleData = data.slice(0, visibleCount);
+
+  const d = visibleData
     .map((v, i) => `${i === 0 ? 'M' : 'L'}${tx(i).toFixed(1)},${ty(v).toFixed(1)}`)
     .join(' ');
+
+  // Build the full path for the "trail" (faded) vs the revealed path
+  const trailD = animatedUpTo !== undefined && animatedUpTo > 0
+    ? data.slice(0, animatedUpTo)
+        .map((v, i) => `${i === 0 ? 'M' : 'L'}${tx(i).toFixed(1)},${ty(v).toFixed(1)}`)
+        .join(' ')
+    : d;
+
+  // Dot at latest point
+  const latestDot = animatedUpTo !== undefined
+    ? <circle cx={tx(animatedUpTo)} cy={ty(data[animatedUpTo])} r="4" fill="#7c3aed" opacity="0.8" />
+    : null;
 
   const gridVals = [0, 0.25, 0.5, 0.75, 1].map((t) => minV + t * span);
 
@@ -81,8 +103,16 @@ export function ConvergenceChart({
             strokeDasharray="5,3"
           />
 
-          {/* Convergence path */}
+          {/* Faded trail (full history behind the animated point) */}
+          {animatedUpTo !== undefined && animatedUpTo > 0 && (
+            <path d={trailD} fill="none" stroke="#c4b5fd" strokeWidth={1.5} opacity={0.5} />
+          )}
+
+          {/* Active convergence path */}
           <path d={d} fill="none" stroke="#7c3aed" strokeWidth={2} />
+
+          {/* Dot at latest point */}
+          {latestDot}
 
           {/* Axes */}
           <line x1={pad.left} y1={pad.top} x2={pad.left} y2={pad.top + ch} stroke="#d1d5db" />

@@ -34,15 +34,86 @@ export function VQEHybridSplitView({
 
   return (
     <div className="space-y-4">
+      {/* Section Header */}
+      <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2">
+          <div className="w-3 h-3 rounded-full bg-blue-500" />
+          <span className="text-xs font-bold uppercase tracking-wider text-slate-500">Classical CPU</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="w-3 h-3 rounded-full bg-purple-500" />
+          <span className="text-xs font-bold uppercase tracking-wider text-slate-500">Quantum QPU/Sim</span>
+        </div>
+        <span className="ml-auto text-xs font-mono text-slate-400">
+          iter {snapshot.iteration} / {totalIterations}
+        </span>
+      </div>
+
+      {/* Step flow: Classical → Quantum → Classical → Quantum → Classical */}
+      <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
+        {/* Step 1: Initialize Parameters (Classical) */}
+        <div className="rounded-lg border border-blue-200 bg-blue-50 p-3">
+          <div className="text-[10px] font-bold text-blue-700 uppercase tracking-wider mb-1">① Classical</div>
+          <div className="text-xs font-semibold text-blue-800 mb-1">Initialize θ</div>
+          <div className="text-[10px] text-blue-600 font-mono mb-1">θ⁽⁰⁾ = random</div>
+          <div className="text-[10px] text-blue-500">
+            Random initial parameters for the variational ansatz.
+          </div>
+        </div>
+
+        {/* Arrow */}
+        <div className="hidden md:flex items-center justify-center">
+          <svg width="24" height="16" viewBox="0 0 24 16"><path d="M0 8h20M14 2l6 6-6 6" fill="none" stroke="#94a3b8" strokeWidth="2" strokeLinecap="round"/></svg>
+        </div>
+
+        {/* Step 2: Build Ansatz Circuit (Quantum) */}
+        <div className="rounded-lg border border-purple-200 bg-purple-50 p-3">
+          <div className="text-[10px] font-bold text-purple-700 uppercase tracking-wider mb-1">② Quantum</div>
+          <div className="text-xs font-semibold text-purple-800 mb-1">Build Ansatz</div>
+          <div className="text-[10px] text-purple-600 font-mono mb-1">U(θ)|0⟩<sup>⊗n</sup></div>
+          <div className="text-[10px] text-purple-500">
+            Parameterized circuit with {ansatzType}, {nLayers} layer{nLayers > 1 ? 's' : ''}.
+          </div>
+        </div>
+
+        {/* Arrow */}
+        <div className="hidden md:flex items-center justify-center">
+          <svg width="24" height="16" viewBox="0 0 24 16"><path d="M0 8h20M14 2l6 6-6 6" fill="none" stroke="#94a3b8" strokeWidth="2" strokeLinecap="round"/></svg>
+        </div>
+
+        {/* Step 3: Measure Expectation Value (Quantum) */}
+        <div className="rounded-lg border border-purple-200 bg-purple-50 p-3">
+          <div className="text-[10px] font-bold text-purple-700 uppercase tracking-wider mb-1">③ Quantum</div>
+          <div className="text-xs font-semibold text-purple-800 mb-1">Measure E</div>
+          <div className="text-[10px] text-purple-600 font-mono mb-1">E(θ) = ⟨ψ|H|ψ⟩</div>
+          <div className="text-[10px] text-purple-500">
+            Expectation value via {measurementMethod}.
+          </div>
+        </div>
+
+        {/* Arrow */}
+        <div className="hidden md:flex items-center justify-center">
+          <svg width="24" height="16" viewBox="0 0 24 16"><path d="M0 8h20M14 2l6 6-6 6" fill="none" stroke="#94a3b8" strokeWidth="2" strokeLinecap="round"/></svg>
+        </div>
+
+        {/* Step 4: Classical Optimizer (Classical) */}
+        <div className="rounded-lg border border-blue-200 bg-blue-50 p-3">
+          <div className="text-[10px] font-bold text-blue-700 uppercase tracking-wider mb-1">④ Classical</div>
+          <div className="text-xs font-semibold text-blue-800 mb-1">Update θ</div>
+          <div className="text-[10px] text-blue-600 font-mono mb-1">θ⁽ᵗ⁺¹⁾ = {optimizerName}(E)</div>
+          <div className="text-[10px] text-blue-500">
+            Classical optimizer adjusts parameters to minimize E(θ).
+          </div>
+        </div>
+      </div>
+
+      {/* Detail Row */}
       <div className="flex flex-col lg:flex-row gap-4 relative">
         {/* Classical Column */}
         <div className="flex-1 bg-white rounded-xl border border-slate-200 p-5 space-y-4">
           <div className="flex items-center gap-2 mb-2">
             <div className="w-3 h-3 rounded-full bg-blue-500" />
             <h3 className="text-sm font-semibold text-slate-700 uppercase tracking-wide">Classical (CPU)</h3>
-            <span className="ml-auto text-xs font-mono text-slate-400">
-              iter {snapshot.iteration} / {totalIterations}
-            </span>
           </div>
 
           {/* Optimizer */}
