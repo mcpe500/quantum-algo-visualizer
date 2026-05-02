@@ -143,9 +143,9 @@ export interface QAOABenchmarkResult extends BaseBenchmarkResult {
   aggregate?: QAOAAggregateResult | null;
 }
 
-export interface QAOATraceStage extends BaseTraceStage {}
+export type QAOATraceStage = BaseTraceStage;
 
-export interface QAOATracePartition extends BaseTracePartition {}
+export type QAOATracePartition = BaseTracePartition;
 
 export interface QAOATrace {
   case_id: string;

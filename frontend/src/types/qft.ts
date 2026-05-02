@@ -74,11 +74,11 @@ export interface QFTBenchmarkResult extends BaseBenchmarkResult {
   };
 }
 
-export interface QFTBenchmarkParams extends BaseBenchmarkParams {}
+export type QFTBenchmarkParams = BaseBenchmarkParams;
 
-export interface QFTTraceStage extends BaseTraceStage {}
+export type QFTTraceStage = BaseTraceStage;
 
-export interface QFTTracePartition extends BaseTracePartition {}
+export type QFTTracePartition = BaseTracePartition;
 
 export interface QFTQuantumTrace {
   case_id: string;

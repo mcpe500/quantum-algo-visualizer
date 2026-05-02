@@ -22,9 +22,10 @@ export interface UseQAOAReturn {
   isLoading: boolean;
   isLoadingAnimation: boolean;
   error: string | null;
-  activeTab: 'classic' | 'quantum' | 'animation';
+  selectedCaseData: QAOACase | null;
+  activeTab: 'problem' | 'classic' | 'quantum' | 'animation';
   setSelectedCaseId: (id: string) => void;
-  setActiveTab: (tab: 'classic' | 'quantum' | 'animation') => void;
+  setActiveTab: (tab: 'problem' | 'classic' | 'quantum' | 'animation') => void;
   handleRun: () => Promise<void>;
   handleDownload: () => Promise<void>;
 }
@@ -43,7 +44,8 @@ export function useQAOA(): UseQAOAReturn {
   const [trace, setTrace] = useState<QAOATrace | null>(null);
   const [animationData, setAnimationData] = useState<QAOAAnimationPayload | null>(null);
   const [isLoadingAnimation, setIsLoadingAnimation] = useState(false);
-  const [activeTab, setActiveTab] = useState<'classic' | 'quantum' | 'animation'>('classic');
+  const [activeTab, setActiveTab] = useState<'problem' | 'classic' | 'quantum' | 'animation'>('problem');
+  const { selectedCaseId, benchmarkResult, handleRun: runBaseBenchmark } = base;
 
   const loadTrace = useCallback(async (caseId: string, gamma?: number[], beta?: number[]) => {
     if (!caseId) return;
@@ -58,25 +60,24 @@ export function useQAOA(): UseQAOAReturn {
   }, []);
 
   useEffect(() => {
-    if (base.selectedCaseId && activeTab === 'animation') {
-      queueMicrotask(() => void loadAnimation(base.selectedCaseId));
+    if (selectedCaseId && activeTab === 'animation') {
+      queueMicrotask(() => void loadAnimation(selectedCaseId));
     }
-  }, [activeTab, base.selectedCaseId, loadAnimation]);
+  }, [activeTab, selectedCaseId, loadAnimation]);
 
   useEffect(() => {
-    if (!base.selectedCaseId) return;
+    if (!selectedCaseId) return;
     queueMicrotask(() => {
-      void loadTrace(base.selectedCaseId);
+      void loadTrace(selectedCaseId);
     });
-  }, [base.selectedCaseId, loadTrace]);
+  }, [selectedCaseId, loadTrace]);
 
   const handleRun = useCallback(async () => {
-    await base.handleRun();
-    if (base.selectedCaseId && base.benchmarkResult) {
-      const data = base.benchmarkResult as any;
-      await loadTrace(base.selectedCaseId, data.quantum?.optimal_gamma, data.quantum?.optimal_beta);
+    await runBaseBenchmark();
+    if (selectedCaseId && benchmarkResult) {
+      await loadTrace(selectedCaseId, benchmarkResult.quantum?.optimal_gamma, benchmarkResult.quantum?.optimal_beta);
     }
-  }, [base.handleRun, base.selectedCaseId, base.benchmarkResult, loadTrace]);
+  }, [runBaseBenchmark, selectedCaseId, benchmarkResult, loadTrace]);
 
   return {
     ...base,

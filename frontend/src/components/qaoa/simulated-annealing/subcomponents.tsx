@@ -1,8 +1,8 @@
 import { ClassicFlowMobileArrow } from '../../classic-flow';
 import { formatNumber, getEdges } from './utils';
-import type { Matrix, StatusColor, TraceStep, CutDetail } from './types';
+import type { Matrix, TraceStep, CutDetail } from './types';
 
-export function getNodeCoordinates(n: number) {
+function getNodeCoordinates(n: number) {
   const svgSize = 200;
   const center = svgSize / 2;
   const radius = 70;
@@ -69,24 +69,6 @@ export function Arrow() {
   return <ClassicFlowMobileArrow className="-my-3" />;
 }
 
-export const statusStyleMap: Record<StatusColor, { card: string; badge: string }> = {
-  slate: {
-    card: 'border-slate-200 bg-slate-50',
-    badge: 'bg-slate-700 text-white',
-  },
-  emerald: {
-    card: 'border-emerald-200 bg-emerald-50',
-    badge: 'bg-emerald-500 text-white',
-  },
-  yellow: {
-    card: 'border-yellow-200 bg-yellow-50',
-    badge: 'bg-yellow-500 text-white',
-  },
-  red: {
-    card: 'border-red-200 bg-red-50',
-    badge: 'bg-red-500 text-white',
-  },
-};
 
 export function CutDetails({ details }: { details: CutDetail[] }) {
   return (

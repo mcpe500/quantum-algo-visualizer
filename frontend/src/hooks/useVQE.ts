@@ -19,10 +19,11 @@ export interface UseVQEReturn {
   trace: VQETrace | null;
   isLoading: boolean;
   error: string | null;
-  activeTab: 'classic' | 'quantum';
+  selectedCaseData: VQECase | null;
+  activeTab: 'problem' | 'classic' | 'quantum';
   shots: number;
   setSelectedCaseId: (id: string) => void;
-  setActiveTab: (tab: 'classic' | 'quantum') => void;
+  setActiveTab: (tab: 'problem' | 'classic' | 'quantum') => void;
   setShots: (shots: number) => void;
   handleRun: () => Promise<void>;
   handleDownload: () => Promise<void>;
@@ -30,7 +31,7 @@ export interface UseVQEReturn {
 
 export function useVQE(): UseVQEReturn {
   const [shots, setShots] = useState(DEFAULT_SHOTS);
-  const [activeTab, setActiveTab] = useState<'classic' | 'quantum'>('classic');
+  const [activeTab, setActiveTab] = useState<'problem' | 'classic' | 'quantum'>('problem');
 
   const base = useBaseAlgorithmBenchmark<VQECase, VQEBenchmarkParams, VQEBenchmarkResult, VQECircuitImage>({
     api: {
@@ -43,6 +44,7 @@ export function useVQE(): UseVQEReturn {
   });
 
   const [trace, setTrace] = useState<VQETrace | null>(null);
+  const { selectedCaseId, handleRun: runBaseBenchmark } = base;
 
   const loadTrace = useCallback(async (caseId: string) => {
     if (!caseId) return;
@@ -50,18 +52,18 @@ export function useVQE(): UseVQEReturn {
   }, []);
 
   useEffect(() => {
-    if (!base.selectedCaseId) return;
+    if (!selectedCaseId) return;
     queueMicrotask(() => {
-      void loadTrace(base.selectedCaseId);
+      void loadTrace(selectedCaseId);
     });
-  }, [base.selectedCaseId, loadTrace]);
+  }, [selectedCaseId, loadTrace]);
 
   const handleRun = useCallback(async () => {
-    await base.handleRun();
-    if (base.selectedCaseId) {
-      await loadTrace(base.selectedCaseId);
+    await runBaseBenchmark();
+    if (selectedCaseId) {
+      await loadTrace(selectedCaseId);
     }
-  }, [base.handleRun, base.selectedCaseId, loadTrace]);
+  }, [runBaseBenchmark, selectedCaseId, loadTrace]);
 
   return {
     ...base,

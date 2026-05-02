@@ -1,18 +1,19 @@
-import { BookOpen, Cpu, LoaderCircle, PlayCircle, Waves } from 'lucide-react';
+import { BookOpen, Cpu, HelpCircle, LoaderCircle, PlayCircle, Waves } from 'lucide-react';
 import { useQFT } from '../hooks/useQFT';
 import { AlgorithmPageShell } from '../shared/components/AlgorithmPageShell';
-import { QFTClassicTab, QFTQuantumTab, QFTQuantumAnimation } from '../components/qft';
+import { QFTClassicTab, QFTProblemStatement, QFTQuantumTab, QFTQuantumAnimation } from '../components/qft';
 import { CAPTURE_IDS } from '../constants/app';
 import { useInitialTabSync } from './hooks/useInitialTabSync';
 
 interface QFTCombinedPageProps {
-  initialTab?: 'classic' | 'quantum' | 'animation';
+  initialTab?: 'problem' | 'classic' | 'quantum' | 'animation';
 }
 
-export default function QFTCombinedPage({ initialTab = 'classic' }: QFTCombinedPageProps) {
+export default function QFTCombinedPage({ initialTab = 'problem' }: QFTCombinedPageProps) {
   const {
     selectedCaseId,
     availableCases,
+    selectedCaseData,
     benchmarkResult,
     circuitImage,
     trace,
@@ -44,6 +45,7 @@ export default function QFTCombinedPage({ initialTab = 'classic' }: QFTCombinedP
       loadingMessage="Menjalankan QFT..."
       datasetLink="/qft/dataset"
       tabs={[
+        { id: 'problem', label: 'Problem', icon: HelpCircle },
         { id: 'classic', label: 'Klasik', icon: BookOpen },
         { id: 'quantum', label: 'Kuantum', icon: Cpu },
         { id: 'animation', label: 'Animasi 3D', icon: PlayCircle },
@@ -52,6 +54,7 @@ export default function QFTCombinedPage({ initialTab = 'classic' }: QFTCombinedP
       onTabChange={setActiveTab}
       captureId={CAPTURE_IDS.qft}
       emptyMessage={'Pilih kasus dan klik "Jalankan" untuk memulai benchmarking QFT.'}
+      problemTab={<QFTProblemStatement caseData={selectedCaseData} result={benchmarkResult} />}
       classicTab={benchmarkResult ? <QFTClassicTab result={benchmarkResult} /> : null}
       quantumTab={benchmarkResult ? (
         <QFTQuantumTab result={benchmarkResult} circuitImage={circuitImage} trace={trace} />

@@ -1,7 +1,7 @@
-import { Atom, BookOpen, Cpu } from 'lucide-react';
+import { Atom, BookOpen, Cpu, HelpCircle } from 'lucide-react';
 import { useVQE } from '../hooks/useVQE';
 import { AlgorithmPageShell } from '../shared/components/AlgorithmPageShell';
-import { VQEClassicTab, VQEQuantumTab } from '../components/vqe';
+import { VQEClassicTab, VQEProblemStatement, VQEQuantumTab } from '../components/vqe';
 import { CAPTURE_IDS } from '../constants/app';
 import { useInitialTabSync } from './hooks/useInitialTabSync';
 
@@ -11,6 +11,7 @@ export default function VQECombinedPage() {
   const {
     selectedCaseId,
     availableCases,
+    selectedCaseData,
     benchmarkResult,
     circuitImage,
     trace,
@@ -25,7 +26,7 @@ export default function VQECombinedPage() {
     handleDownload,
   } = useVQE();
 
-  useInitialTabSync('classic', setActiveTab);
+  useInitialTabSync('problem', setActiveTab);
 
   return (
     <AlgorithmPageShell
@@ -42,11 +43,12 @@ export default function VQECombinedPage() {
       loadingMessage="Menjalankan VQE... proses optimisasi mungkin memerlukan beberapa detik."
       datasetLink="/vqe/dataset"
       tabs={[
+        { id: 'problem', label: 'Problem', icon: HelpCircle },
         { id: 'classic', label: 'Klasik', icon: BookOpen },
         { id: 'quantum', label: 'Kuantum', icon: Cpu },
       ]}
       activeTab={activeTab}
-      onTabChange={(tab) => setActiveTab(tab as 'classic' | 'quantum')}
+      onTabChange={(tab) => setActiveTab(tab as 'problem' | 'classic' | 'quantum')}
       captureId={CAPTURE_IDS.vqe}
       emptyMessage={'Pilih kasus dan klik "Jalankan" untuk memulai benchmarking VQE.'}
       extraControls={
@@ -60,6 +62,7 @@ export default function VQECombinedPage() {
           ))}
         </select>
       }
+      problemTab={<VQEProblemStatement caseData={selectedCaseData} result={benchmarkResult} />}
       classicTab={benchmarkResult ? <VQEClassicTab result={benchmarkResult} /> : null}
       quantumTab={benchmarkResult ? (
         <VQEQuantumTab result={benchmarkResult} circuitImage={circuitImage} trace={trace} />

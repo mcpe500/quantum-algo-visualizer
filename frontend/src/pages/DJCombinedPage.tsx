@@ -1,6 +1,7 @@
-import { Cpu, BookOpen, Video } from 'lucide-react';
+import { Cpu, BookOpen, HelpCircle, Video } from 'lucide-react';
 import { useDJBenchmark } from '../hooks/useDJBenchmark';
 import { AlgorithmPageShell } from '../shared/components/AlgorithmPageShell';
+import { DJProblemStatement } from '../components/dj/DJProblemStatement';
 import { ClassicalVisualization } from '../components/dj/ClassicalVisualization';
 import { QuantumVisualization } from '../components/dj/QuantumVisualization';
 import { ComparisonSection } from '../components/dj/ComparisonSection';
@@ -10,13 +11,14 @@ import { CAPTURE_IDS } from '../constants/app';
 import { useInitialTabSync } from './hooks/useInitialTabSync';
 
 interface DJCombinedPageProps {
-  initialTab?: 'classic' | 'quantum' | 'animation';
+  initialTab?: 'problem' | 'classic' | 'quantum' | 'animation';
 }
 
-export default function DJCombinedPage({ initialTab = 'classic' }: DJCombinedPageProps) {
+export default function DJCombinedPage({ initialTab = 'problem' }: DJCombinedPageProps) {
   const {
     selectedCaseId,
     availableCases,
+    selectedCaseData,
     benchmarkResult,
     circuitImage,
     boxedCircuitImage,
@@ -51,14 +53,16 @@ export default function DJCombinedPage({ initialTab = 'classic' }: DJCombinedPag
         error={error}
         datasetLink="/dj/dataset"
         tabs={[
+          { id: 'problem', label: 'Problem', icon: HelpCircle },
           { id: 'classic', label: 'Klasik', icon: BookOpen },
           { id: 'quantum', label: 'Kuantum', icon: Cpu },
           { id: 'animation', label: 'Animasi 3D', icon: Video },
         ]}
         activeTab={activeTab}
-        onTabChange={(tab) => setActiveTab(tab as 'classic' | 'quantum' | 'animation')}
+        onTabChange={setActiveTab}
         captureId={CAPTURE_IDS.djQuantum}
         emptyMessage="Pilih kasus dan klik 'Jalankan' untuk memulai benchmarking Deutsch-Jozsa."
+        problemTab={<DJProblemStatement caseData={selectedCaseData} />}
         classicTab={
           classicalResult ? (
             <ClassicalVisualization result={classicalResult} onDownload={handleDownload} />

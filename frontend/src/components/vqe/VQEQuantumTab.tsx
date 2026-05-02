@@ -12,6 +12,7 @@ import { UI_MESSAGES } from '../../constants/ui';
 import { VQEHybridSplitView } from './VQEHybridSplitView';
 import { VQECheckpointTimeline } from './VQECheckpointTimeline';
 import { VQEStepFlowDiagram } from './VQEStepFlowDiagram';
+import { VQEComputationalTracePanel } from './VQEComputationalTracePanel';
 import { VQESection, VQEMetricsGrid, VQECard, VQE_TYPOGRAPHY } from './layout';
 
 const ANIMATION_INTERVAL_MS = 120;
@@ -27,26 +28,7 @@ export function VQEQuantumTab({ result, circuitImage, trace }: VQEQuantumTabProp
   const [isAnimating, setIsAnimating] = useState(false);
   const [animatedIteration, setAnimatedIteration] = useState(0);
   const animationRef = useRef<ReturnType<typeof setInterval> | null>(null);
-
-  if (!result) {
-    return <InlineEmptyState message={UI_MESSAGES.emptyQuantum} />;
-  }
-
-  const convergenceHistory = result.quantum.convergence_history;
-  const snapshots = result.quantum.iteration_snapshots || [];
-  const hasSnapshots = snapshots.length > 0;
-  const totalIterations = convergenceHistory.length;
-
-  // Keep activeCheckpoint in bounds
-  const safeActive = Math.min(activeCheckpoint, Math.max(0, snapshots.length - 1));
-  const currentSnapshot = hasSnapshots ? snapshots[safeActive] : null;
-
-  const displayEnergy = currentSnapshot ? currentSnapshot.energy : result.quantum.energy;
-  const displayEnergyError = Math.abs(displayEnergy - result.classical.energy);
-  const displayAccuracy = Math.max(
-    0,
-    Math.min(100, (1 - displayEnergyError / Math.max(Math.abs(result.classical.energy), 1e-10)) * 100)
-  );
+  const totalIterations = result?.quantum.convergence_history.length ?? 0;
 
   // Animation: advance through convergence history
   useEffect(() => {
@@ -66,6 +48,26 @@ export function VQEQuantumTab({ result, circuitImage, trace }: VQEQuantumTabProp
       if (animationRef.current) clearInterval(animationRef.current);
     };
   }, [isAnimating, totalIterations]);
+
+  if (!result) {
+    return <InlineEmptyState message={UI_MESSAGES.emptyQuantum} />;
+  }
+
+  const convergenceHistory = result.quantum.convergence_history;
+  const snapshots = result.quantum.iteration_snapshots || [];
+  const hasSnapshots = snapshots.length > 0;
+
+  // Keep activeCheckpoint in bounds
+  const safeActive = Math.min(activeCheckpoint, Math.max(0, snapshots.length - 1));
+  const currentSnapshot = hasSnapshots ? snapshots[safeActive] : null;
+
+  const displayEnergy = currentSnapshot ? currentSnapshot.energy : result.quantum.energy;
+  const displayEnergyError = Math.abs(displayEnergy - result.classical.energy);
+  const displayAccuracy = Math.max(
+    0,
+    Math.min(100, (1 - displayEnergyError / Math.max(Math.abs(result.classical.energy), 1e-10)) * 100)
+  );
+
 
   const handlePlay = () => {
     setAnimatedIteration(0);
@@ -359,6 +361,11 @@ export function VQEQuantumTab({ result, circuitImage, trace }: VQEQuantumTabProp
             </VQECard>
           </div>
         </SectionCard>
+      )}
+
+      {/* Computational Trace */}
+      {result.computational_trace && (
+        <VQEComputationalTracePanel trace={result.computational_trace} />
       )}
 
       {/* Trace Table */}

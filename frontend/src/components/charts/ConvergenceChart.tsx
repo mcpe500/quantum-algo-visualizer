@@ -31,7 +31,6 @@ export function ConvergenceChart({
   optimalLabel = 'Optimal',
   dataLabel = 'Value',
   animatedUpTo,
-  onAnimationStep,
 }: ConvergenceChartProps) {
   if (!data || data.length === 0) return null;
 

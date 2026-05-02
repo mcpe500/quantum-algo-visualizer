@@ -9,6 +9,7 @@ from services.vqe_service import (
     get_vqe_circuit_payload,
     get_vqe_circuit_image_payload,
     get_vqe_classical_payload,
+    get_vqe_computational_trace_payload,
     get_vqe_trace_payload,
     run_vqe_payload,
 )
@@ -60,6 +61,14 @@ def vqe_circuit_image(case_id):
 def vqe_trace(case_id):
     theta = parse_float(request.args.get('theta'), math.pi / 4)
     payload = get_vqe_trace_payload(case_id, theta)
+    if payload is None:
+        return jsonify({'error': f'Case {case_id} not found'}), 404
+    return jsonify(payload)
+
+@api_bp.route('/vqe/computational-trace/<case_id>', methods=['GET'])
+def vqe_computational_trace(case_id):
+    shots = parse_int(request.args.get('shots'), 1024)
+    payload = get_vqe_computational_trace_payload(case_id, shots)
     if payload is None:
         return jsonify({'error': f'Case {case_id} not found'}), 404
     return jsonify(payload)

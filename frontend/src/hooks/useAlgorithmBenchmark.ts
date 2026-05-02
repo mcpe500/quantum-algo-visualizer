@@ -8,15 +8,17 @@ export interface BaseAlgorithmBenchmarkConfig<TCase, TParams, TResult, TCircuitI
   api: {
     getCases: () => Promise<TCase[]>;
     runBenchmark: (params: TParams) => Promise<TResult>;
-    getCircuitImage: (caseId: string, ...extra: any[]) => Promise<TCircuitImage>;
+    getCircuitImage: (caseId: string) => Promise<TCircuitImage>;
   };
   getDefaultParams: (caseId: string) => TParams;
   getCaptureId: (caseId: string) => string;
 }
 
-export interface BaseAlgorithmBenchmarkState<TResult, TCircuitImage> {
+export interface BaseAlgorithmBenchmarkState<TCase, TResult, TCircuitImage> {
   selectedCaseId: string;
   availableCases: string[];
+  caseData: TCase[];
+  selectedCaseData: TCase | null;
   benchmarkResult: TResult | null;
   circuitImage: TCircuitImage | null;
   isLoading: boolean;
@@ -30,15 +32,17 @@ export function useBaseAlgorithmBenchmark<
   TCircuitImage
 >(
   config: BaseAlgorithmBenchmarkConfig<TCase, TParams, TResult, TCircuitImage>
-): BaseAlgorithmBenchmarkState<TResult, TCircuitImage> & {
+): BaseAlgorithmBenchmarkState<TCase, TResult, TCircuitImage> & {
   setSelectedCaseId: (id: string) => void;
   handleRun: () => Promise<void>;
   handleDownload: () => Promise<void>;
 } {
   const { api, getDefaultParams, getCaptureId } = config;
+  const { getCases, runBenchmark, getCircuitImage } = api;
 
   const [selectedCaseId, setSelectedCaseId] = useState<string>('');
   const [availableCases, setAvailableCases] = useState<string[]>([]);
+  const [caseData, setCaseData] = useState<TCase[]>([]);
   const [benchmarkResult, setBenchmarkResult] = useState<TResult | null>(null);
   const [circuitImage, setCircuitImage] = useState<TCircuitImage | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -48,25 +52,27 @@ export function useBaseAlgorithmBenchmark<
     let cancelled = false;
     const load = async () => {
       try {
-        const cases = await api.getCases();
+        const cases = await getCases();
         if (cancelled) return;
         const ids = getSortedCaseIds(cases);
+        setCaseData(cases);
+        setAvailableCases(ids);
         if (ids.length > 0) {
-          setAvailableCases(ids);
           setSelectedCaseId((cur) => (ids.includes(cur) ? cur : ids[0]));
         }
       } catch {
+        setCaseData([]);
         setAvailableCases([]);
       }
     };
     void load();
     return () => { cancelled = true; };
-  }, [api.getCases]);
+  }, [getCases]);
 
-  const loadCircuitImage = useCallback(async (caseId: string, ...extra: any[]) => {
+  const loadCircuitImage = useCallback(async (caseId: string) => {
     if (!caseId) return;
-    setCircuitImage(await fetchNullable(() => api.getCircuitImage(caseId, ...extra)));
-  }, [api.getCircuitImage]);
+    setCircuitImage(await fetchNullable(() => getCircuitImage(caseId)));
+  }, [getCircuitImage]);
 
   const handleRun = useCallback(async () => {
     setIsLoading(true);
@@ -78,7 +84,7 @@ export function useBaseAlgorithmBenchmark<
     }
     try {
       const params = getDefaultParams(selectedCaseId);
-      const data = await api.runBenchmark(params);
+      const data = await runBenchmark(params);
       setBenchmarkResult(data);
       await loadCircuitImage(selectedCaseId);
     } catch (err) {
@@ -86,16 +92,20 @@ export function useBaseAlgorithmBenchmark<
     } finally {
       setIsLoading(false);
     }
-  }, [selectedCaseId, api.runBenchmark, getDefaultParams, loadCircuitImage]);
+  }, [selectedCaseId, runBenchmark, getDefaultParams, loadCircuitImage]);
 
   const handleDownload = useCallback(async () => {
     if (!selectedCaseId) return;
     await downloadElementAsPNG(getCaptureId(selectedCaseId), `${getCaptureId(selectedCaseId)}_${selectedCaseId}.png`);
   }, [selectedCaseId, getCaptureId]);
 
+  const selectedCaseData = caseData.find((item) => item.case_id === selectedCaseId) ?? null;
+
   return {
     selectedCaseId,
     availableCases,
+    caseData,
+    selectedCaseData,
     benchmarkResult,
     circuitImage,
     isLoading,

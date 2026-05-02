@@ -19,12 +19,13 @@ export interface AlgorithmPageShellProps {
   loadingMessage?: string;
   datasetLink?: string;
   tabs: Array<{
-    id: 'classic' | 'quantum' | 'animation';
+    id: 'problem' | 'classic' | 'quantum' | 'animation';
     label: string;
     icon: LucideIcon;
   }>;
-  activeTab: 'classic' | 'quantum' | 'animation';
-  onTabChange: (tab: 'classic' | 'quantum' | 'animation') => void;
+  activeTab: 'problem' | 'classic' | 'quantum' | 'animation';
+  onTabChange: (tab: 'problem' | 'classic' | 'quantum' | 'animation') => void;
+  problemTab?: ReactNode;
   classicTab: ReactNode;
   quantumTab: ReactNode;
   animationTab?: ReactNode;
@@ -49,6 +50,7 @@ export function AlgorithmPageShell({
   tabs,
   activeTab,
   onTabChange,
+  problemTab,
   classicTab,
   quantumTab,
   animationTab,
@@ -57,6 +59,7 @@ export function AlgorithmPageShell({
   extraControls,
 }: AlgorithmPageShellProps) {
   const hasCases = availableCases.length > 0;
+  const canShowTabs = hasResult || Boolean(problemTab);
   const tabClass = (tabId: string) =>
     activeTab === tabId
       ? 'bg-white text-slate-900 shadow-sm'
@@ -132,7 +135,7 @@ export function AlgorithmPageShell({
           <PageLoadingBanner message={loadingMessage} />
         )}
 
-        {hasResult && (
+        {canShowTabs && (
           <div id={captureId} className="space-y-6">
             <div className="flex justify-center mb-4">
               <div className="inline-flex bg-slate-100 p-1 rounded-lg">
@@ -149,13 +152,14 @@ export function AlgorithmPageShell({
               </div>
             </div>
 
-            {activeTab === 'classic' && classicTab}
-            {activeTab === 'quantum' && quantumTab}
-            {activeTab === 'animation' && animationTab}
+            {activeTab === 'problem' && problemTab}
+            {activeTab === 'classic' && (hasResult ? classicTab : <PageEmptyState message={emptyMessage} />)}
+            {activeTab === 'quantum' && (hasResult ? quantumTab : <PageEmptyState message={emptyMessage} />)}
+            {activeTab === 'animation' && (hasResult ? animationTab : <PageEmptyState message={emptyMessage} />)}
           </div>
         )}
 
-        {!hasResult && !isLoading && (
+        {!canShowTabs && !isLoading && (
           <PageEmptyState message={emptyMessage} />
         )}
       </div>

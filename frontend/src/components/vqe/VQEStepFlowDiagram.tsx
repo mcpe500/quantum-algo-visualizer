@@ -46,9 +46,6 @@ export function VQEStepFlowDiagram({
         ? 6
         : effectiveCheckpoint + 2;
 
-  // Pulse animation for the active step during animation
-  const pulseClass = isAnimating ? 'animate-pulse' : '';
-
   return (
     <VQECard>
       <div className={VQE_TYPOGRAPHY.tiny + ' text-center mb-4'}>

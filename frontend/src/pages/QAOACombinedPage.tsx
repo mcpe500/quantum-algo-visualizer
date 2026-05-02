@@ -1,18 +1,19 @@
-import { BookOpen, Cpu, GitBranch, LoaderCircle, PlayCircle } from 'lucide-react';
+import { BookOpen, Cpu, GitBranch, HelpCircle, LoaderCircle, PlayCircle } from 'lucide-react';
 import { useQAOA } from '../hooks/useQAOA';
 import { AlgorithmPageShell } from '../shared/components/AlgorithmPageShell';
-import { QAOAClassicTab, QAOAHybridAnimation, QAOAQuantumTab } from '../components/qaoa';
+import { QAOAClassicTab, QAOAHybridAnimation, QAOAProblemStatement, QAOAQuantumTab } from '../components/qaoa';
 import { CAPTURE_IDS } from '../constants/app';
 import { useInitialTabSync } from './hooks/useInitialTabSync';
 
 interface QAOACombinedPageProps {
-  initialTab?: 'classic' | 'quantum' | 'animation';
+  initialTab?: 'problem' | 'classic' | 'quantum' | 'animation';
 }
 
-export default function QAOACombinedPage({ initialTab = 'classic' }: QAOACombinedPageProps) {
+export default function QAOACombinedPage({ initialTab = 'problem' }: QAOACombinedPageProps) {
   const {
     selectedCaseId,
     availableCases,
+    selectedCaseData,
     benchmarkResult,
     circuitImage,
     trace,
@@ -44,6 +45,7 @@ export default function QAOACombinedPage({ initialTab = 'classic' }: QAOACombine
       loadingMessage="Menjalankan QAOA... SA dan optimisasi parameter mungkin memerlukan beberapa detik."
       datasetLink="/qaoa/dataset"
       tabs={[
+        { id: 'problem', label: 'Problem', icon: HelpCircle },
         { id: 'classic', label: 'Klasik', icon: BookOpen },
         { id: 'quantum', label: 'Kuantum', icon: Cpu },
         { id: 'animation', label: 'Animasi 3D', icon: PlayCircle },
@@ -52,6 +54,7 @@ export default function QAOACombinedPage({ initialTab = 'classic' }: QAOACombine
       onTabChange={setActiveTab}
       captureId={CAPTURE_IDS.qaoa}
       emptyMessage={'Pilih kasus dan klik "Jalankan" untuk memulai benchmarking QAOA.'}
+      problemTab={<QAOAProblemStatement caseData={selectedCaseData} result={benchmarkResult} />}
       classicTab={benchmarkResult ? <QAOAClassicTab result={benchmarkResult} /> : null}
       quantumTab={benchmarkResult ? (
         <QAOAQuantumTab result={benchmarkResult} circuitImage={circuitImage} trace={trace} />

@@ -2,7 +2,8 @@ import { useEffect, useMemo, useState } from 'react';
 import type { QAOABenchmarkResult } from '../../types/qaoa';
 import { formatNumber, createTemplateFromResult, getMatrixFromPayload, validateMatrix, toMatrix, getEdges } from './simulated-annealing/utils';
 import { simulate } from './simulated-annealing/simulation';
-import { GraphSvg, Arrow, statusStyleMap, CutDetails, ProbabilityLogic } from './simulated-annealing/subcomponents';
+import { GraphSvg, Arrow, CutDetails, ProbabilityLogic } from './simulated-annealing/subcomponents';
+import { statusStyleMap } from './simulated-annealing/styles';
 import type { Matrix, SimulationConfig, SimulatedAnnealingResult, TraceStep, JsonPayload } from './simulated-annealing/types';
 
 interface QAOASimulatedAnnealingFlowProps {

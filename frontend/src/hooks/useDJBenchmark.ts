@@ -24,11 +24,12 @@ export interface UseDJBenchmarkReturn {
   classicalResult: ClassicalResult | null;
   isLoading: boolean;
   error: string | null;
-  activeTab: 'classic' | 'quantum' | 'animation';
+  selectedCaseData: DJCase | null;
+  activeTab: 'problem' | 'classic' | 'quantum' | 'animation';
   isVideoExporting: boolean;
   setIsVideoExporting: (v: boolean) => void;
   setSelectedCaseId: (id: string) => void;
-  setActiveTab: (tab: 'classic' | 'quantum' | 'animation') => void;
+  setActiveTab: (tab: 'problem' | 'classic' | 'quantum' | 'animation') => void;
   handleRun: () => Promise<void>;
   handleDownload: () => Promise<void>;
 }
@@ -48,8 +49,9 @@ export function useDJBenchmark(): UseDJBenchmarkReturn {
   const [trace, setTrace] = useState<DJQuantumTrace | null>(null);
   const [animationData, setAnimationData] = useState<DJAnimationPayload | null>(null);
   const [classicalResult, setClassicalResult] = useState<ClassicalResult | null>(null);
-  const [activeTab, setActiveTab] = useState<'classic' | 'quantum' | 'animation'>('classic');
+  const [activeTab, setActiveTab] = useState<'problem' | 'classic' | 'quantum' | 'animation'>('problem');
   const [isVideoExporting, setIsVideoExporting] = useState(false);
+  const { selectedCaseId, handleRun: runBaseBenchmark } = base;
 
   const loadBoxedCircuitImage = useCallback(async (caseId: string) => {
     if (!caseId) return;
@@ -75,23 +77,23 @@ export function useDJBenchmark(): UseDJBenchmarkReturn {
   }, []);
 
   useEffect(() => {
-    if (!base.selectedCaseId) return;
+    if (!selectedCaseId) return;
     queueMicrotask(() => {
-      void loadClassical(base.selectedCaseId);
-      void loadBoxedCircuitImage(base.selectedCaseId);
-      void loadTrace(base.selectedCaseId);
-      void loadAnimation(base.selectedCaseId);
+      void loadClassical(selectedCaseId);
+      void loadBoxedCircuitImage(selectedCaseId);
+      void loadTrace(selectedCaseId);
+      void loadAnimation(selectedCaseId);
     });
-  }, [base.selectedCaseId, loadClassical, loadBoxedCircuitImage, loadTrace, loadAnimation]);
+  }, [selectedCaseId, loadClassical, loadBoxedCircuitImage, loadTrace, loadAnimation]);
 
   const handleRun = useCallback(async () => {
-    await base.handleRun();
-    if (base.selectedCaseId) {
-      await loadClassical(base.selectedCaseId);
-      await loadBoxedCircuitImage(base.selectedCaseId);
-      void loadAnimation(base.selectedCaseId);
+    await runBaseBenchmark();
+    if (selectedCaseId) {
+      await loadClassical(selectedCaseId);
+      await loadBoxedCircuitImage(selectedCaseId);
+      void loadAnimation(selectedCaseId);
     }
-  }, [base.handleRun, base.selectedCaseId, loadClassical, loadBoxedCircuitImage, loadAnimation]);
+  }, [runBaseBenchmark, selectedCaseId, loadClassical, loadBoxedCircuitImage, loadAnimation]);
 
   return {
     ...base,

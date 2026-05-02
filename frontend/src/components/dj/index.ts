@@ -4,6 +4,7 @@ export { SpeedupCard } from './SpeedupCard';
 export { CircuitVisualizer } from './CircuitVisualizer';
 export { Header } from './Header';
 export { InfoCard } from './InfoCard';
+export { DJProblemStatement } from './DJProblemStatement';
 export { ClassicalVisualization } from './ClassicalVisualization';
 export { InputsPanel } from './InputsPanel';
 export { OraclePanel } from './OraclePanel';

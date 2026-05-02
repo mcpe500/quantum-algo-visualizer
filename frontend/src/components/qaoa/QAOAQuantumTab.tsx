@@ -7,7 +7,7 @@ import { CutDistributionChart } from '../charts/CutDistributionChart';
 import { CircuitDisplay } from '../layout/CircuitDisplay';
 import { TraceTable } from '../layout/TraceTable';
 import { InlineEmptyState, SectionCard } from '../layout';
-import { Cpu, GitBranch, RefreshCw, ArrowRight } from 'lucide-react';
+import { GitBranch, RefreshCw, ArrowRight } from 'lucide-react';
 import { SURFACE_CLASSES, UI_MESSAGES } from '../../constants/ui';
 
 interface QAOAQuantumTabProps {

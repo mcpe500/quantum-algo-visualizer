@@ -1,6 +1,38 @@
 import type { BaseCase, BaseBenchmarkResult, BaseBenchmarkParams, BaseTraceStage, BaseTracePartition } from './shared';
 
+export interface VQEMoleculeSpec {
+  formula?: string;
+  interatomic_distance_angstrom?: number;
+  basis?: string;
+  charge?: number;
+  multiplicity?: number;
+}
+
+export interface VQEPreprocessingSpec {
+  mapping?: string;
+  initial_qubits?: number;
+  qubit_reduction?: string;
+  target_qubits?: number;
+  hamiltonian_format?: string;
+}
+
+export interface VQEExperimentSpec {
+  algorithm?: string;
+  ansatz_type?: string;
+  ansatz_family?: string;
+  rotation_gate?: string;
+  entanglement?: string;
+  n_layers?: number;
+  shots?: number;
+  optimizer?: string;
+  classical_reference?: string;
+}
+
 export interface VQECase extends BaseCase {
+  problem_type?: string;
+  molecule_spec?: VQEMoleculeSpec;
+  preprocessing?: VQEPreprocessingSpec;
+  experiment?: VQEExperimentSpec;
   molecule: string;
   qubits: number;
   ansatz: {
@@ -12,31 +44,9 @@ export interface VQECase extends BaseCase {
   };
   raw_spec?: {
     problem_type?: string;
-    molecule_spec?: {
-      formula?: string;
-      interatomic_distance_angstrom?: number;
-      basis?: string;
-      charge?: number;
-      multiplicity?: number;
-    };
-    preprocessing?: {
-      mapping?: string;
-      initial_qubits?: number;
-      qubit_reduction?: string;
-      target_qubits?: number;
-      hamiltonian_format?: string;
-    };
-    experiment?: {
-      algorithm?: string;
-      ansatz_type?: string;
-      ansatz_family?: string;
-      rotation_gate?: string;
-      entanglement?: string;
-      n_layers?: number;
-      shots?: number;
-      optimizer?: string;
-      classical_reference?: string;
-    };
+    molecule_spec?: VQEMoleculeSpec;
+    preprocessing?: VQEPreprocessingSpec;
+    experiment?: VQEExperimentSpec;
   };
   transform?: {
     source?: string;
@@ -99,6 +109,69 @@ export interface VQEComparison {
   note: string;
 }
 
+export interface VQEComputationalTraceValue {
+  label: string;
+  value: string;
+  tone?: string;
+}
+
+export interface VQEComputationalTraceMatrixPreview {
+  dimension: string;
+  rows: string[][];
+  truncated: boolean;
+}
+
+export interface VQEComputationalTracePauliTerm {
+  pauli: string;
+  coefficient: number;
+  text: string;
+}
+
+export interface VQEComputationalTraceStep {
+  step: number;
+  phase: string;
+  title: string;
+  summary: string;
+  formula?: string | null;
+  calculation: string[];
+  result?: string | null;
+  values: VQEComputationalTraceValue[];
+  pauli_terms?: VQEComputationalTracePauliTerm[];
+  matrix_preview?: VQEComputationalTraceMatrixPreview;
+}
+
+export interface VQEComputationalTraceTrack {
+  title: string;
+  steps: VQEComputationalTraceStep[];
+}
+
+export interface VQEComputationalIterationTrace {
+  iteration: number;
+  energy: number;
+  parameters: number[];
+}
+
+export interface VQEComputationalTraceComparison {
+  fci_energy: number;
+  vqe_energy: number;
+  energy_error: number;
+  accuracy_percent: number;
+  shots: number;
+  matrix_size: string;
+  pauli_terms: number;
+}
+
+export interface VQEComputationalTrace {
+  case_id: string;
+  title: string;
+  summary: string;
+  numerical_policy: string;
+  fci: VQEComputationalTraceTrack;
+  vqe: VQEComputationalTraceTrack;
+  iteration_trace: VQEComputationalIterationTrace[];
+  comparison: VQEComputationalTraceComparison;
+}
+
 export interface VQEBenchmarkResult extends BaseBenchmarkResult {
   molecule: string;
   description: string;
@@ -109,11 +182,12 @@ export interface VQEBenchmarkResult extends BaseBenchmarkResult {
   classical: VQEClassicalResult;
   quantum: VQEQuantumResult;
   comparison: VQEComparison;
+  computational_trace?: VQEComputationalTrace;
 }
 
-export interface VQETraceStage extends BaseTraceStage {}
+export type VQETraceStage = BaseTraceStage;
 
-export interface VQETracePartition extends BaseTracePartition {}
+export type VQETracePartition = BaseTracePartition;
 
 export interface VQETrace {
   case_id: string;
@@ -124,7 +198,7 @@ export interface VQETrace {
   partitions: VQETracePartition[];
 }
 
-export interface VQEBenchmarkParams extends BaseBenchmarkParams {}
+export type VQEBenchmarkParams = BaseBenchmarkParams;
 
 export interface VQECircuitImage {
   case_id: string;

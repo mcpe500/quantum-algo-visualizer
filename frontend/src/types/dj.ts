@@ -52,13 +52,13 @@ export interface DJCircuit {
   }>;
 }
 
-export interface DJBenchmarkParams extends BaseBenchmarkParams {}
+export type DJBenchmarkParams = BaseBenchmarkParams;
 
 export interface DJTraceStage extends BaseTraceStage {
   ancilla_marker: string;
 }
 
-export interface DJTracePartition extends BaseTracePartition {}
+export type DJTracePartition = BaseTracePartition;
 
 export interface DJQuantumTrace {
   case_id: string;

@@ -20,6 +20,7 @@ import type {
   VQETrace,
   VQEBenchmarkParams,
   VQECircuitImage,
+  VQEComputationalTrace,
 } from "../types/vqe";
 import type {
   QAOACase,
@@ -204,6 +205,10 @@ export const vqeApi = {
 
   getTrace(caseId: string): Promise<VQETrace> {
     return requestJson<VQETrace>(`/vqe/trace/${caseId}`, undefined, "Trace not found");
+  },
+
+  getComputationalTrace(caseId: string, shots = 1024): Promise<VQEComputationalTrace> {
+    return requestJson<VQEComputationalTrace>(`/vqe/computational-trace/${caseId}`, undefined, "Computational trace not found", { shots });
   },
 };
 

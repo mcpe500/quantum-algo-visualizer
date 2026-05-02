@@ -162,7 +162,7 @@ export function createUseAlgorithmBenchmark<
         } finally {
           setIsLoading(false);
         }
-      }, [selectedCaseId, loadCircuitImage, loadTrace, api, defaultShots]);
+      }, [selectedCaseId, loadCircuitImage, loadTrace]);
 
       const handleDownload = useCallback(async () => {
         if (!captureId) {
@@ -170,7 +170,7 @@ export function createUseAlgorithmBenchmark<
         }
         if (!selectedCaseId) return;
         await downloadElementAsPNG(captureId, `${algorithmId}_${selectedCaseId}.png`);
-      }, [algorithmId, captureId, selectedCaseId]);
+      }, [selectedCaseId]);
 
     return {
       selectedCaseId,
