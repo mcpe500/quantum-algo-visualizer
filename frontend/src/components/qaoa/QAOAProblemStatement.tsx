@@ -96,15 +96,21 @@ export function QAOAProblemStatement({ className = '', caseData, result }: QAOAP
 
             <DesktopArrow />
 
-            <FlowBox icon={<Scissors className="h-5 w-5" />} label="Objective" title="max C(z)" tone="amber">
-              <div className="flex h-56 flex-col items-center justify-center rounded-2xl border border-amber-100 bg-white p-5 text-center">
-                <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-3">
+            <FlowBox icon={<Scissors className="h-5 w-5" />} label="Objective" title="Max-Cut Problem" tone="amber">
+              <div className="flex h-56 flex-col items-center justify-center rounded-2xl border border-amber-100 bg-white p-4 text-center">
+                <p className="mb-4 text-xs font-bold leading-relaxed text-amber-700">
+                  Maksimalkan jumlah sisi (edge) yang terpotong antar dua partisi
+                </p>
+                <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2">
                   <GroupBadge label="0" color="bg-blue-600" />
-                  <Scissors className="h-8 w-8 text-amber-500" />
+                  <div className="flex flex-col items-center px-1">
+                    <Scissors className="h-6 w-6 text-amber-500" />
+                    <span className="mt-1 text-[10px] font-black uppercase tracking-widest text-amber-500">Cut</span>
+                  </div>
                   <GroupBadge label="1" color="bg-red-600" />
                 </div>
-                <div className="mt-5 rounded-full border border-amber-200 bg-amber-50 px-4 py-2 font-mono text-3xl font-black text-amber-700">
-                  cut ↑
+                <div className="mt-4 rounded-full border border-amber-200 bg-amber-50 px-4 py-1.5 font-mono text-lg font-black text-amber-700 shadow-sm">
+                  max C(z)
                 </div>
               </div>
             </FlowBox>
