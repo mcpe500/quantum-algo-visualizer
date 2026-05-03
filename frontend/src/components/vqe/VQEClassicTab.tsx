@@ -5,7 +5,6 @@ import { BookOpen } from 'lucide-react';
 import { UI_MESSAGES } from '../../constants/ui';
 import { VQESection, VQEMetricsGrid, VQECard, VQE_TYPOGRAPHY } from './layout';
 import { FCIBookFigure } from './fci/FCIBookFigure';
-import { FCIFlowDiagram } from './FCIFlowDiagram';
 
 interface VQEClassicTabProps {
   result: VQEBenchmarkResult | null;
@@ -19,10 +18,6 @@ export function VQEClassicTab({ result }: VQEClassicTabProps) {
   return (
     <div className="space-y-6">
       <SectionCard title="Full Configuration Interaction (FCI)" icon={<BookOpen className="w-5 h-5" />}>
-        <VQESection>
-          <FCIFlowDiagram activeCheckpoint={1} />
-        </VQESection>
-
         <VQESection noPadding>
           <FCIBookFigure result={result} />
         </VQESection>

@@ -169,7 +169,7 @@ function InputPanel({ model }: { model: QFTBookFigureModel }) {
 
       {model.isPadded ? (
         <text x={px + 30} y={py + ph - 18} fontSize="15" fill={C.muted}>
-          {model.nOriginal} sampel -> zero-pad -> {model.nPadded} sampel
+          {model.nOriginal} sampel {'->'} zero-pad {'->'} {model.nPadded} sampel
           <tspan> (2</tspan><tspan baselineShift="super" fontSize="10">{Math.log2(model.nPadded)}</tspan><tspan> tahap)</tspan>
         </text>
       ) : (
