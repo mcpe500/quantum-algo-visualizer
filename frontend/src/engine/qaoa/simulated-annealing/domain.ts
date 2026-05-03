@@ -1,3 +1,8 @@
+/**
+ * Domain types for QAOA Simulated Annealing engine.
+ * Extracted from components/qaoa/simulated-annealing/types.ts
+ */
+
 export type Matrix = number[][];
 
 export interface Edge {
@@ -77,4 +82,40 @@ export interface JsonPayload {
     adjacency_matrix?: unknown;
   };
   adjacency_matrix?: unknown;
+}
+
+export interface QaoaSAEngineInput {
+  jsonInput: string;
+  initialTemperature: number;
+  alpha: number;
+  minTemperature: number;
+  maxSteps: number;
+  seed: number;
+  description?: string;
+}
+
+export interface MatrixParseError extends Error {
+  name: 'MatrixParseError';
+  code: string;
+}
+
+export interface ConfigError extends Error {
+  name: 'ConfigError';
+  code: string;
+}
+
+export function createMatrixParseError(message: string, code: string): MatrixParseError {
+  const error = Object.assign(new Error(message), {
+    name: 'MatrixParseError',
+    code,
+  }) as MatrixParseError;
+  return error;
+}
+
+export function createConfigError(message: string, code: string): ConfigError {
+  const error = Object.assign(new Error(message), {
+    name: 'ConfigError',
+    code,
+  }) as ConfigError;
+  return error;
 }

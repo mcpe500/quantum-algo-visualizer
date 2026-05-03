@@ -22,6 +22,7 @@ type FFTTraceNode = {
   depth: number;
   path: string;
   input: number[];
+  indices: number[];
   output: Complex[];
   butterflyRows: ButterflyRow[];
   evenNode?: FFTTraceNode;
@@ -56,9 +57,12 @@ export interface QFTBookFigureModel {
   paddedPreview: string;
   sampleLine: string;
   wavePath: string;
-  evenPreview: string;
-  oddPreview: string;
-  quarterNodes: SplitPreviewNode[];
+  treeRootPreview: string;
+  treeEvenPreview: string;
+  treeOddPreview: string;
+  treeQuarterNodes: SplitPreviewNode[];
+  treeLeafCount: number;
+  treeLeafPreview: string;
   divideSummaryLine: string;
   conquerSummaryLine: string;
   mergeExample: MergeExample | null;
@@ -128,6 +132,13 @@ function formatComplexPreview(values: Complex[], maxItems = 3): string {
   return `[${shown.join(', ')}]`;
 }
 
+function formatIndexPreview(indices: number[], maxItems = 8): string {
+  if (indices.length === 0) return '[]';
+  const shown = indices.slice(0, maxItems).map(String);
+  if (indices.length > maxItems) shown.push('...');
+  return `[${shown.join(', ')}]`;
+}
+
 function buildWaveformPath(values: number[], width: number, height: number): string {
   if (values.length === 0) return '';
   const min = Math.min(...values);
@@ -143,7 +154,7 @@ function buildWaveformPath(values: number[], width: number, height: number): str
     .join(' ');
 }
 
-function buildFFTTrace(signal: number[], depth = 0, path = 'R'): FFTTraceNode {
+function buildFFTTrace(signal: number[], indices: number[], depth = 0, path = 'R'): FFTTraceNode {
   const n = signal.length;
 
   if (n === 1) {
@@ -152,15 +163,18 @@ function buildFFTTrace(signal: number[], depth = 0, path = 'R'): FFTTraceNode {
       depth,
       path,
       input: signal,
+      indices,
       output: [{ re: signal[0] ?? 0, im: 0 }],
       butterflyRows: [],
     };
   }
 
   const evenInput = signal.filter((_, index) => index % 2 === 0);
+  const evenIndices = indices.filter((_, index) => index % 2 === 0);
   const oddInput = signal.filter((_, index) => index % 2 !== 0);
-  const evenNode = buildFFTTrace(evenInput, depth + 1, `${path}E`);
-  const oddNode = buildFFTTrace(oddInput, depth + 1, `${path}O`);
+  const oddIndices = indices.filter((_, index) => index % 2 !== 0);
+  const evenNode = buildFFTTrace(evenInput, evenIndices, depth + 1, `${path}E`);
+  const oddNode = buildFFTTrace(oddInput, oddIndices, depth + 1, `${path}O`);
 
   const output: Complex[] = Array.from({ length: n }, () => ({ ...ZERO_COMPLEX }));
   const butterflyRows: ButterflyRow[] = [];
@@ -190,6 +204,7 @@ function buildFFTTrace(signal: number[], depth = 0, path = 'R'): FFTTraceNode {
     depth,
     path,
     input: signal,
+    indices,
     output,
     butterflyRows,
     evenNode,
@@ -237,11 +252,15 @@ function summarizeLevels(levels: FFTTraceNode[][], reverse = false): string {
 
 export function buildQFTBookFigureModel(result: QFTBenchmarkResult): QFTBookFigureModel {
   const n = result.n_points_padded || result.n_points_original;
-  const trace = buildFFTTrace(result.padded_signal);
+  const initialIndices = Array.from({ length: n }, (_, i) => i);
+  const trace = buildFFTTrace(result.padded_signal, initialIndices);
   const levels = collectNodesByDepth(trace);
   const mirrorPairs = buildDominantMirrorPairs(result.fft.dominant_bins, result.fft.dominant_magnitudes, result.fft.n_points);
   const primaryPair = mirrorPairs[0] ?? null;
   const focusRow = primaryPair ? trace.butterflyRows[primaryPair.canonicalBin] ?? null : null;
+  
+  const leaves = levels[levels.length - 1] ?? [];
+  const leafIndices = leaves.map(n => n.indices[0]);
 
   return {
     title: 'Alur FFT Klasik Dinamis - Cooley-Tukey Radix-2',
@@ -250,12 +269,17 @@ export function buildQFTBookFigureModel(result: QFTBenchmarkResult): QFTBookFigu
     paddedPreview: `x_pad[n] = ${formatValuePreview(result.padded_signal, 5)}`,
     sampleLine: `${result.n_points_original} sampel asli -> zero padding -> ${n} sampel untuk radix-2 FFT.`,
     wavePath: buildWaveformPath(result.input_signal, 240, 64),
-    evenPreview: `genap = ${formatValuePreview(trace.evenNode?.input ?? [], 4)}`,
-    oddPreview: `ganjil = ${formatValuePreview(trace.oddNode?.input ?? [], 4)}`,
-    quarterNodes: (levels[2] ?? []).slice(0, 4).map((node) => ({
+    
+    treeRootPreview: formatIndexPreview(trace.indices, 8),
+    treeEvenPreview: formatIndexPreview(trace.evenNode?.indices ?? [], 8),
+    treeOddPreview: formatIndexPreview(trace.oddNode?.indices ?? [], 8),
+    treeQuarterNodes: (levels[2] ?? []).slice(0, 4).map((node) => ({
       label: formatPathLabel(node.path),
-      preview: formatValuePreview(node.input, 3),
+      preview: formatIndexPreview(node.indices, 4),
     })),
+    treeLeafCount: n,
+    treeLeafPreview: formatIndexPreview(leafIndices as number[], 12),
+    
     divideSummaryLine: summarizeLevels(levels),
     conquerSummaryLine: summarizeLevels(levels, true),
     mergeExample: focusRow && primaryPair

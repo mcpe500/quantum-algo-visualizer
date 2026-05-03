@@ -1,4 +1,4 @@
-import type { StatusColor } from './types';
+import type { StatusColor } from '../../../engine/qaoa/simulated-annealing';
 
 export const statusStyleMap: Record<StatusColor, { card: string; badge: string }> = {
   slate: {

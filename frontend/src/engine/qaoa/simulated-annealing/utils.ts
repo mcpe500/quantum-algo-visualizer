@@ -1,4 +1,9 @@
-import type { Matrix, Edge, CutDetailsResult, CutDetail, JsonPayload } from './types';
+/**
+ * Utility functions for QAOA Simulated Annealing engine.
+ * Extracted from components/qaoa/simulated-annealing/utils.ts
+ */
+
+import type { Matrix, Edge, CutDetailsResult, CutDetail, JsonPayload } from './domain';
 
 export function formatNumber(value: unknown, digits = 5) {
   if (value === null || value === undefined) return '-';

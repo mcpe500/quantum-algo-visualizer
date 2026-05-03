@@ -1,5 +1,10 @@
+/**
+ * QAOA Simulated Annealing simulation engine.
+ * Pure domain logic - no React, no DOM.
+ */
+
 import { formatNumber, calcCutDetails, flipOneBit, createSeededRandom } from './utils';
-import type { SimulationConfig, SimulatedAnnealingResult, TraceStep, StatusColor } from './types';
+import type { SimulationConfig, SimulatedAnnealingResult, TraceStep, StatusColor } from './domain';
 
 export function simulate({ matrix, initialTemperature, alpha, minTemperature, maxSteps, seed }: SimulationConfig): SimulatedAnnealingResult {
   const n = matrix.length;

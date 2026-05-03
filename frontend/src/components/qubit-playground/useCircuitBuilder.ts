@@ -22,160 +22,25 @@ import {
   blochCoords,
   marginalProb,
 } from './constants';
+import {
+  type CircuitGateName,
+  type CircuitPlacement,
+  type CircuitCellState,
+  type CircuitProjectData,
+  type CircuitCodeExportFormat,
+  CIRCUIT_GATE_LIBRARY,
+  getGateDefinition,
+  createPlacementId,
+  clampQubits,
+  clampColumns,
+  clonePlacement,
+  sortPlacements,
+  overlaps,
+  buildCircuitCode,
+} from '../../engine/circuit-lab';
 
-export type CircuitGateName =
-  | 'H'
-  | 'X'
-  | 'Y'
-  | 'Z'
-  | 'S'
-  | 'T'
-  | 'Rx'
-  | 'Ry'
-  | 'Rz'
-  | 'CNOT'
-  | 'SWAP'
-  | 'CPhase';
-
-export interface CircuitGateDefinition {
-  gate: CircuitGateName;
-  symbol: string;
-  fullName: string;
-  group: 'fixed' | 'parametric' | 'twoQubit';
-  numQubits: 1 | 2;
-  defaultAngle?: number;
-  description: string;
-  tone: 'blue' | 'green' | 'purple';
-}
-
-export const CIRCUIT_GATE_LIBRARY: CircuitGateDefinition[] = [
-  {
-    gate: 'H',
-    symbol: 'H',
-    fullName: 'Hadamard',
-    group: 'fixed',
-    numQubits: 1,
-    description: 'Membuat superposisi merata pada qubit target.',
-    tone: 'blue',
-  },
-  {
-    gate: 'X',
-    symbol: 'X',
-    fullName: 'Pauli-X',
-    group: 'fixed',
-    numQubits: 1,
-    description: 'Membalik amplitudo basis |0⟩ dan |1⟩.',
-    tone: 'blue',
-  },
-  {
-    gate: 'Y',
-    symbol: 'Y',
-    fullName: 'Pauli-Y',
-    group: 'fixed',
-    numQubits: 1,
-    description: 'Rotasi dengan fase imajiner pada sumbu Y.',
-    tone: 'blue',
-  },
-  {
-    gate: 'Z',
-    symbol: 'Z',
-    fullName: 'Pauli-Z',
-    group: 'fixed',
-    numQubits: 1,
-    description: 'Membalik fase komponen |1⟩.',
-    tone: 'blue',
-  },
-  {
-    gate: 'S',
-    symbol: 'S',
-    fullName: 'Phase (S)',
-    group: 'fixed',
-    numQubits: 1,
-    description: 'Menambahkan fase π/2 pada |1⟩.',
-    tone: 'blue',
-  },
-  {
-    gate: 'T',
-    symbol: 'T',
-    fullName: 'T Gate',
-    group: 'fixed',
-    numQubits: 1,
-    description: 'Menambahkan fase π/4 pada |1⟩.',
-    tone: 'blue',
-  },
-  {
-    gate: 'Rx',
-    symbol: 'Rx',
-    fullName: 'Rotation-X',
-    group: 'parametric',
-    numQubits: 1,
-    defaultAngle: Math.PI / 4,
-    description: 'Memutar vektor Bloch terhadap sumbu X.',
-    tone: 'green',
-  },
-  {
-    gate: 'Ry',
-    symbol: 'Ry',
-    fullName: 'Rotation-Y',
-    group: 'parametric',
-    numQubits: 1,
-    defaultAngle: Math.PI / 4,
-    description: 'Memutar vektor Bloch terhadap sumbu Y.',
-    tone: 'green',
-  },
-  {
-    gate: 'Rz',
-    symbol: 'Rz',
-    fullName: 'Rotation-Z',
-    group: 'parametric',
-    numQubits: 1,
-    defaultAngle: Math.PI / 4,
-    description: 'Memutar fase relatif terhadap sumbu Z.',
-    tone: 'green',
-  },
-  {
-    gate: 'CNOT',
-    symbol: 'CX',
-    fullName: 'Controlled-NOT',
-    group: 'twoQubit',
-    numQubits: 2,
-    description: 'Membalik target saat control bernilai |1⟩.',
-    tone: 'purple',
-  },
-  {
-    gate: 'SWAP',
-    symbol: 'SWAP',
-    fullName: 'Swap',
-    group: 'twoQubit',
-    numQubits: 2,
-    description: 'Menukar keadaan dua qubit yang berdekatan.',
-    tone: 'purple',
-  },
-  {
-    gate: 'CPhase',
-    symbol: 'CP',
-    fullName: 'Controlled-Phase',
-    group: 'twoQubit',
-    numQubits: 2,
-    defaultAngle: Math.PI / 4,
-    description: 'Menambahkan fase terkontrol pada komponen |11⟩.',
-    tone: 'purple',
-  },
-];
-
-export interface CircuitPlacement {
-  id: string;
-  gate: CircuitGateName;
-  column: number;
-  row: number;
-  targetRow?: number;
-  angle?: number;
-}
-
-export interface CircuitCellState {
-  placement: CircuitPlacement;
-  role: 'primary' | 'secondary';
-}
+export type { CircuitGateName, CircuitPlacement, CircuitCellState, CircuitProjectData, CircuitCodeExportFormat };
+export { CIRCUIT_GATE_LIBRARY };
 
 export interface CircuitTraceStep {
   placementId: string;
@@ -208,15 +73,6 @@ export interface CircuitPlaybackFrame {
   blochCards: Array<BlochData & { label: string }>;
 }
 
-export interface CircuitProjectData {
-  version: 1;
-  numQubits: number;
-  columnCount: number;
-  placements: CircuitPlacement[];
-}
-
-export type CircuitCodeExportFormat = 'json' | 'qiskit' | 'cirq' | 'projectq';
-
 const SINGLE_GATE_MATRICES: Record<Extract<CircuitGateName, 'H' | 'X' | 'Y' | 'Z' | 'S' | 'T'>, Complex[][]> = {
   H,
   X,
@@ -244,250 +100,6 @@ const TWO_QUBIT_GATES: CircuitGateName[] = ['CNOT', 'SWAP', 'CPhase'];
 const EPSILON = 1e-3;
 
 let placementCounter = 0;
-
-function createPlacementId(): string {
-  placementCounter += 1;
-  return `circuit-placement-${placementCounter}`;
-}
-
-function clampQubits(value: number): number {
-  return Math.max(1, Math.round(value));
-}
-
-function clampColumns(value: number): number {
-  return Math.max(4, Math.min(10, Math.round(value)));
-}
-
-function getGateDefinition(gate: CircuitGateName): CircuitGateDefinition {
-  return CIRCUIT_GATE_LIBRARY.find((entry) => entry.gate === gate)!;
-}
-
-function computeBlochData(statevector: Complex[], numQubits: number): BlochData[] {
-  return Array.from({ length: numQubits }, (_, i) => {
-    const coords = blochCoords(statevector, i, numQubits);
-    const probs = marginalProb(statevector, i, numQubits);
-    return { ...coords, pZero: probs.pZero, pOne: probs.pOne };
-  });
-}
-
-function buildBlochCards(blochData: BlochData[]) {
-  return blochData.map((entry, index) => ({ ...entry, label: `q${index}` }));
-}
-
-function clonePlacement(placement: CircuitPlacement): CircuitPlacement {
-  return {
-    id: placement.id,
-    gate: placement.gate,
-    column: placement.column,
-    row: placement.row,
-    targetRow: placement.targetRow,
-    angle: placement.angle,
-  };
-}
-
-function sortPlacements(placements: CircuitPlacement[]): CircuitPlacement[] {
-  return [...placements].sort((a, b) => a.column - b.column || a.row - b.row);
-}
-
-function formatCodeNumber(value: number): string {
-  return value.toFixed(6).replace(/\.0+$/, '').replace(/(\.[0-9]*[1-9])0+$/, '$1');
-}
-
-function buildQiskitSource(project: CircuitProjectData): string {
-  const lines = [
-    'from qiskit import QuantumCircuit',
-    '',
-    `qc = QuantumCircuit(${project.numQubits})`,
-  ];
-
-  let previousColumn = -1;
-  for (const placement of project.placements) {
-    if (placement.column !== previousColumn) {
-      lines.push('', `# Column ${placement.column + 1}`);
-      previousColumn = placement.column;
-    }
-
-    const targetRow = placement.targetRow ?? placement.row + 1;
-    const angle = formatCodeNumber(placement.angle ?? getGateDefinition(placement.gate).defaultAngle ?? 0);
-
-    switch (placement.gate) {
-      case 'H':
-        lines.push(`qc.h(${placement.row})`);
-        break;
-      case 'X':
-        lines.push(`qc.x(${placement.row})`);
-        break;
-      case 'Y':
-        lines.push(`qc.y(${placement.row})`);
-        break;
-      case 'Z':
-        lines.push(`qc.z(${placement.row})`);
-        break;
-      case 'S':
-        lines.push(`qc.s(${placement.row})`);
-        break;
-      case 'T':
-        lines.push(`qc.t(${placement.row})`);
-        break;
-      case 'Rx':
-        lines.push(`qc.rx(${angle}, ${placement.row})`);
-        break;
-      case 'Ry':
-        lines.push(`qc.ry(${angle}, ${placement.row})`);
-        break;
-      case 'Rz':
-        lines.push(`qc.rz(${angle}, ${placement.row})`);
-        break;
-      case 'CNOT':
-        lines.push(`qc.cx(${placement.row}, ${targetRow})`);
-        break;
-      case 'SWAP':
-        lines.push(`qc.swap(${placement.row}, ${targetRow})`);
-        break;
-      case 'CPhase':
-        lines.push(`qc.cp(${angle}, ${placement.row}, ${targetRow})`);
-        break;
-    }
-  }
-
-  lines.push('', 'print(qc)');
-  return lines.join('\n');
-}
-
-function buildCirqSource(project: CircuitProjectData): string {
-  const lines = [
-    'import cirq',
-    'import numpy as np',
-    '',
-    `q = cirq.LineQubit.range(${project.numQubits})`,
-    'circuit = cirq.Circuit()',
-  ];
-
-  let previousColumn = -1;
-  for (const placement of project.placements) {
-    if (placement.column !== previousColumn) {
-      lines.push('', `# Column ${placement.column + 1}`);
-      previousColumn = placement.column;
-    }
-
-    const targetRow = placement.targetRow ?? placement.row + 1;
-    const angle = formatCodeNumber(placement.angle ?? getGateDefinition(placement.gate).defaultAngle ?? 0);
-
-    switch (placement.gate) {
-      case 'H':
-        lines.push(`circuit.append(cirq.H(q[${placement.row}]))`);
-        break;
-      case 'X':
-        lines.push(`circuit.append(cirq.X(q[${placement.row}]))`);
-        break;
-      case 'Y':
-        lines.push(`circuit.append(cirq.Y(q[${placement.row}]))`);
-        break;
-      case 'Z':
-        lines.push(`circuit.append(cirq.Z(q[${placement.row}]))`);
-        break;
-      case 'S':
-        lines.push(`circuit.append(cirq.S(q[${placement.row}]))`);
-        break;
-      case 'T':
-        lines.push(`circuit.append(cirq.T(q[${placement.row}]))`);
-        break;
-      case 'Rx':
-        lines.push(`circuit.append(cirq.rx(${angle}).on(q[${placement.row}]))`);
-        break;
-      case 'Ry':
-        lines.push(`circuit.append(cirq.ry(${angle}).on(q[${placement.row}]))`);
-        break;
-      case 'Rz':
-        lines.push(`circuit.append(cirq.rz(${angle}).on(q[${placement.row}]))`);
-        break;
-      case 'CNOT':
-        lines.push(`circuit.append(cirq.CNOT(q[${placement.row}], q[${targetRow}]))`);
-        break;
-      case 'SWAP':
-        lines.push(`circuit.append(cirq.SWAP(q[${placement.row}], q[${targetRow}]))`);
-        break;
-      case 'CPhase':
-        lines.push(`circuit.append(cirq.CZPowGate(exponent=${angle} / np.pi).on(q[${placement.row}], q[${targetRow}]))`);
-        break;
-    }
-  }
-
-  lines.push('', 'print(circuit)');
-  return lines.join('\n');
-}
-
-function buildProjectQSource(project: CircuitProjectData): string {
-  const lines = [
-    'from projectq import MainEngine',
-    'from projectq.meta import Control',
-    'from projectq.ops import H, X, Y, Z, S, T, Rx, Ry, Rz, CNOT, Swap, R',
-    '',
-    'eng = MainEngine()',
-    `qubits = eng.allocate_qureg(${project.numQubits})`,
-  ];
-
-  let previousColumn = -1;
-  for (const placement of project.placements) {
-    if (placement.column !== previousColumn) {
-      lines.push('', `# Column ${placement.column + 1}`);
-      previousColumn = placement.column;
-    }
-
-    const targetRow = placement.targetRow ?? placement.row + 1;
-    const angle = formatCodeNumber(placement.angle ?? getGateDefinition(placement.gate).defaultAngle ?? 0);
-
-    switch (placement.gate) {
-      case 'H':
-        lines.push(`H | qubits[${placement.row}]`);
-        break;
-      case 'X':
-        lines.push(`X | qubits[${placement.row}]`);
-        break;
-      case 'Y':
-        lines.push(`Y | qubits[${placement.row}]`);
-        break;
-      case 'Z':
-        lines.push(`Z | qubits[${placement.row}]`);
-        break;
-      case 'S':
-        lines.push(`S | qubits[${placement.row}]`);
-        break;
-      case 'T':
-        lines.push(`T | qubits[${placement.row}]`);
-        break;
-      case 'Rx':
-        lines.push(`Rx(${angle}) | qubits[${placement.row}]`);
-        break;
-      case 'Ry':
-        lines.push(`Ry(${angle}) | qubits[${placement.row}]`);
-        break;
-      case 'Rz':
-        lines.push(`Rz(${angle}) | qubits[${placement.row}]`);
-        break;
-      case 'CNOT':
-        lines.push(`CNOT | (qubits[${placement.row}], qubits[${targetRow}])`);
-        break;
-      case 'SWAP':
-        lines.push(`Swap | (qubits[${placement.row}], qubits[${targetRow}])`);
-        break;
-      case 'CPhase':
-        lines.push(`with Control(eng, qubits[${placement.row}]):`);
-        lines.push(`    R(${angle}) | qubits[${targetRow}]`);
-        break;
-    }
-  }
-
-  lines.push('', 'eng.flush()');
-  return lines.join('\n');
-}
-
-function overlaps(a: CircuitPlacement, b: CircuitPlacement): boolean {
-  if (a.column !== b.column) return false;
-  const rowsA = new Set([a.row, a.targetRow].filter((value): value is number => value !== undefined));
-  const rowsB = new Set([b.row, b.targetRow].filter((value): value is number => value !== undefined));
-  return [...rowsA].some((row) => rowsB.has(row));
-}
 
 function probabilityOf(amplitude: Complex): number {
   return amplitude.re * amplitude.re + amplitude.im * amplitude.im;
@@ -850,20 +462,7 @@ export function useCircuitBuilder() {
   const decompositionSummary = useMemo(() => formatDecompositionSummary(decomposition), [decomposition]);
 
   const exportCircuitCode = useCallback((format: CircuitCodeExportFormat): string => {
-    const project = exportProjectData();
-
-    switch (format) {
-      case 'json':
-        return JSON.stringify(project, null, 2);
-      case 'qiskit':
-        return buildQiskitSource(project);
-      case 'cirq':
-        return buildCirqSource(project);
-      case 'projectq':
-        return buildProjectQSource(project);
-      default:
-        return '';
-    }
+    return buildCircuitCode(exportProjectData(), format);
   }, [exportProjectData]);
 
   const simulation = useMemo(() => {

@@ -1,6 +1,6 @@
 import { ClassicFlowMobileArrow } from '../../classic-flow';
-import { formatNumber, getEdges } from './utils';
-import type { Matrix, TraceStep, CutDetail } from './types';
+import { formatNumber, getEdges } from '../../../engine/qaoa/simulated-annealing';
+import type { Matrix, TraceStep, CutDetail } from '../../../engine/qaoa/simulated-annealing';
 
 function getNodeCoordinates(n: number) {
   const svgSize = 200;

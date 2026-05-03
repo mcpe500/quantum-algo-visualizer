@@ -17,6 +17,12 @@ import {
   SkipForward,
 } from 'lucide-react';
 import { downloadBlob } from '../../utils/download';
+import { usePlaybackController } from '../../engine/core/playback';
+import {
+  buildProbabilityEntries,
+  buildStepIndexByPlacementId,
+  buildCircuitLayoutModel,
+} from '../../engine/circuit-lab';
 import { BlochSphere3D } from './BlochSphere';
 import type { NamedBlochData } from './QubitStatePreview';
 import {
@@ -209,10 +215,19 @@ export default function CircuitLabTab({ builder }: CircuitLabTabProps) {
 
   const [dragPayload, setDragPayload] = useState<DragPayload | null>(null);
   const [hoveredCell, setHoveredCell] = useState<string | null>(null);
-  const [currentStep, setCurrentStep] = useState(0);
-  const [isPlaying, setIsPlaying] = useState(false);
   const [inspectorTab, setInspectorTab] = useState<InspectorTab>('visual');
   const [exportFormat, setExportFormat] = useState<CodePreviewFormat>('qiskit');
+
+  const totalSteps = Math.max(playbackFrames.length - 1, 0);
+  const {
+    state: playback,
+    play,
+    pause,
+    jump,
+    reset: resetPlayback,
+  } = usePlaybackController(totalSteps, 900);
+  const currentStep = playback.currentStep;
+  const isPlaying = playback.isPlaying;
 
   const groupedGates = useMemo(() => {
     return {
@@ -248,7 +263,6 @@ export default function CircuitLabTab({ builder }: CircuitLabTabProps) {
         },
       ];
 
-  const totalSteps = Math.max(playbackFrames.length - 1, 0);
   const activeFrame = playbackFrames[currentStep] ?? playbackFrames[0];
   const previewStatevector = activeFrame?.statevector ?? statevector;
   const previewBlochCards = activeFrame?.blochCards ?? blochCards;
@@ -257,64 +271,31 @@ export default function CircuitLabTab({ builder }: CircuitLabTabProps) {
   const activeCode = exportCircuitCode(exportFormat);
   const jsonProject = exportCircuitCode('json');
 
-  const probabilityEntries = useMemo(() => {
-    return previewStatevector.map((amplitude, index) => ({
-      basis: `|${index.toString(2).padStart(numQubits, '0')}⟩`,
-      probability: amplitude.re ** 2 + amplitude.im ** 2,
-    }));
-  }, [numQubits, previewStatevector]);
+  const probabilityEntries = useMemo(
+    () => buildProbabilityEntries(previewStatevector, numQubits),
+    [numQubits, previewStatevector]
+  );
 
-  const stepIndexByPlacementId = useMemo(() => {
-    const map = new Map<string, number>();
-    playbackFrames.forEach((frame) => {
-      if (frame.placementId) {
-        map.set(frame.placementId, frame.stepIndex);
-      }
-    });
-    return map;
-  }, [playbackFrames]);
+  const stepIndexByPlacementId = useMemo(
+    () => buildStepIndexByPlacementId(playbackFrames),
+    [playbackFrames]
+  );
 
   const selectedAngle = selectedPlacement?.angle ?? selectedGateDefinition?.defaultAngle ?? Math.PI / 4;
   const statusMessage = useMemo(() => getStatusMessage(placements.length, columnCount), [columnCount, placements.length]);
   const displayedStep = getDisplayedStepLabel(currentStep, totalSteps);
-  const occupiedColumns = useMemo(() => new Set(placements.map((placement) => placement.column)).size, [placements]);
-
-  useEffect(() => {
-    queueMicrotask(() => {
-      setCurrentStep((value) => Math.min(value, totalSteps));
-      if (totalSteps === 0) {
-        setIsPlaying(false);
-      }
-    });
-  }, [totalSteps]);
+  const occupiedColumns = useMemo(
+    () => buildCircuitLayoutModel(placements).occupiedColumns,
+    [placements]
+  );
 
   useEffect(() => {
     if (!selectedPlacementId) return;
     const stepIndex = stepIndexByPlacementId.get(selectedPlacementId);
     if (stepIndex !== undefined) {
-      queueMicrotask(() => setCurrentStep(stepIndex));
+      queueMicrotask(() => jump(stepIndex));
     }
-  }, [selectedPlacementId, stepIndexByPlacementId]);
-
-  useEffect(() => {
-    if (!isPlaying || totalSteps === 0) return;
-    if (currentStep >= totalSteps) {
-      queueMicrotask(() => setIsPlaying(false));
-      return;
-    }
-
-    const timer = window.setInterval(() => {
-      setCurrentStep((value) => Math.min(value + 1, totalSteps));
-    }, 900);
-
-    return () => window.clearInterval(timer);
-  }, [currentStep, isPlaying, totalSteps]);
-
-  useEffect(() => {
-    if (isPlaying && currentStep >= totalSteps) {
-      queueMicrotask(() => setIsPlaying(false));
-    }
-  }, [currentStep, isPlaying, totalSteps]);
+  }, [selectedPlacementId, stepIndexByPlacementId, jump]);
 
   const startPaletteDrag = (event: DragEvent<HTMLDivElement>, gate: CircuitGateName) => {
     const payload: DragPayload = { type: 'palette', gate };
@@ -336,23 +317,27 @@ export default function CircuitLabTab({ builder }: CircuitLabTabProps) {
   };
 
   const jumpToStep = (stepIndex: number) => {
-    setIsPlaying(false);
-    setCurrentStep(Math.max(0, Math.min(stepIndex, totalSteps)));
+    pause();
+    jump(Math.max(0, Math.min(stepIndex, totalSteps)));
   };
 
   const togglePlayback = () => {
     if (totalSteps === 0) return;
     if (!isPlaying && currentStep >= totalSteps) {
-      setCurrentStep(0);
+      resetPlayback();
+      play();
+    } else if (isPlaying) {
+      pause();
+    } else {
+      play();
     }
-    setIsPlaying((value) => !value);
   };
 
   const handlePlacementSelection = (placementId: string) => {
     selectPlacement(placementId);
     const stepIndex = stepIndexByPlacementId.get(placementId);
     if (stepIndex !== undefined) {
-      setCurrentStep(stepIndex);
+      jump(stepIndex);
     }
   };
 
@@ -473,8 +458,7 @@ export default function CircuitLabTab({ builder }: CircuitLabTabProps) {
               onClick={() => {
                 clearCircuit();
                 selectPlacement(null);
-                setCurrentStep(0);
-                setIsPlaying(false);
+                resetPlayback();
               }}
               className="inline-flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold text-rose-600 transition-colors hover:bg-rose-50"
             >

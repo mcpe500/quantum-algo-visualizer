@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useMemo, useRef, useState, useEffect } from 'react';
 import { Canvas } from '@react-three/fiber';
 import { Gauge, LoaderCircle, Lock, Move3D, Pause, Play, RotateCcw, SkipForward, Video } from 'lucide-react';
 import type { QAOAAnimationPayload } from '../../types/qaoa';
@@ -37,38 +37,45 @@ import {
 } from './animation/panels';
 import { QAOAStoryScene } from './animation/scene-primitives';
 import { drawVideoFrame, getSupportedVideoMimeType } from './animation/video-overlay';
+import {
+  buildQaoaHybridTimelineModel,
+  buildQaoaSceneModel,
+  useQaoaHybridPlayback,
+  buildVideoExportPlan,
+  calculateExportDuration,
+} from '../../engine/qaoa/hybrid-animation';
 
 interface QAOAHybridAnimationProps {
   data: QAOAAnimationPayload;
 }
 
 export function QAOAHybridAnimation({ data }: QAOAHybridAnimationProps) {
-  const [currentStep, setCurrentStep] = useState(0);
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [speed, setSpeed] = useState(DEFAULT_STEP_MS);
+  const timelineModel = useMemo(() => buildQaoaHybridTimelineModel(data), [data]);
+  const totalSteps = timelineModel.totalSteps;
+
+  const {
+    state: playback,
+    speed,
+    setSpeed,
+    speedRef,
+    play,
+    pause,
+    reset,
+    stepForward,
+    jump,
+  } = useQaoaHybridPlayback(totalSteps, DEFAULT_STEP_MS);
+
+  const currentStep = playback.currentStep;
+  const isPlaying = playback.isPlaying;
   const [cameraMode, setCameraMode] = useState<'fixed' | 'orbit'>('fixed');
   const [isExporting, setIsExporting] = useState(false);
   const [isConverting, setIsConverting] = useState(false);
   const [exportError, setExportError] = useState<string | null>(null);
-  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const currentStepRef = useRef(currentStep);
-  const isPlayingRef = useRef(isPlaying);
-  const speedRef = useRef(speed);
+
   const exportRendererCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const exportAnimationFrameRef = useRef<number | null>(null);
-
-  const activeStep = data.timeline[currentStep];
-  const totalSteps = data.timeline.length;
-  const activePhaseColor = PHASE_COLOR[activeStep.phase] || '#2563eb';
-  const isLastStep = currentStep >= totalSteps - 1;
-  const supportedVideoMimeType = useMemo(() => getSupportedVideoMimeType(), []);
-  const ffmpegReady = useMemo(() => isFFmpegSupported(), []);
-
-  const stopTimer = useCallback(() => {
-    if (!timerRef.current) return;
-    clearInterval(timerRef.current);
-    timerRef.current = null;
-  }, []);
+  const currentStepRef = useRef(currentStep);
+  const isPlayingRef = useRef(isPlaying);
 
   useEffect(() => {
     currentStepRef.current = currentStep;
@@ -78,94 +85,67 @@ export function QAOAHybridAnimation({ data }: QAOAHybridAnimationProps) {
     isPlayingRef.current = isPlaying;
   }, [isPlaying]);
 
-  useEffect(() => {
-    speedRef.current = speed;
-  }, [speed]);
+  const activeStep = data.timeline[currentStep];
+  const activePhaseColor = PHASE_COLOR[activeStep.phase] || '#2563eb';
+  const isLastStep = currentStep >= totalSteps - 1;
+  const supportedVideoMimeType = useMemo(() => getSupportedVideoMimeType(), []);
+  const ffmpegReady = useMemo(() => isFFmpegSupported(), []);
 
-  useEffect(() => {
-    if (isPlaying && currentStep < totalSteps - 1) {
-      timerRef.current = setInterval(() => {
-        setCurrentStep((previous) => {
-          if (previous >= totalSteps - 1) {
-            setIsPlaying(false);
-            return previous;
-          }
-          return previous + 1;
-        });
-      }, speed);
-    } else {
-      stopTimer();
-      if (currentStep >= totalSteps - 1) {
-        queueMicrotask(() => setIsPlaying(false));
-      }
-    }
-
-    return stopTimer;
-  }, [currentStep, isPlaying, speed, stopTimer, totalSteps]);
+  const sceneModel = useMemo(() => buildQaoaSceneModel(data, currentStep), [data, currentStep]);
 
   useEffect(() => {
     queueMicrotask(() => {
-      setCurrentStep(0);
-      setIsPlaying(false);
+      reset();
       setExportError(null);
-      stopTimer();
     });
-  }, [data.case_id, stopTimer]);
+  }, [data.case_id, reset]);
 
   useEffect(() => {
     return () => {
-      stopTimer();
       if (exportAnimationFrameRef.current !== null) {
         window.cancelAnimationFrame(exportAnimationFrameRef.current);
       }
     };
-  }, [stopTimer]);
+  }, []);
 
   const handlePlay = () => {
     if (isExporting) return;
-    if (isLastStep) setCurrentStep(0);
-    setIsPlaying(true);
+    if (isLastStep) reset();
+    play();
   };
 
   const handlePause = () => {
     if (isExporting) return;
-    setIsPlaying(false);
-    stopTimer();
+    pause();
   };
 
   const handleStep = () => {
     if (isExporting) return;
-    setIsPlaying(false);
-    stopTimer();
-    setCurrentStep((previous) => Math.min(previous + 1, totalSteps - 1));
+    pause();
+    stepForward();
   };
 
   const handleReset = () => {
     if (isExporting) return;
-    setIsPlaying(false);
-    stopTimer();
-    setCurrentStep(0);
+    pause();
+    reset();
   };
 
   const handleJumpCheckpoint = useCallback((checkpointKey: string) => {
     if (isExporting) return;
     const index = getCheckpointStepIndex(data, checkpointKey);
     if (index >= 0) {
-      setCurrentStep(index);
-      setIsPlaying(false);
-      stopTimer();
+      jump(index);
     }
-  }, [data, isExporting, stopTimer]);
+  }, [data, isExporting, jump]);
 
   const handleJumpPhase = useCallback((phase: string) => {
     if (isExporting) return;
     const index = getPhaseStepIndex(data, activeStep.checkpoint_key, phase);
     if (index >= 0) {
-      setCurrentStep(index);
-      setIsPlaying(false);
-      stopTimer();
+      jump(index);
     }
-  }, [activeStep.checkpoint_key, data, isExporting, stopTimer]);
+  }, [activeStep.checkpoint_key, data, isExporting, jump]);
 
   const runExportPipeline = useCallback(async (target: 'webm' | 'mp4') => {
     if (isExporting) return;
@@ -182,7 +162,8 @@ export function QAOAHybridAnimation({ data }: QAOAHybridAnimationProps) {
     const previousStep = currentStepRef.current;
     const previousSpeed = speedRef.current;
     const previousPlaying = isPlayingRef.current;
-    const exportStepMs = Math.max(previousSpeed, EXPORT_STEP_MS_MIN);
+    const exportPlan = buildVideoExportPlan(data.case_id, totalSteps, previousSpeed);
+    const exportStepMs = exportPlan.stepMs;
     const compositorCanvas = document.createElement('canvas');
     const compositorContext = compositorCanvas.getContext('2d', { alpha: false });
 
@@ -222,11 +203,9 @@ export function QAOAHybridAnimation({ data }: QAOAHybridAnimationProps) {
           chunks.push(event.data);
         }
       };
-
       recorder!.onerror = () => {
         reject(new Error(target === 'webm' ? 'Recorder browser gagal membuat video WebM.' : 'Recorder browser gagal merekam video.'));
       };
-
       recorder!.onstop = () => {
         resolve(new Blob(chunks, { type: supportedVideoMimeType }));
       };
@@ -259,9 +238,8 @@ export function QAOAHybridAnimation({ data }: QAOAHybridAnimationProps) {
     setIsConverting(false);
 
     try {
-      stopTimer();
-      setIsPlaying(false);
-      setCurrentStep(0);
+      pause();
+      reset();
       setSpeed(exportStepMs);
       await waitForAnimationFrames(2);
 
@@ -278,16 +256,15 @@ export function QAOAHybridAnimation({ data }: QAOAHybridAnimationProps) {
       await wait(EXPORT_INTRO_MS);
 
       overlayMode = 'play';
-      setCurrentStep(0);
+      reset();
       await waitForAnimationFrames(2);
-      setIsPlaying(true);
+      play();
 
-      const playbackDurationMs = Math.max(totalSteps - 1, 0) * exportStepMs + Math.round(exportStepMs * 0.6);
+      const playbackDurationMs = calculateExportDuration(exportPlan) - EXPORT_INTRO_MS - EXPORT_OUTRO_MS;
       await wait(playbackDurationMs);
 
-      setIsPlaying(false);
-      stopTimer();
-      setCurrentStep(totalSteps - 1);
+      pause();
+      jump(totalSteps - 1);
       await waitForAnimationFrames(3);
 
       overlayMode = 'outro';
@@ -330,18 +307,18 @@ export function QAOAHybridAnimation({ data }: QAOAHybridAnimationProps) {
       exportRendererCanvasRef.current = null;
 
       setSpeed(previousSpeed);
-      setCurrentStep(previousStep);
-      setIsPlaying(false);
+      jump(previousStep);
+      pause();
       setIsConverting(false);
       await waitForAnimationFrames(2);
 
       if (previousPlaying && previousStep < totalSteps - 1) {
-        setIsPlaying(true);
+        play();
       }
 
       setIsExporting(false);
     }
-  }, [data, isExporting, stopTimer, supportedVideoMimeType, totalSteps]);
+  }, [data, isExporting, pause, play, jump, reset, setSpeed, speedRef, supportedVideoMimeType, totalSteps]);
 
   const handleExportVideo = useCallback(async () => {
     await runExportPipeline('webm');
@@ -349,12 +326,10 @@ export function QAOAHybridAnimation({ data }: QAOAHybridAnimationProps) {
 
   const handleExportMp4 = useCallback(async () => {
     if (isExporting) return;
-
     if (!ffmpegReady) {
       setExportError('Browser ini tidak mendukung konversi MP4 di sisi klien. Gunakan browser modern yang mendukung WebAssembly + Worker.');
       return;
     }
-
     await runExportPipeline('mp4');
   }, [ffmpegReady, isExporting, runExportPipeline]);
 
@@ -433,7 +408,7 @@ export function QAOAHybridAnimation({ data }: QAOAHybridAnimationProps) {
 
               <div style={{ height: '560px' }}>
                 <Canvas
-                  camera={{ position: [0, 0.4, 22], fov: 36, near: 0.1, far: 100 }}
+                  camera={{ position: sceneModel.camera.position, fov: 36, near: 0.1, far: 100 }}
                   style={{ background: 'linear-gradient(180deg, #f8fafc 0%, #e2e8f0 100%)' }}
                   gl={{ antialias: true }}
                 >
@@ -575,7 +550,7 @@ export function QAOAHybridAnimation({ data }: QAOAHybridAnimationProps) {
         >
           <Canvas
             dpr={1}
-            camera={{ position: [0, 0.4, 22], fov: 36, near: 0.1, far: 100 }}
+            camera={{ position: sceneModel.camera.position, fov: 36, near: 0.1, far: 100 }}
             style={{ width: `${EXPORT_VIDEO_WIDTH}px`, height: `${EXPORT_VIDEO_HEIGHT}px` }}
             gl={{ antialias: true, preserveDrawingBuffer: true, powerPreference: 'high-performance' }}
             onCreated={({ gl }) => {
