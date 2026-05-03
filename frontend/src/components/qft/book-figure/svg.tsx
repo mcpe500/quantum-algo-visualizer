@@ -1,327 +1,418 @@
 import type { FigureMode, QFTBookFigureModel } from './engine';
 
-const VIEWBOX_WIDTH = 1600;
-const VIEWBOX_HEIGHT = 900;
+const VW = 1800;
+const VH = 1100;
 
-function wrapText(text: string, maxChars: number): string[] {
-  const words = text.trim().split(/\s+/).filter(Boolean);
-  if (words.length === 0) return [];
+/* ── colour tokens (academic dark-accent palette) ── */
+const C = {
+  bg: '#ffffff',
+  panel: '#f8fafc',
+  primary: '#0f172a',
+  blue: '#2563eb',
+  red: '#dc2626',
+  green: '#16a34a',
+  purple: '#7c3aed',
+  teal: '#0d9488',
+  grid: '#cbd5e1',
+  border: '#e2e8f0',
+  text: '#334155',
+  muted: '#64748b',
+  lightBlue: '#e0f2fe',
+  lightRed: '#fee2e2',
+  lightGreen: '#f0fdf4',
+  lightYellow: '#fefce8',
+};
 
-  const lines: string[] = [];
-  let current = '';
-
-  for (const word of words) {
-    const candidate = current ? `${current} ${word}` : word;
-    if (candidate.length <= maxChars) {
-      current = candidate;
-      continue;
-    }
-
-    if (current) {
-      lines.push(current);
-    }
-
-    if (word.length <= maxChars) {
-      current = word;
-      continue;
-    }
-
-    let remaining = word;
-    while (remaining.length > maxChars) {
-      lines.push(`${remaining.slice(0, maxChars - 1)}...`);
-      remaining = remaining.slice(maxChars - 1);
-    }
-    current = remaining;
-  }
-
-  if (current) lines.push(current);
-  return lines;
-}
-
-function clampLines(lines: string[], maxLines: number): string[] {
-  if (lines.length <= maxLines) return lines;
-  const clamped = lines.slice(0, maxLines);
-  const last = clamped[maxLines - 1] ?? '';
-  clamped[maxLines - 1] = last.length > 3 ? `${last.slice(0, Math.max(0, last.length - 3))}...` : `${last}...`;
-  return clamped;
-}
-
-function WrappedText({
-  x,
-  y,
-  text,
-  maxChars,
-  maxLines,
-  lineHeight,
-  fontSize,
-  fontWeight,
-  fill,
-  textAnchor = 'start',
-  fontFamily,
-}: {
-  x: number;
-  y: number;
-  text: string;
-  maxChars: number;
-  maxLines: number;
-  lineHeight: number;
-  fontSize: number;
-  fontWeight: number | string;
-  fill: string;
-  textAnchor?: 'start' | 'middle' | 'end';
-  fontFamily?: string;
-}) {
-  const lines = clampLines(wrapText(text, maxChars), maxLines);
-
+/* ── shared SVG primitives ── */
+function Badge({ x, y, text, bg, fg }: { x: number; y: number; text: string; bg: string; fg: string }) {
+  const w = text.length * 9 + 24;
   return (
-    <text x={x} y={y} fontSize={fontSize} fontWeight={fontWeight} fill={fill} textAnchor={textAnchor} fontFamily={fontFamily}>
-      {lines.map((line, index) => (
-        <tspan key={`${x}-${y}-${index}`} x={x} dy={index === 0 ? 0 : lineHeight}>
-          {line}
-        </tspan>
-      ))}
+    <g>
+      <rect x={x} y={y - 20} width={w} height={30} rx={15} fill={bg} />
+      <text x={x + w / 2} y={y} textAnchor="middle" fontSize="14" fontWeight="700" fill={fg}>{text}</text>
+    </g>
+  );
+}
+
+function NumberBadge({ x, y, n }: { x: number; y: number; n: number }) {
+  return (
+    <g>
+      <circle cx={x} cy={y} r={18} fill={C.primary} />
+      <text x={x} y={y + 5} textAnchor="middle" fontSize="16" fontWeight="800" fill="#fff">{n}</text>
+    </g>
+  );
+}
+
+function Panel({ x, y, w, h, children }: { x: number; y: number; w: number; h: number; children: React.ReactNode }) {
+  return (
+    <g>
+      <rect x={x} y={y} width={w} height={h} rx={16} fill={C.panel} stroke={C.border} strokeWidth={1.5} />
+      {children}
+    </g>
+  );
+}
+
+function FlowArrow({ x1, y1, x2, y2, markerId }: { x1: number; y1: number; x2: number; y2: number; markerId: string }) {
+  return <line x1={x1} y1={y1} x2={x2} y2={y2} stroke={C.grid} strokeWidth={6} markerEnd={`url(#${markerId})`} />;
+}
+
+function TreeNode({ x, y, text, w, isOdd }: { x: number; y: number; text: string; w: number; isOdd: boolean }) {
+  return (
+    <g>
+      <rect x={x - w / 2} y={y} width={w} height={35} rx={6} fill={isOdd ? C.lightRed : C.lightBlue} stroke={isOdd ? C.red : C.blue} strokeWidth={1.2} />
+      <text x={x} y={y + 22} textAnchor="middle" fontSize="13" fontWeight="700" fontFamily="monospace" fill={isOdd ? C.red : C.blue}>{text}</text>
+    </g>
+  );
+}
+
+function WrapText({ x, y, text, maxChars, fontSize = 13, fill = C.text, fontWeight = '500', anchor = 'start' as const, fontFamily }: {
+  x: number; y: number; text: string; maxChars: number; fontSize?: number; fill?: string; fontWeight?: string; anchor?: 'start' | 'middle' | 'end'; fontFamily?: string;
+}) {
+  const words = text.split(' ');
+  const lines: string[] = [];
+  let cur = '';
+  for (const w of words) {
+    const test = cur ? `${cur} ${w}` : w;
+    if (test.length <= maxChars) { cur = test; } else { if (cur) lines.push(cur); cur = w; }
+  }
+  if (cur) lines.push(cur);
+  return (
+    <text x={x} y={y} fontSize={fontSize} fontWeight={fontWeight} fill={fill} textAnchor={anchor} fontFamily={fontFamily}>
+      {lines.slice(0, 3).map((l, i) => <tspan key={i} x={x} dy={i === 0 ? 0 : fontSize + 3}>{l}</tspan>)}
     </text>
   );
 }
 
-function FigureHeader({ model }: { model: QFTBookFigureModel }) {
+/* ── HEADER ── */
+function Header({ model }: { model: QFTBookFigureModel }) {
   return (
-    <>
-      <rect x="40" y="40" width="6" height="40" rx="3" fill="#0f172a" />
-      <text x="60" y="56" fontSize="14" fontWeight="700" letterSpacing="0.2em" fill="#64748b">DIAGRAM AKADEMIK</text>
-      <text x="60" y="80" fontSize="24" fontWeight="800" fill="#0f172a">{model.title}</text>
-      <WrappedText x={60} y={104} text={model.metaLine} maxChars={110} maxLines={2} lineHeight={16} fontSize={14} fontWeight="500" fill="#475569" />
-    </>
+    <g>
+      <text x={VW / 2} y={46} textAnchor="middle" fontSize="36" fontWeight="800" fill={C.primary} letterSpacing="0.5">
+        Diagram Akademik Alur FFT Klasik Dinamis — Cooley-Tukey Radix-2
+      </text>
+      <text x={VW / 2} y={78} textAnchor="middle" fontSize="18" fill={C.text}>
+        Ilustrasi Visual Transformasi Fourier Cepat Berbasis Dataset Aktual
+      </text>
+      <Badge x={VW / 2 - 160} y={110} text={`Dataset Aktif: ${model.caseId} (${model.signalType})`} bg={C.blue} fg="#fff" />
+    </g>
   );
 }
 
-function InputBlock({ model }: { model: QFTBookFigureModel }) {
+/* ── PANEL 1: INPUT TIME DOMAIN ── */
+function InputPanel({ model }: { model: QFTBookFigureModel }) {
+  const px = 40, py = 160, pw = 540, ph = 430;
+  const gx = px + 30, gy = py + 140, gw = pw - 60, gh = 240;
+  const midY = gy + gh / 2;
+
   return (
-    <>
-      <rect x="40" y="160" width="310" height="265" rx="8" fill="#ffffff" stroke="#cbd5e1" strokeWidth="1.5" />
-      <rect x="60" y="180" width="8" height="16" rx="2" fill="#3b82f6" />
-      <text x="76" y="193" fontSize="15" fontWeight="800" letterSpacing="0.05em" fill="#0f172a">1. INPUT SIGNAL</text>
-      
-      <rect x="60" y="214" width="270" height="100" rx="6" fill="#f8fafc" stroke="#cbd5e1" strokeWidth="1" />
-      <line x1="60" y1="264" x2="330" y2="264" stroke="#e2e8f0" strokeWidth="1.5" />
-      <path transform="translate(75,224)" d={model.wavePath} fill="none" stroke="#2563eb" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
-      
-      <WrappedText x={60} y={340} text={model.inputPreview} maxChars={34} maxLines={1} lineHeight={14} fontSize={13} fontWeight="600" fill="#0f172a" fontFamily="monospace" />
-      <WrappedText x={60} y={364} text={model.paddedPreview} maxChars={34} maxLines={1} lineHeight={14} fontSize={13} fontWeight="600" fill="#0f172a" fontFamily="monospace" />
-      <WrappedText x={60} y={392} text={model.sampleLine} maxChars={40} maxLines={2} lineHeight={16} fontSize={12} fontWeight="500" fill="#64748b" />
-    </>
-  );
-}
+    <Panel x={px} y={py} w={pw} h={ph}>
+      <NumberBadge x={px - 5} y={py + 25} n={1} />
+      <text x={px + 30} y={py + 32} fontSize="20" fontWeight="800" fill={C.primary}>Data Input (Domain Waktu)</text>
 
-function DivideBlock({ model, flowMarkerId }: { model: QFTBookFigureModel; flowMarkerId: string }) {
-  return (
-    <>
-      <line x1="350" y1="292" x2="380" y2="292" stroke="#94a3b8" strokeWidth="2" markerEnd={`url(#${flowMarkerId})`} />
-      <rect x="390" y="160" width="750" height="360" rx="8" fill="#ffffff" stroke="#cbd5e1" strokeWidth="1.5" />
-      <rect x="410" y="180" width="8" height="16" rx="2" fill="#6366f1" />
-      <text x="426" y="193" fontSize="15" fontWeight="800" letterSpacing="0.05em" fill="#0f172a">2. SPLIT &amp; DIVIDE</text>
-      <text x="410" y="218" fontSize="18" fontWeight="600" fill="#334155">Array input dipecah berdasarkan indeks genap dan ganjil secara rekursif</text>
-      
-      {/* Root */}
-      <rect x="645" y="242" width="240" height="40" rx="4" fill="#f8fafc" stroke="#e2e8f0" strokeWidth="1.2" />
-      <text x="765" y="260" fontSize="10" fontWeight="700" fill="#64748b" textAnchor="middle">ROOT INDICES (N={model.treeLeafCount})</text>
-      <WrappedText x={765} y={274} text={model.treeRootPreview} maxChars={30} maxLines={1} lineHeight={16} fontSize={13} fontWeight="600" fill="#0f172a" textAnchor="middle" fontFamily="monospace" />
-      
-      {/* Tree Lines */}
-      <line x1="765" y1="282" x2="765" y2="296" stroke="#cbd5e1" strokeWidth="1.5" />
-      <line x1="570" y1="296" x2="960" y2="296" stroke="#cbd5e1" strokeWidth="1.5" />
-      <line x1="570" y1="296" x2="570" y2="310" stroke="#cbd5e1" strokeWidth="1.5" />
-      <line x1="960" y1="296" x2="960" y2="310" stroke="#cbd5e1" strokeWidth="1.5" />
+      {/* Metadata */}
+      <text x={px + 30} y={py + 68} fontSize="15" fontFamily="monospace" fill={C.text}>
+        Panjang Data (N) = {model.nOriginal} titik
+      </text>
+      <text x={px + 30} y={py + 92} fontSize="15" fontFamily="monospace" fill={C.text}>
+        Tipe             = {model.signalType}
+      </text>
+      <WrapText x={px + 30} y={py + 116} text={model.inputPreview} maxChars={40} fontSize={14} fontFamily="monospace" fill={C.text} fontWeight="600" />
 
-      {/* Even */}
-      <rect x="450" y="310" width="240" height="40" rx="4" fill="#f8fafc" stroke="#e2e8f0" strokeWidth="1.2" />
-      <text x="570" y="328" fontSize="10" fontWeight="700" fill="#64748b" textAnchor="middle">GENAP (N/2)</text>
-      <WrappedText x={570} y={342} text={model.treeEvenPreview} maxChars={28} maxLines={1} lineHeight={14} fontSize={13} fontWeight="600" fill="#0f172a" textAnchor="middle" fontFamily="monospace" />
-      
-      {/* Odd */}
-      <rect x="840" y="310" width="240" height="40" rx="4" fill="#f8fafc" stroke="#e2e8f0" strokeWidth="1.2" />
-      <text x="960" y="328" fontSize="10" fontWeight="700" fill="#64748b" textAnchor="middle">GANJIL (N/2)</text>
-      <WrappedText x={960} y={342} text={model.treeOddPreview} maxChars={28} maxLines={1} lineHeight={14} fontSize={13} fontWeight="600" fill="#0f172a" textAnchor="middle" fontFamily="monospace" />
+      {/* Chart area */}
+      <rect x={gx} y={gy} width={gw} height={gh} rx={8} fill="#fff" stroke={C.border} strokeWidth={1} />
+      <line x1={gx} y1={midY} x2={gx + gw} y2={midY} stroke={C.grid} strokeWidth={1.5} />
 
-      <text x="410" y="375" fontSize="12" fontWeight="600" fill="#64748b">Level Kedalaman Berikutnya (N/4):</text>
-      
-      {/* Quarter Nodes */}
-      {model.treeQuarterNodes.map((node, index) => {
-        const spacing = 175;
-        const startX = 410;
-        const px = startX + index * spacing;
-        const py = 390;
-        return (
-          <g key={`quarter-${node.label}`}>
-            <rect x={px} y={py} width="165" height="40" rx="4" fill="#ffffff" stroke="#e2e8f0" strokeWidth="1" />
-            <text x={px + 82.5} y={py + 15} fontSize="9" fontWeight="700" fill="#64748b" textAnchor="middle">{node.label.toUpperCase()}</text>
-            <WrappedText x={px + 82.5} y={py + 29} text={node.preview} maxChars={20} maxLines={1} lineHeight={12} fontSize={12} fontWeight="600" fill="#0f172a" textAnchor="middle" fontFamily="monospace" />
-          </g>
-        );
-      })}
+      {/* Waveform path scaled to chart area */}
+      <g transform={`translate(${gx + 10},${gy + 10})`}>
+        <path d={buildScaledWavePath(model.wavePath, gw - 20, gh - 20)} fill="none" stroke={C.blue} strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" />
+      </g>
 
-      {/* Ellipsis / Continuation */}
-      <text x="765" y="455" fontSize="24" fontWeight="800" fill="#cbd5e1" textAnchor="middle" letterSpacing="0.2em">...</text>
-
-      {/* Leaf Nodes (N=1) */}
-      <rect x="410" y="470" width="710" height="30" rx="4" fill="#f8fafc" stroke="#cbd5e1" strokeWidth="1.2" />
-      <text x="420" y="489" fontSize="10" fontWeight="700" fill="#64748b">LEAF (N=1) BIT-REVERSED INDICES:</text>
-      <WrappedText x={620} y={489} text={model.treeLeafPreview} maxChars={65} maxLines={1} lineHeight={12} fontSize={12} fontWeight="600" fill="#0f172a" fontFamily="monospace" />
-
-      <WrappedText x={410} y={510} text={model.divideSummaryLine} maxChars={100} maxLines={1} lineHeight={16} fontSize={13} fontWeight="500" fill="#64748b" />
-    </>
-  );
-}
-
-function ConquerBlock({ model, flowMarkerId }: { model: QFTBookFigureModel; flowMarkerId: string }) {
-  return (
-    <>
-      <line x1="765" y1="520" x2="765" y2="540" stroke="#94a3b8" strokeWidth="2" markerEnd={`url(#${flowMarkerId})`} />
-      <rect x="390" y="548" width="750" height="252" rx="8" fill="#ffffff" stroke="#cbd5e1" strokeWidth="1.5" />
-      <rect x="410" y="568" width="8" height="16" rx="2" fill="#8b5cf6" />
-      <text x="426" y="581" fontSize="15" fontWeight="800" letterSpacing="0.05em" fill="#0f172a">3. CONQUER (BUTTERFLY MERGE)</text>
-      <text x="410" y="606" fontSize="18" fontWeight="600" fill="#334155">Menggabungkan hasil rekursif menggunakan Twiddle Factor</text>
-
-      {/* Equations */}
-      <rect x="410" y="624" width="310" height="84" rx="4" fill="#f8fafc" stroke="#e2e8f0" strokeWidth="1.2" />
-      <text x="430" y="650" fontSize="14" fontWeight="600" fontFamily="monospace" fill="#334155">W_N^k = exp(-j 2πk/N)</text>
-      <text x="430" y="674" fontSize="14" fontWeight="600" fontFamily="monospace" fill="#334155">X[k]     = E[k] + W_N^k · O[k]</text>
-      <text x="430" y="698" fontSize="14" fontWeight="600" fontFamily="monospace" fill="#334155">X[k+N/2] = E[k] - W_N^k · O[k]</text>
-
-      {/* Diagram */}
-      <rect x="740" y="624" width="380" height="84" rx="4" fill="#ffffff" stroke="#e2e8f0" strokeWidth="1.2" />
-      <text x="770" y="655" fontSize="16" fontWeight="600" fill="#0f172a">E[k]</text>
-      <text x="770" y="690" fontSize="16" fontWeight="600" fill="#0f172a">O[k]</text>
-      
-      <line x1="810" y1="650" x2="950" y2="650" stroke="#334155" strokeWidth="1.5" />
-      <line x1="810" y1="685" x2="950" y2="685" stroke="#334155" strokeWidth="1.5" />
-      <line x1="830" y1="685" x2="930" y2="650" stroke="#94a3b8" strokeWidth="1.5" />
-      <line x1="830" y1="650" x2="930" y2="685" stroke="#94a3b8" strokeWidth="1.5" />
-      
-      <circle cx="830" cy="685" r="4" fill="#334155" />
-      <text x="830" y="705" fontSize="12" fontWeight="700" fill="#334155" textAnchor="middle">W_N^k</text>
-      
-      <circle cx="950" cy="650" r="10" fill="white" stroke="#334155" strokeWidth="1.5" />
-      <text x="950" y="655" fontSize="14" fontWeight="700" fill="#334155" textAnchor="middle">+</text>
-      
-      <circle cx="950" cy="685" r="10" fill="white" stroke="#334155" strokeWidth="1.5" />
-      <text x="950" y="690" fontSize="14" fontWeight="700" fill="#334155" textAnchor="middle">-</text>
-
-      <line x1="960" y1="650" x2="1020" y2="650" stroke="#334155" strokeWidth="1.5" markerEnd="url(#arrow-head)" />
-      <line x1="960" y1="685" x2="1020" y2="685" stroke="#334155" strokeWidth="1.5" markerEnd="url(#arrow-head)" />
-
-      <text x="1030" y="655" fontSize="16" fontWeight="600" fill="#0f172a">X[k]</text>
-      <text x="1030" y="690" fontSize="16" fontWeight="600" fill="#0f172a">X[k+N/2]</text>
-
-      {model.mergeExample && (
-        <>
-          <rect x="410" y="724" width="710" height="58" rx="4" fill="#f8fafc" stroke="#e2e8f0" strokeWidth="1.2" />
-          <text x="430" y="746" fontSize="12" fontWeight="700" fill="#64748b">Contoh Merge Pasangan Dominan (k = {model.mergeExample.focusBin} ↔ {model.mergeExample.mirrorBin})</text>
-          <WrappedText x={430} y={766} text={`E[${model.mergeExample.focusBin}] = ${model.mergeExample.even}, O[${model.mergeExample.focusBin}] = ${model.mergeExample.odd}, W = ${model.mergeExample.twiddle}, X[${model.mergeExample.focusBin}] = ${model.mergeExample.top}, X[${model.mergeExample.mirrorBin}] = ${model.mergeExample.bottom}`} maxChars={110} maxLines={1} lineHeight={14} fontSize={12} fontWeight="600" fill="#0f172a" fontFamily="monospace" />
-        </>
+      {/* Padding annotation */}
+      {model.isPadded && (
+        <g>
+          <text x={gx + gw / 2} y={gy + gh - 16} textAnchor="middle" fontSize="13" fontWeight="700" fill={C.red}>
+            → Penambahan Zero-Padding ({model.nPadded - model.nOriginal} titik)
+          </text>
+          <line x1={gx + gw * 0.7} y1={midY - 5} x2={gx + gw * 0.7} y2={midY + 5} stroke={C.red} strokeWidth={2} strokeDasharray="4 3" />
+        </g>
       )}
 
-      <WrappedText x={410} y={794} text={model.conquerSummaryLine} maxChars={100} maxLines={1} lineHeight={16} fontSize={13} fontWeight="500" fill="#64748b" />
-    </>
+      {/* Sample info at bottom */}
+      <WrapText x={px + 30} y={py + ph - 30} text={model.sampleLine} maxChars={48} fontSize={12} fill={C.muted} />
+    </Panel>
   );
 }
 
-function SpectrumBars({ model }: { model: QFTBookFigureModel }) {
-  const maxMagnitude = Math.max(...model.spectrum.map((point) => point.magnitude), 1);
-  const width = 310;
-  const height = 160;
-  const x = 1215;
-  const y = 320;
-  
+/* ── PANEL 2: DIVIDE & CONQUER ── */
+function DividePanel({ model }: { model: QFTBookFigureModel }) {
+  const px = 620, py = 160, pw = 560, ph = 430;
+  const cx = px + pw / 2;
+
   return (
-    <>
-      {model.spectrum.map((point, index) => {
-        const barX = x + (index / (model.spectrum.length - 1)) * width;
-        const barHeight = (point.magnitude / maxMagnitude) * height;
-        const barY = y + height - barHeight;
-        const isDominant = model.dominantBins.includes(point.bin);
-        const color = isDominant ? '#0d9488' : '#94a3b8';
+    <Panel x={px} y={py} w={pw} h={ph}>
+      <NumberBadge x={px - 5} y={py + 25} n={2} />
+      <text x={px + 30} y={py + 32} fontSize="20" fontWeight="800" fill={C.primary}>Proses Divide &amp; Conquer</text>
+
+      {/* Validation block */}
+      <rect x={px + 30} y={py + 55} width={pw - 60} height={60} rx={8}
+        fill={model.isPadded ? '#fef2f2' : '#f0fdf4'}
+        stroke={model.isPadded ? C.red : C.green} strokeWidth={1.5} />
+      <text x={px + 45} y={py + 80} fontSize="15" fontWeight="700" fill={model.isPadded ? C.red : C.green}>
+        {model.isPadded ? '✘ Validasi Gagal: N bukan pangkat dua' : '✔ Validasi Sukses: N adalah pangkat dua'}
+      </text>
+      <text x={px + 45} y={py + 100} fontSize="13" fill={C.text}>
+        {model.isPadded
+          ? `Tindakan: Pad N=${model.nOriginal} menjadi N=${model.nPadded} (Pangkat 2 terdekat)`
+          : `Tindakan: Pertahankan N=${model.nOriginal}. Pemisahan berimbang terjamin.`}
+      </text>
+
+      {/* Tree heading */}
+      <text x={cx} y={py + 148} textAnchor="middle" fontSize="14" fontWeight="700" fill={C.text}>
+        Pemisahan Indeks Genap/Ganjil (Ukuran Array: {model.nPadded})
+      </text>
+
+      {/* Level 0 - Root */}
+      <TreeNode x={cx} y={py + 165} text={`X[0..${model.nPadded - 1}]`} w={150} isOdd={false} />
+
+      {/* Lines root -> children */}
+      <line x1={cx} y1={py + 200} x2={cx - 130} y2={py + 230} stroke={C.grid} strokeWidth={1.5} />
+      <line x1={cx} y1={py + 200} x2={cx + 130} y2={py + 230} stroke={C.grid} strokeWidth={1.5} />
+
+      {/* Level 1 */}
+      <TreeNode x={cx - 130} y={py + 235} text={`E[0,2,4..] (N=${model.nPadded / 2})`} w={170} isOdd={false} />
+      <TreeNode x={cx + 130} y={py + 235} text={`O[1,3,5..] (N=${model.nPadded / 2})`} w={170} isOdd={true} />
+
+      {/* Level 2 lines */}
+      <line x1={cx - 130} y1={py + 270} x2={cx - 195} y2={py + 298} stroke={C.grid} strokeWidth={1.2} />
+      <line x1={cx - 130} y1={py + 270} x2={cx - 65} y2={py + 298} stroke={C.grid} strokeWidth={1.2} />
+      <line x1={cx + 130} y1={py + 270} x2={cx + 65} y2={py + 298} stroke={C.grid} strokeWidth={1.2} />
+      <line x1={cx + 130} y1={py + 270} x2={cx + 195} y2={py + 298} stroke={C.grid} strokeWidth={1.2} />
+
+      {/* Level 2 nodes */}
+      <TreeNode x={cx - 195} y={py + 303} text="E_E" w={70} isOdd={false} />
+      <TreeNode x={cx - 65} y={py + 303} text="E_O" w={70} isOdd={true} />
+      <TreeNode x={cx + 65} y={py + 303} text="O_E" w={70} isOdd={false} />
+      <TreeNode x={cx + 195} y={py + 303} text="O_O" w={70} isOdd={true} />
+
+      {/* Ellipsis */}
+      <text x={cx} y={py + 370} textAnchor="middle" fontSize="24" fontWeight="800" fill={C.grid}>⋮</text>
+      <text x={cx} y={py + 400} textAnchor="middle" fontSize="12" fontStyle="italic" fill={C.muted}>
+        *Representasi ringkas rekursi FFT. Berlanjut hingga basis N=1.
+      </text>
+    </Panel>
+  );
+}
+
+/* ── PANEL 3: BUTTERFLY & TWIDDLE ── */
+function CombinePanel({ model }: { model: QFTBookFigureModel }) {
+  const px = 1220, py = 160, pw = 540, ph = 430;
+  const rY = py + 60;
+  const bY = rY + 165;
+  const bX = px + 155;
+
+  return (
+    <Panel x={px} y={py} w={pw} h={ph}>
+      <NumberBadge x={px - 5} y={py + 25} n={3} />
+      <text x={px + 30} y={py + 32} fontSize="20" fontWeight="800" fill={C.primary}>Kombinasi &amp; Twiddle Factor</text>
+
+      {/* Formula heading */}
+      <text x={px + 30} y={rY} fontSize="14" fontWeight="700" fill={C.text}>Rumus Kombinasi (Operasi Butterfly):</text>
+
+      {/* Formula box */}
+      <rect x={px + 30} y={rY + 12} width={pw - 60} height={75} rx={8} fill="#fff" stroke={C.border} strokeWidth={1} />
+      <text x={px + 50} y={rY + 42} fontSize="16" fontWeight="700" fontFamily="monospace" fill={C.primary}>
+        X[k]       = E[k]  +  W_N^k · O[k]
+      </text>
+      <text x={px + 50} y={rY + 70} fontSize="16" fontWeight="700" fontFamily="monospace" fill={C.primary}>
+        X[k + N/2] = E[k]  -  W_N^k · O[k]
+      </text>
+
+      {/* Twiddle definition */}
+      <text x={px + 30} y={rY + 120} fontSize="14" fontStyle="italic" fill={C.red}>Faktor Putar (Twiddle):</text>
+      <text x={px + 220} y={rY + 120} fontSize="16" fontWeight="700" fontFamily="monospace" fill={C.primary}>W_N^k = e^(-j2πk/N)</text>
+
+      {/* Butterfly heading */}
+      <text x={px + 30} y={bY - 18} fontSize="14" fontWeight="700" fill={C.text}>Diagram Konseptual "Butterfly"</text>
+
+      {/* Butterfly box */}
+      <rect x={px + 30} y={bY} width={pw - 60} height={155} rx={8} fill={C.panel} stroke={C.grid} strokeWidth={1} />
+
+      {/* Labels left */}
+      <text x={bX - 50} y={bY + 48} fontSize="16" fontFamily="monospace" fontWeight="600" fill={C.primary}>E[k]</text>
+      <text x={bX - 50} y={bY + 118} fontSize="16" fontFamily="monospace" fontWeight="600" fill={C.primary}>O[k]</text>
+
+      {/* Labels right */}
+      <text x={bX + 185} y={bY + 48} fontSize="16" fontFamily="monospace" fontWeight="600" fill={C.primary}>X[k]</text>
+      <text x={bX + 185} y={bY + 118} fontSize="16" fontFamily="monospace" fontWeight="600" fill={C.primary}>X[k+N/2]</text>
+
+      {/* Straight lines */}
+      <line x1={bX} y1={bY + 43} x2={bX + 165} y2={bY + 43} stroke={C.primary} strokeWidth={2} />
+      <line x1={bX} y1={bY + 113} x2={bX + 165} y2={bY + 113} stroke={C.primary} strokeWidth={2} />
+
+      {/* Cross lines */}
+      <line x1={bX} y1={bY + 43} x2={bX + 165} y2={bY + 113} stroke={C.red} strokeWidth={1.8} />
+      <line x1={bX} y1={bY + 113} x2={bX + 165} y2={bY + 43} stroke={C.blue} strokeWidth={1.8} />
+
+      {/* Twiddle labels on butterfly */}
+      <text x={bX + 45} y={bY + 78} fontSize="14" fontWeight="700" fontFamily="monospace" fill={C.blue}>W_N^k</text>
+      <text x={bX + 45} y={bY + 105} fontSize="14" fontWeight="700" fontFamily="monospace" fill={C.red}>-W_N^k</text>
+
+      {/* Conceptual badge */}
+      <rect x={px + pw - 170} y={bY + 8} width={130} height={22} rx={4} fill={C.border} />
+      <text x={px + pw - 105} y={bY + 23} textAnchor="middle" fontSize="11" fill={C.text}>Ilustrasi Konseptual</text>
+    </Panel>
+  );
+}
+
+/* ── PANEL 4: SPECTRUM OUTPUT ── */
+function SpectrumPanel({ model }: { model: QFTBookFigureModel }) {
+  const px = 40, py = 640, pw = 1720, ph = 420;
+  const gx = px + 30, gy = py + 70, gw = pw - 400, gh = 320;
+  const spectrum = model.spectrum;
+  const halfN = spectrum.length;
+  const maxMag = Math.max(...spectrum.map(s => s.magnitude), 1);
+  const barSpacing = gw / halfN;
+  const barW = barSpacing * 0.6;
+
+  return (
+    <Panel x={px} y={py} w={pw} h={ph}>
+      <NumberBadge x={px - 5} y={py + 25} n={4} />
+      <text x={px + 30} y={py + 32} fontSize="20" fontWeight="800" fill={C.primary}>
+        Hasil Akhir: Magnitude Spectrum (Limit Nyquist)
+      </text>
+
+      {/* Chart area */}
+      <rect x={gx} y={gy} width={gw} height={gh} rx={8} fill="#fff" stroke={C.border} strokeWidth={1} />
+
+      {/* Grid lines */}
+      {[1, 2, 3, 4].map(i => (
+        <line key={`grid-${i}`} x1={gx} y1={gy + gh - (i / 4) * gh} x2={gx + gw} y2={gy + gh - (i / 4) * gh} stroke="#f1f5f9" strokeWidth={1} />
+      ))}
+
+      {/* Axes */}
+      <line x1={gx} y1={gy} x2={gx} y2={gy + gh} stroke={C.primary} strokeWidth={2} />
+      <line x1={gx} y1={gy + gh} x2={gx + gw} y2={gy + gh} stroke={C.primary} strokeWidth={2} />
+
+      {/* Bars */}
+      {spectrum.map((pt, i) => {
+        const barH = (pt.magnitude / maxMag) * (gh - 40);
+        const bx = gx + i * barSpacing + (barSpacing - barW) / 2;
+        const by = gy + gh - barH - 2;
+        const isDom = model.dominantBins.includes(pt.bin);
+        const color = isDom ? C.red : C.blue;
 
         return (
-          <g key={`fft-stem-${point.bin}`}>
-            {/* Stem */}
-            <line x1={barX} y1={y + height} x2={barX} y2={barY} stroke={color} strokeWidth={isDominant ? 2.5 : 1.5} opacity={isDominant ? 1 : 0.4} />
-            {/* Head (dot) */}
-            <circle cx={barX} cy={barY} r={isDominant ? 4 : 2.5} fill={color} />
-            
-            {(isDominant || point.bin === 0 || point.bin === model.spectrum.length - 1) && (
-              <text x={barX} y={y + height + 16} textAnchor="middle" fontSize="10" fontWeight="700" fill={color}>{point.bin}</text>
+          <g key={`bar-${pt.bin}`}>
+            <rect x={bx} y={by} width={barW} height={barH} fill={color} opacity={isDom ? 1 : 0.65} rx={1} />
+            {/* X label */}
+            {(halfN <= 32 || i % 2 === 0) && (
+              <text x={bx + barW / 2} y={gy + gh + 18} textAnchor="middle" fontSize="12" fontFamily="monospace" fill={C.text}>{i}</text>
+            )}
+            {/* Peak label */}
+            {isDom && (
+              <text x={bx + barW / 2} y={by - 8} textAnchor="middle" fontSize="14" fontWeight="700" fontFamily="monospace" fill={C.red}>
+                {pt.magnitude.toFixed(1)}
+              </text>
             )}
           </g>
         );
       })}
-    </>
+
+      {/* Axis labels */}
+      <text x={gx + gw / 2} y={gy + gh + 42} textAnchor="middle" fontSize="14" fill={C.text}>Indeks Frekuensi (k)</text>
+      <g transform={`translate(${gx - 18},${gy + gh / 2 + 50}) rotate(-90)`}>
+        <text fontSize="14" fill={C.text}>Magnitudo |X(k)|</text>
+      </g>
+
+      {/* Interpretation box */}
+      <InterpretationBox model={model} x={gx + gw + 30} y={gy} h={gh} />
+    </Panel>
   );
 }
 
-function OutputBlock({ model, flowMarkerId }: { model: QFTBookFigureModel; flowMarkerId: string }) {
+function InterpretationBox({ model, x, y, h }: { model: QFTBookFigureModel; x: number; y: number; h: number }) {
   return (
-    <>
-      <line x1="1140" y1="608" x2="1170" y2="608" stroke="#94a3b8" strokeWidth="2" markerEnd={`url(#${flowMarkerId})`} />
-      
-      <rect x="1180" y="160" width="380" height="640" rx="8" fill="#ffffff" stroke="#cbd5e1" strokeWidth="1.5" />
-      <rect x="1200" y="180" width="8" height="16" rx="2" fill="#0d9488" />
-      <text x="1216" y="193" fontSize="15" fontWeight="800" letterSpacing="0.05em" fill="#0f172a">4. OUTPUT SPECTRUM</text>
-      <text x="1200" y="218" fontSize="18" fontWeight="600" fill="#334155">Frekuensi dominan dari deret waktu</text>
-      
-      <WrappedText x={1200} y={248} text={model.outputPreview} maxChars={45} maxLines={2} lineHeight={16} fontSize={12.5} fontWeight="600" fill="#0f172a" fontFamily="monospace" />
-      
-      {/* Chart */}
-      <rect x="1200" y="300" width="340" height="200" rx="4" fill="#f8fafc" stroke="#e2e8f0" strokeWidth="1.2" />
-      <line x1="1200" y1="480" x2="1540" y2="480" stroke="#cbd5e1" strokeWidth="1.5" />
-      <text x="1205" y="315" fontSize="10" fontWeight="700" fill="#64748b">Magnitude</text>
-      <text x="1530" y="495" fontSize="10" fontWeight="700" fill="#64748b">k (Bin)</text>
-      
-      <SpectrumBars model={model} />
+    <g>
+      <rect x={x} y={y} width={310} height={h} rx={12} fill="#fff" stroke={C.border} strokeWidth={1.5} />
+      <text x={x + 20} y={y + 35} fontSize="18" fontWeight="800" fill={C.primary}>Interpretasi Spektrum</text>
+      <text x={x + 20} y={y + 65} fontSize="14" fill={C.text}>Frekuensi Dominan Terdeteksi:</text>
 
-      <text x="1200" y="550" fontSize="13" fontWeight="700" fill="#334155">Pasangan Bin Dominan (Mirror):</text>
-      {model.dominantPairLines.map((line, index) => (
-        <g key={`dominant-line-${line.label}`}>
-          <circle cx="1208" cy={576 + index * 30} r="4" fill="#0d9488" />
-          <text x="1220" y={580 + index * 30} fontSize="13" fontWeight="600" fill="#0f172a" fontFamily="monospace">{line.label}</text>
-          <text x="1220" y={596 + index * 30} fontSize="12" fontWeight="500" fill="#64748b">|X[k]| = {line.magnitude}</text>
+      {model.dominantPairLines.map((line, i) => (
+        <g key={`dom-${line.label}`}>
+          <circle cx={x + 30} cy={y + 95 + i * 35} r={6} fill={C.red} />
+          <text x={x + 45} y={y + 100 + i * 35} fontSize="14" fontWeight="700" fontFamily="monospace" fill={C.primary}>
+            {line.label}
+          </text>
+          <text x={x + 170} y={y + 100 + i * 35} fontSize="14" fontFamily="monospace" fill={C.text}>
+            Mag: {line.magnitude}
+          </text>
         </g>
       ))}
 
-      <WrappedText x={1200} y={720} text={`Mirror pair utama: ${model.mirrorPairLabel}`} maxChars={45} maxLines={2} lineHeight={16} fontSize={13} fontWeight="600" fill="#0f172a" />
-      <WrappedText x={1200} y={750} text={`Bin unik: ${model.uniqueBinLabel}`} maxChars={45} maxLines={2} lineHeight={16} fontSize={13} fontWeight="500" fill="#475569" />
-    </>
+      {/* Divider */}
+      <line x1={x + 20} y1={y + 100 + model.dominantPairLines.length * 35 + 10}
+        x2={x + 290} y2={y + 100 + model.dominantPairLines.length * 35 + 10}
+        stroke={C.border} strokeWidth={1} />
+
+      <WrapText
+        x={x + 20}
+        y={y + 100 + model.dominantPairLines.length * 35 + 35}
+        text="Puncak magnitudo yang dihitung secara aktual dari data mengindikasikan komponen frekuensi paling kuat yang membentuk pola periodik pada domain waktu."
+        maxChars={38} fontSize={13} fontStyle="italic" fill={C.muted}
+      />
+    </g>
   );
 }
 
-function FigureFootnote({ model }: { model: QFTBookFigureModel }) {
-  return (
-    <>
-      <line x1="40" y1="850" x2="1560" y2="850" stroke="#e2e8f0" strokeWidth="1.5" />
-      <WrappedText x={40} y={875} text={model.footnote} maxChars={200} maxLines={2} lineHeight={16} fontSize={13.5} fontWeight="500" fill="#64748b" />
-    </>
-  );
+/* ── scale the wave path from engine coords to new chart coords ── */
+function buildScaledWavePath(originalPath: string, targetW: number, targetH: number): string {
+  if (!originalPath) return '';
+  // The engine builds path in 240×64 space. We scale it.
+  const scaleX = targetW / 240;
+  const scaleY = targetH / 64;
+  return originalPath.replace(/([ML])\s*([\d.]+)\s+([\d.]+)/g, (_m, cmd, xStr, yStr) => {
+    const nx = (parseFloat(xStr) * scaleX).toFixed(2);
+    const ny = (parseFloat(yStr) * scaleY).toFixed(2);
+    return `${cmd} ${nx} ${ny}`;
+  });
 }
 
+/* ── MAIN EXPORT ── */
 export function QFTBookFigureSvg({ model, mode }: { model: QFTBookFigureModel; mode: FigureMode }) {
   const flowMarkerId = `fft-flow-arrow-${mode}`;
 
   return (
-    <svg viewBox={`0 0 ${VIEWBOX_WIDTH} ${VIEWBOX_HEIGHT}`} className="block h-auto w-full" role="img" aria-label={model.title}>
+    <svg viewBox={`0 0 ${VW} ${VH}`} className="block h-auto w-full" role="img" aria-label={model.title}>
       <defs>
-        <marker id={flowMarkerId} viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
-          <path d="M 0 0 L 10 5 L 0 10 z" fill="#94a3b8" />
-        </marker>
-        <marker id="arrow-head" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
-          <path d="M 0 0 L 10 5 L 0 10 z" fill="#334155" />
+        <marker id={flowMarkerId} viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+          <path d="M 0 0 L 10 5 L 0 10 z" fill={C.grid} />
         </marker>
       </defs>
-      <FigureHeader model={model} />
-      <InputBlock model={model} />
-      <DivideBlock model={model} flowMarkerId={flowMarkerId} />
-      <ConquerBlock model={model} flowMarkerId={flowMarkerId} />
-      <OutputBlock model={model} flowMarkerId={flowMarkerId} />
-      <FigureFootnote model={model} />
+
+      <Header model={model} />
+
+      <InputPanel model={model} />
+
+      {/* Flow 1→2 */}
+      <FlowArrow x1={590} y1={375} x2={615} y2={375} markerId={flowMarkerId} />
+
+      <DividePanel model={model} />
+
+      {/* Flow 2→3 */}
+      <FlowArrow x1={1190} y1={375} x2={1215} y2={375} markerId={flowMarkerId} />
+
+      <CombinePanel model={model} />
+
+      {/* Flow down to 4 */}
+      <FlowArrow x1={VW / 2} y1={595} x2={VW / 2} y2={635} markerId={flowMarkerId} />
+
+      <SpectrumPanel model={model} />
+
+      {/* Footer */}
+      <line x1={40} y1={VH - 30} x2={VW - 40} y2={VH - 30} stroke={C.border} strokeWidth={1} />
+      <text x={VW / 2} y={VH - 10} textAnchor="middle" fontSize="13" fill={C.muted} fontStyle="italic">
+        100% React SVG | Dataset: datasets/qft/{model.caseId}.json | Gambar Statis Akademik | Resolusi {VW}×{VH}
+      </text>
     </svg>
   );
 }

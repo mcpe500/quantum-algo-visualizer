@@ -51,6 +51,11 @@ export interface MergeExample {
 }
 
 export interface QFTBookFigureModel {
+  caseId: string;
+  signalType: string;
+  nOriginal: number;
+  nPadded: number;
+  isPadded: boolean;
   title: string;
   metaLine: string;
   inputPreview: string;
@@ -263,6 +268,11 @@ export function buildQFTBookFigureModel(result: QFTBenchmarkResult): QFTBookFigu
   const leafIndices = leaves.map(n => n.indices[0]);
 
   return {
+    caseId: result.case_id,
+    signalType: result.signal_type,
+    nOriginal: result.n_points_original,
+    nPadded: n,
+    isPadded: result.n_points_original !== n,
     title: 'Alur FFT Klasik Dinamis - Cooley-Tukey Radix-2',
     metaLine: `Case ${result.case_id} | N asli = ${result.n_points_original} | N FFT = ${n} | log2(N) = ${Math.log2(n)} | Kompleksitas O(N log N)`,
     inputPreview: `x_raw[n] = ${formatValuePreview(result.input_signal, 5)}`,

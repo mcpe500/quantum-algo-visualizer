@@ -16,8 +16,8 @@ export function QFTClassicBookFigure({ result, mode = 'screen' }: QFTClassicBook
     <div
       id={wrapperId}
       className={mode === 'screen'
-        ? 'w-full max-w-[1180px] rounded-2xl border border-slate-200 bg-white p-4 shadow-sm'
-        : 'w-[1600px] rounded-2xl border border-slate-200 bg-white p-5'}
+        ? 'w-full max-w-[1800px] rounded-2xl border border-slate-200 bg-white p-4 shadow-sm'
+        : 'w-[1800px] rounded-2xl border border-slate-200 bg-white p-5'}
     >
       <QFTBookFigureSvg model={model} mode={mode} />
     </div>
