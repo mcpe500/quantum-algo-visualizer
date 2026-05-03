@@ -1,3 +1,6 @@
+import React from 'react';
+import katex from 'katex';
+import 'katex/dist/katex.min.css';
 import type { FigureMode, QFTBookFigureModel } from './engine';
 
 const VW = 1800;
@@ -23,13 +26,43 @@ const C = {
   lightYellow: '#fefce8',
 };
 
+/* ── LaTeX Component for SVG ── */
+function Latex({ x, y, latex, fontSize = 20, color = C.primary, anchor = 'start', width, height }: {
+  x: number; y: number; latex: string; fontSize?: number; color?: string; anchor?: 'start' | 'middle' | 'end'; width?: number; height?: number;
+}) {
+  const html = katex.renderToString(latex, { throwOnError: false, output: 'html' });
+  const boxWidth = width ?? latex.length * (fontSize * 0.72) + 80;
+  const boxHeight = height ?? fontSize * 2.6;
+
+  const tx = anchor === 'middle' ? x - boxWidth / 2 : anchor === 'end' ? x - boxWidth : x;
+
+  return (
+    <foreignObject x={tx} y={y - fontSize} width={boxWidth} height={boxHeight}>
+      <div 
+        style={{ 
+          fontSize: `${fontSize}px`, 
+          color, 
+          fontFamily: 'serif',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: anchor === 'middle' ? 'center' : anchor === 'end' ? 'flex-end' : 'flex-start',
+          height: '100%',
+          overflow: 'hidden',
+          whiteSpace: 'nowrap'
+        }}
+        dangerouslySetInnerHTML={{ __html: html }} 
+      />
+    </foreignObject>
+  );
+}
+
 /* ── shared SVG primitives ── */
 function Badge({ x, y, text, bg, fg }: { x: number; y: number; text: string; bg: string; fg: string }) {
   const w = text.length * 9 + 24;
   return (
     <g>
-      <rect x={x} y={y - 20} width={w} height={30} rx={15} fill={bg} />
-      <text x={x + w / 2} y={y} textAnchor="middle" fontSize="14" fontWeight="700" fill={fg}>{text}</text>
+      <rect x={x - w / 2} y={y - 21} width={w} height={32} rx={16} fill={bg} />
+      <text x={x} y={y + 1} textAnchor="middle" fontSize="16" fontWeight="700" fill={fg}>{text}</text>
     </g>
   );
 }
@@ -37,8 +70,8 @@ function Badge({ x, y, text, bg, fg }: { x: number; y: number; text: string; bg:
 function NumberBadge({ x, y, n }: { x: number; y: number; n: number }) {
   return (
     <g>
-      <circle cx={x} cy={y} r={18} fill={C.primary} />
-      <text x={x} y={y + 5} textAnchor="middle" fontSize="16" fontWeight="800" fill="#fff">{n}</text>
+      <circle cx={x} cy={y} r={19} fill={C.primary} />
+      <text x={x} y={y + 6} textAnchor="middle" fontSize="18" fontWeight="800" fill="#fff">{n}</text>
     </g>
   );
 }
@@ -53,32 +86,25 @@ function Panel({ x, y, w, h, children }: { x: number; y: number; w: number; h: n
 }
 
 function FlowArrow({ x1, y1, x2, y2, markerId }: { x1: number; y1: number; x2: number; y2: number; markerId: string }) {
-  return <line x1={x1} y1={y1} x2={x2} y2={y2} stroke={C.grid} strokeWidth={6} markerEnd={`url(#${markerId})`} />;
+  return <line x1={x1} y1={y1} x2={x2} y2={y2} stroke={C.grid} strokeWidth={4} opacity={0.7} markerEnd={`url(#${markerId})`} />;
 }
 
 function TreeNode({ x, y, text, w, isOdd }: { x: number; y: number; text: string; w: number; isOdd: boolean }) {
   return (
     <g>
-      <rect x={x - w / 2} y={y} width={w} height={35} rx={6} fill={isOdd ? C.lightRed : C.lightBlue} stroke={isOdd ? C.red : C.blue} strokeWidth={1.2} />
-      <text x={x} y={y + 22} textAnchor="middle" fontSize="13" fontWeight="700" fontFamily="monospace" fill={isOdd ? C.red : C.blue}>{text}</text>
+      <rect x={x - w / 2} y={y} width={w} height={48} rx={7} fill={isOdd ? C.lightRed : C.lightBlue} stroke={isOdd ? C.red : C.blue} strokeWidth={1.4} />
+      <text x={x} y={y + 30} textAnchor="middle" fontSize="15" fontWeight="700" fontFamily="monospace" fill={isOdd ? C.red : C.blue}>{text}</text>
     </g>
   );
 }
 
-function WrapText({ x, y, text, maxChars, fontSize = 13, fill = C.text, fontWeight = '500', anchor = 'start' as const, fontFamily }: {
-  x: number; y: number; text: string; maxChars: number; fontSize?: number; fill?: string; fontWeight?: string; anchor?: 'start' | 'middle' | 'end'; fontFamily?: string;
+function PowerText({ x, y, base, exponent, fontSize = 16, fill = C.text, fontWeight = '500' }: {
+  x: number; y: number; base: string; exponent: string; fontSize?: number; fill?: string; fontWeight?: string;
 }) {
-  const words = text.split(' ');
-  const lines: string[] = [];
-  let cur = '';
-  for (const w of words) {
-    const test = cur ? `${cur} ${w}` : w;
-    if (test.length <= maxChars) { cur = test; } else { if (cur) lines.push(cur); cur = w; }
-  }
-  if (cur) lines.push(cur);
   return (
-    <text x={x} y={y} fontSize={fontSize} fontWeight={fontWeight} fill={fill} textAnchor={anchor} fontFamily={fontFamily}>
-      {lines.slice(0, 3).map((l, i) => <tspan key={i} x={x} dy={i === 0 ? 0 : fontSize + 3}>{l}</tspan>)}
+    <text x={x} y={y} fontSize={fontSize} fontWeight={fontWeight} fill={fill}>
+      <tspan>{base}</tspan>
+      <tspan baselineShift="super" fontSize={Math.round(fontSize * 0.65)}>{exponent}</tspan>
     </text>
   );
 }
@@ -87,207 +113,248 @@ function WrapText({ x, y, text, maxChars, fontSize = 13, fill = C.text, fontWeig
 function Header({ model }: { model: QFTBookFigureModel }) {
   return (
     <g>
-      <text x={VW / 2} y={46} textAnchor="middle" fontSize="36" fontWeight="800" fill={C.primary} letterSpacing="0.5">
-        Diagram Akademik Alur FFT Klasik Dinamis — Cooley-Tukey Radix-2
+      <text x={VW / 2} y={44} textAnchor="middle" fontSize="38" fontWeight="800" fill={C.primary}>
+        {model.title}
       </text>
-      <text x={VW / 2} y={78} textAnchor="middle" fontSize="18" fill={C.text}>
-        Ilustrasi Visual Transformasi Fourier Cepat Berbasis Dataset Aktual
+      <text x={VW / 2} y={78} textAnchor="middle" fontSize="20" fill={C.text}>
+        Dekomposisi Sinyal Berbasis Algoritma Cooley-Tukey Radix-2
       </text>
-      <Badge x={VW / 2 - 160} y={110} text={`Dataset Aktif: ${model.caseId} (${model.signalType})`} bg={C.blue} fg="#fff" />
+      <Badge x={VW / 2} y={110} text={`Dataset aktif: ${model.caseId} (${model.signalType})`} bg={C.blue} fg="#fff" />
     </g>
   );
 }
 
 /* ── PANEL 1: INPUT TIME DOMAIN ── */
 function InputPanel({ model }: { model: QFTBookFigureModel }) {
-  const px = 40, py = 160, pw = 540, ph = 430;
-  const gx = px + 30, gy = py + 140, gw = pw - 60, gh = 240;
+  const px = 40, py = 160, pw = 540, ph = 450;
+  const gx = px + 60, gy = py + 142, gw = pw - 90, gh = 210;
   const midY = gy + gh / 2;
 
   return (
     <Panel x={px} y={py} w={pw} h={ph}>
       <NumberBadge x={px - 5} y={py + 25} n={1} />
-      <text x={px + 30} y={py + 32} fontSize="20" fontWeight="800" fill={C.primary}>Data Input (Domain Waktu)</text>
+      <text x={px + 30} y={py + 32} fontSize="22" fontWeight="800" fill={C.primary}>Sinyal Masukan (Domain Waktu)</text>
 
-      {/* Metadata */}
-      <text x={px + 30} y={py + 68} fontSize="15" fontFamily="monospace" fill={C.text}>
-        Panjang Data (N) = {model.nOriginal} titik
+      <text x={px + 30} y={py + 72} fontSize="20" fontFamily="Georgia, serif" fill={C.primary}>
+        N<tspan baselineShift="sub" fontSize="13">asli</tspan> = {model.nOriginal}
       </text>
-      <text x={px + 30} y={py + 92} fontSize="15" fontFamily="monospace" fill={C.text}>
-        Tipe             = {model.signalType}
-      </text>
-      <WrapText x={px + 30} y={py + 116} text={model.inputPreview} maxChars={40} fontSize={14} fontFamily="monospace" fill={C.text} fontWeight="600" />
+      <text x={px + 30} y={py + 98} fontSize="16" fontWeight="600" fill={C.muted}>Tipe: {model.signalType}</text>
+      <text x={px + 30} y={py + 125} fontSize="17" fontFamily="Georgia, serif" fill={C.primary}>{model.inputPreviewPlain}</text>
 
       {/* Chart area */}
       <rect x={gx} y={gy} width={gw} height={gh} rx={8} fill="#fff" stroke={C.border} strokeWidth={1} />
-      <line x1={gx} y1={midY} x2={gx + gw} y2={midY} stroke={C.grid} strokeWidth={1.5} />
+      <line x1={gx} y1={midY} x2={gx + gw} y2={midY} stroke={C.grid} strokeWidth={1} strokeDasharray="4 3" />
 
-      {/* Waveform path scaled to chart area */}
-      <g transform={`translate(${gx + 10},${gy + 10})`}>
-        <path d={buildScaledWavePath(model.wavePath, gw - 20, gh - 20)} fill="none" stroke={C.blue} strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" />
+      {/* Defect 12: Y-axis label x[n] */}
+      <g transform={`translate(${gx - 20},${midY}) rotate(-90)`}>
+        <text textAnchor="middle" fontSize="15" fill={C.muted} fontStyle="italic">x[n]</text>
+      </g>
+      {/* Defect 12: X-axis label n */}
+      <text x={gx + gw / 2} y={gy + gh + 22} textAnchor="middle" fontSize="15" fill={C.muted} fontStyle="italic">n (indeks sampel)</text>
+
+      {/* Waveform path */}
+      <g transform={`translate(${gx + 5},${gy + 5})`}>
+        <path d={buildScaledWavePath(model.wavePath, gw - 10, gh - 10)} fill="none" stroke={C.blue} strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" />
       </g>
 
       {/* Padding annotation */}
       {model.isPadded && (
         <g>
-          <text x={gx + gw / 2} y={gy + gh - 16} textAnchor="middle" fontSize="13" fontWeight="700" fill={C.red}>
-            → Penambahan Zero-Padding ({model.nPadded - model.nOriginal} titik)
+          <rect x={gx + gw / 2 - 105} y={gy + gh + 28} width={210} height={28} rx={7} fill="#fff" stroke={C.red} strokeWidth={1} />
+          <text x={gx + gw / 2} y={gy + gh + 47} textAnchor="middle" fontSize="15" fontWeight="800" fill={C.red}>
+            Zero-padding ({model.nPadded - model.nOriginal} titik)
           </text>
-          <line x1={gx + gw * 0.7} y1={midY - 5} x2={gx + gw * 0.7} y2={midY + 5} stroke={C.red} strokeWidth={2} strokeDasharray="4 3" />
         </g>
       )}
 
-      {/* Sample info at bottom */}
-      <WrapText x={px + 30} y={py + ph - 30} text={model.sampleLine} maxChars={48} fontSize={12} fill={C.muted} />
+      {model.isPadded ? (
+        <text x={px + 30} y={py + ph - 18} fontSize="15" fill={C.muted}>
+          {model.nOriginal} sampel -> zero-pad -> {model.nPadded} sampel
+          <tspan> (2</tspan><tspan baselineShift="super" fontSize="10">{Math.log2(model.nPadded)}</tspan><tspan> tahap)</tspan>
+        </text>
+      ) : (
+        <text x={px + 30} y={py + ph - 18} fontSize="15" fill={C.muted}>
+          {model.nPadded} sampel, sudah 2<tspan baselineShift="super" fontSize="10">{Math.log2(model.nPadded)}</tspan> - tidak perlu padding
+        </text>
+      )}
     </Panel>
   );
 }
 
-/* ── PANEL 2: DIVIDE & CONQUER ── */
+/* ── PANEL 2: DIVIDE & CONQUER (Defects 4 & 5 fixed) ── */
 function DividePanel({ model }: { model: QFTBookFigureModel }) {
-  const px = 620, py = 160, pw = 560, ph = 430;
+  const px = 620, py = 160, pw = 560, ph = 450;
   const cx = px + pw / 2;
+  const m = Math.log2(model.nPadded);
 
   return (
     <Panel x={px} y={py} w={pw} h={ph}>
       <NumberBadge x={px - 5} y={py + 25} n={2} />
-      <text x={px + 30} y={py + 32} fontSize="20" fontWeight="800" fill={C.primary}>Proses Divide &amp; Conquer</text>
+      <text x={px + 30} y={py + 32} fontSize="22" fontWeight="800" fill={C.primary}>Dekomposisi Sinyal (Rekursif)</text>
 
-      {/* Validation block */}
-      <rect x={px + 30} y={py + 55} width={pw - 60} height={60} rx={8}
+      {/* Defect 4: Use 2^m not 2^k */}
+      <rect x={px + 30} y={py + 50} width={pw - 60} height={78} rx={8}
         fill={model.isPadded ? '#fef2f2' : '#f0fdf4'}
         stroke={model.isPadded ? C.red : C.green} strokeWidth={1.5} />
-      <text x={px + 45} y={py + 80} fontSize="15" fontWeight="700" fill={model.isPadded ? C.red : C.green}>
-        {model.isPadded ? '✘ Validasi Gagal: N bukan pangkat dua' : '✔ Validasi Sukses: N adalah pangkat dua'}
+      <text x={px + 45} y={py + 80} fontSize="18" fontWeight="800" fill={model.isPadded ? C.red : C.green}>
+        {model.isPadded ? `N = ${model.nOriginal} bukan 2^m -> zero-padding ke ${model.nPadded}` : `N = ${model.nOriginal} = 2^${m} -> valid radix-2`}
       </text>
-      <text x={px + 45} y={py + 100} fontSize="13" fill={C.text}>
-        {model.isPadded
-          ? `Tindakan: Pad N=${model.nOriginal} menjadi N=${model.nPadded} (Pangkat 2 terdekat)`
-          : `Tindakan: Pertahankan N=${model.nOriginal}. Pemisahan berimbang terjamin.`}
+      {model.isPadded ? (
+        <>
+          <text x={px + 45} y={py + 110} fontSize="15" fill={C.text}>
+            {model.nOriginal} != 2^m, N = {model.nPadded} = 2^{m}
+          </text>
+          <text x={px + 360} y={py + 110} fontSize="15" fill={C.text}>total {m} tahap</text>
+        </>
+      ) : (
+        <>
+          <PowerText x={px + 45} y={py + 110} base={`N = ${model.nPadded} = 2`} exponent={String(m)} fontSize={15} fill={C.text} />
+          <text x={px + 205} y={py + 110} fontSize="15" fill={C.text}>tanpa padding; {m} tahap rekursi</text>
+        </>
+      )}
+
+      {/* Defect 5: show recursion chain */}
+      <text x={cx} y={py + 154} textAnchor="middle" fontSize="15" fontWeight="700" fill={C.text}>Rantai Rekursi ({m} tahap):</text>
+      <rect x={px + 30} y={py + 164} width={pw - 60} height={34} rx={6} fill="#fff" stroke={C.border} strokeWidth={1} />
+      <text x={cx} y={py + 187} textAnchor="middle" fontSize="14" fontFamily="monospace" fontWeight="700" fill={C.primary}>
+        {model.recursionLevelsLabel}
       </text>
 
-      {/* Tree heading */}
-      <text x={cx} y={py + 148} textAnchor="middle" fontSize="14" fontWeight="700" fill={C.text}>
-        Pemisahan Indeks Genap/Ganjil (Ukuran Array: {model.nPadded})
-      </text>
+      {/* Tree */}
+      <text x={cx} y={py + 228} textAnchor="middle" fontSize="15" fontWeight="700" fill={C.text}>Pemisahan Indeks Genap / Ganjil:</text>
 
-      {/* Level 0 - Root */}
-      <TreeNode x={cx} y={py + 165} text={`X[0..${model.nPadded - 1}]`} w={150} isOdd={false} />
+      <TreeNode x={cx} y={py + 240} text={`X[0..${model.nPadded - 1}]`} w={165} isOdd={false} />
 
-      {/* Lines root -> children */}
-      <line x1={cx} y1={py + 200} x2={cx - 130} y2={py + 230} stroke={C.grid} strokeWidth={1.5} />
-      <line x1={cx} y1={py + 200} x2={cx + 130} y2={py + 230} stroke={C.grid} strokeWidth={1.5} />
+      <line x1={cx} y1={py + 288} x2={cx - 120} y2={py + 312} stroke={C.grid} strokeWidth={1.5} />
+      <line x1={cx} y1={py + 288} x2={cx + 120} y2={py + 312} stroke={C.grid} strokeWidth={1.5} />
 
-      {/* Level 1 */}
-      <TreeNode x={cx - 130} y={py + 235} text={`E[0,2,4..] (N=${model.nPadded / 2})`} w={170} isOdd={false} />
-      <TreeNode x={cx + 130} y={py + 235} text={`O[1,3,5..] (N=${model.nPadded / 2})`} w={170} isOdd={true} />
+      <TreeNode x={cx - 125} y={py + 318} text={`Genap N=${model.nPadded / 2}`} w={170} isOdd={false} />
+      <TreeNode x={cx + 125} y={py + 318} text={`Ganjil N=${model.nPadded / 2}`} w={170} isOdd={true} />
 
-      {/* Level 2 lines */}
-      <line x1={cx - 130} y1={py + 270} x2={cx - 195} y2={py + 298} stroke={C.grid} strokeWidth={1.2} />
-      <line x1={cx - 130} y1={py + 270} x2={cx - 65} y2={py + 298} stroke={C.grid} strokeWidth={1.2} />
-      <line x1={cx + 130} y1={py + 270} x2={cx + 65} y2={py + 298} stroke={C.grid} strokeWidth={1.2} />
-      <line x1={cx + 130} y1={py + 270} x2={cx + 195} y2={py + 298} stroke={C.grid} strokeWidth={1.2} />
+      <text x={cx} y={py + 380} textAnchor="middle" fontSize="24" fill={C.grid}>...</text>
 
-      {/* Level 2 nodes */}
-      <TreeNode x={cx - 195} y={py + 303} text="E_E" w={70} isOdd={false} />
-      <TreeNode x={cx - 65} y={py + 303} text="E_O" w={70} isOdd={true} />
-      <TreeNode x={cx + 65} y={py + 303} text="O_E" w={70} isOdd={false} />
-      <TreeNode x={cx + 195} y={py + 303} text="O_O" w={70} isOdd={true} />
+      <rect x={px + 60} y={py + 388} width={pw - 120} height={34} rx={6} fill={C.lightBlue} stroke={C.blue} strokeWidth={1} />
+      <text x={cx} y={py + 411} textAnchor="middle" fontSize="15" fontWeight="700" fill={C.blue}>Basis: N=1 (node daun)</text>
 
-      {/* Ellipsis */}
-      <text x={cx} y={py + 370} textAnchor="middle" fontSize="24" fontWeight="800" fill={C.grid}>⋮</text>
-      <text x={cx} y={py + 400} textAnchor="middle" fontSize="12" fontStyle="italic" fill={C.muted}>
-        *Representasi ringkas rekursi FFT. Berlanjut hingga basis N=1.
+      <text x={cx} y={py + ph - 12} textAnchor="middle" fontSize="13" fontStyle="italic" fill={C.muted}>
+        *Berlanjut hingga ukuran sub-array N=1.
       </text>
     </Panel>
   );
 }
 
-/* ── PANEL 3: BUTTERFLY & TWIDDLE ── */
-function CombinePanel({ model }: { model: QFTBookFigureModel }) {
-  const px = 1220, py = 160, pw = 540, ph = 430;
-  const rY = py + 60;
-  const bY = rY + 165;
-  const bX = px + 155;
+/* ── PANEL 3: BUTTERFLY (Defects 1,2,6,7 fixed) ── */
+function CombinePanel() {
+  const px = 1220, py = 160, pw = 540, ph = 450;
+  const rY = py + 55;
+  // butterfly coordinates
+  const bY = rY + 205;
+  const bLeft = px + 110;
+  const bMid = px + 280;
+  const bRight = px + 420;
 
   return (
     <Panel x={px} y={py} w={pw} h={ph}>
       <NumberBadge x={px - 5} y={py + 25} n={3} />
-      <text x={px + 30} y={py + 32} fontSize="20" fontWeight="800" fill={C.primary}>Kombinasi &amp; Twiddle Factor</text>
+      <text x={px + 30} y={py + 32} fontSize="22" fontWeight="800" fill={C.primary}>Operasi Butterfly &amp; Twiddle</text>
 
-      {/* Formula heading */}
-      <text x={px + 30} y={rY} fontSize="14" fontWeight="700" fill={C.text}>Rumus Kombinasi (Operasi Butterfly):</text>
-
-      {/* Formula box */}
-      <rect x={px + 30} y={rY + 12} width={pw - 60} height={75} rx={8} fill="#fff" stroke={C.border} strokeWidth={1} />
-      <text x={px + 50} y={rY + 42} fontSize="16" fontWeight="700" fontFamily="monospace" fill={C.primary}>
-        X[k]       = E[k]  +  W_N^k · O[k]
+      {/* Defect 1+2: taller box, more vertical spacing, correct \cdot */}
+      <rect x={px + 20} y={rY} width={pw - 40} height={155} rx={8} fill="#fff" stroke={C.border} strokeWidth={1} />
+      <text x={px + 35} y={rY + 23} fontSize="15" fontWeight="700" fill={C.muted}>Rumus Butterfly:</text>
+      <text x={px + 35} y={rY + 61} fontSize="22" fontFamily="Georgia, serif" fill={C.primary}>
+        X[k] = E[k] + W_N^k · O[k]
       </text>
-      <text x={px + 50} y={rY + 70} fontSize="16" fontWeight="700" fontFamily="monospace" fill={C.primary}>
-        X[k + N/2] = E[k]  -  W_N^k · O[k]
+      <text x={px + 35} y={rY + 105} fontSize="22" fontFamily="Georgia, serif" fill={C.primary}>
+        X[k + N/2] = E[k] - W_N^k · O[k]
       </text>
 
-      {/* Twiddle definition */}
-      <text x={px + 30} y={rY + 120} fontSize="14" fontStyle="italic" fill={C.red}>Faktor Putar (Twiddle):</text>
-      <text x={px + 220} y={rY + 120} fontSize="16" fontWeight="700" fontFamily="monospace" fill={C.primary}>W_N^k = e^(-j2πk/N)</text>
+      {/* Defect 2: twiddle definition with correct backslash */}
+      <text x={px + 35} y={rY + 145} fontSize="21" fontFamily="Georgia, serif" fill={C.primary}>
+        W_N^k = exp(-j 2π k / N)
+      </text>
 
-      {/* Butterfly heading */}
-      <text x={px + 30} y={bY - 18} fontSize="14" fontWeight="700" fill={C.text}>Diagram Konseptual "Butterfly"</text>
+      {/* Defect 6+7: butterfly with clear +/- nodes, non-overlapping labels */}
+      <text x={px + 30} y={bY - 10} fontSize="15" fontWeight="700" fill={C.text}>Diagram Butterfly:</text>
 
-      {/* Butterfly box */}
-      <rect x={px + 30} y={bY} width={pw - 60} height={155} rx={8} fill={C.panel} stroke={C.grid} strokeWidth={1} />
+      <rect x={px + 20} y={bY} width={pw - 40} height={170} rx={8} fill={C.panel} stroke={C.grid} strokeWidth={1} />
 
-      {/* Labels left */}
-      <text x={bX - 50} y={bY + 48} fontSize="16" fontFamily="monospace" fontWeight="600" fill={C.primary}>E[k]</text>
-      <text x={bX - 50} y={bY + 118} fontSize="16" fontFamily="monospace" fontWeight="600" fill={C.primary}>O[k]</text>
+      {/* Input labels */}
+      <Latex x={bLeft - 55} y={bY + 50} latex="E[k]" fontSize={19} width={70} />
+      <Latex x={bLeft - 55} y={bY + 125} latex="O[k]" fontSize={19} width={70} />
 
-      {/* Labels right */}
-      <text x={bX + 185} y={bY + 48} fontSize="16" fontFamily="monospace" fontWeight="600" fill={C.primary}>X[k]</text>
-      <text x={bX + 185} y={bY + 118} fontSize="16" fontFamily="monospace" fontWeight="600" fill={C.primary}>X[k+N/2]</text>
+      {/* W_N^k multiplier on O[k] path */}
+      <line x1={bLeft} y1={bY + 45} x2={bMid - 15} y2={bY + 45} stroke={C.primary} strokeWidth={2} />
+      <line x1={bLeft} y1={bY + 120} x2={bMid - 30} y2={bY + 120} stroke={C.primary} strokeWidth={2} />
+      {/* Twiddle circle on O branch */}
+      <circle cx={bMid - 20} cy={bY + 120} r={15} fill="#fff" stroke={C.blue} strokeWidth={2} />
+      <text x={bMid - 20} y={bY + 125} textAnchor="middle" fontSize="12" fontWeight="700" fill={C.blue}>W</text>
 
-      {/* Straight lines */}
-      <line x1={bX} y1={bY + 43} x2={bX + 165} y2={bY + 43} stroke={C.primary} strokeWidth={2} />
-      <line x1={bX} y1={bY + 113} x2={bX + 165} y2={bY + 113} stroke={C.primary} strokeWidth={2} />
+      {/* Diagonal crossings */}
+      <line x1={bMid - 6} y1={bY + 120} x2={bMid + 30} y2={bY + 45} stroke={C.blue} strokeWidth={1.8} strokeDasharray="5 2" />
+      <line x1={bMid - 6} y1={bY + 120} x2={bMid + 30} y2={bY + 120} stroke={C.blue} strokeWidth={2} />
+      <line x1={bMid - 15} y1={bY + 45} x2={bMid + 30} y2={bY + 45} stroke={C.primary} strokeWidth={2} />
+      <line x1={bMid - 15} y1={bY + 45} x2={bMid + 30} y2={bY + 120} stroke={C.primary} strokeWidth={1.8} strokeDasharray="5 2" />
 
-      {/* Cross lines */}
-      <line x1={bX} y1={bY + 43} x2={bX + 165} y2={bY + 113} stroke={C.red} strokeWidth={1.8} />
-      <line x1={bX} y1={bY + 113} x2={bX + 165} y2={bY + 43} stroke={C.blue} strokeWidth={1.8} />
+      {/* Adder circles with clear +/- (Defect 6) */}
+      <circle cx={bMid + 42} cy={bY + 45} r={15} fill="#fff" stroke={C.green} strokeWidth={2} />
+      <text x={bMid + 42} y={bY + 51} textAnchor="middle" fontSize="17" fontWeight="800" fill={C.green}>+</text>
 
-      {/* Twiddle labels on butterfly */}
-      <text x={bX + 45} y={bY + 78} fontSize="14" fontWeight="700" fontFamily="monospace" fill={C.blue}>W_N^k</text>
-      <text x={bX + 45} y={bY + 105} fontSize="14" fontWeight="700" fontFamily="monospace" fill={C.red}>-W_N^k</text>
+      <circle cx={bMid + 42} cy={bY + 120} r={15} fill="#fff" stroke={C.red} strokeWidth={2} />
+      <text x={bMid + 42} y={bY + 126} textAnchor="middle" fontSize="17" fontWeight="800" fill={C.red}>-</text>
 
-      {/* Conceptual badge */}
-      <rect x={px + pw - 170} y={bY + 8} width={130} height={22} rx={4} fill={C.border} />
-      <text x={px + pw - 105} y={bY + 23} textAnchor="middle" fontSize="11" fill={C.text}>Ilustrasi Konseptual</text>
+      {/* Output lines */}
+      <line x1={bMid + 56} y1={bY + 45} x2={bRight - 10} y2={bY + 45} stroke={C.primary} strokeWidth={2} />
+      <line x1={bMid + 56} y1={bY + 120} x2={bRight - 10} y2={bY + 120} stroke={C.primary} strokeWidth={2} />
+
+      {/* Output labels */}
+      <Latex x={bRight - 8} y={bY + 50} latex="X[k]" fontSize={19} width={80} />
+      <Latex x={bRight - 8} y={bY + 125} latex="X[k+N/2]" fontSize={19} width={120} />
+      <text x={bMid + 64} y={bY + 76} fontSize="11" fontFamily="Georgia, serif" fill={C.green}>E[k] + W_N^k O[k]</text>
+      <text x={bMid + 64} y={bY + 150} fontSize="11" fontFamily="Georgia, serif" fill={C.red}>E[k] - W_N^k O[k]</text>
     </Panel>
   );
 }
 
-/* ── PANEL 4: SPECTRUM OUTPUT ── */
+/* ── PANEL 4: SPECTRUM (Defects 8,9,10,11 fixed) ── */
 function SpectrumPanel({ model }: { model: QFTBookFigureModel }) {
-  const px = 40, py = 640, pw = 1720, ph = 420;
-  const gx = px + 30, gy = py + 70, gw = pw - 400, gh = 320;
+  const px = 40, py = 635, pw = 1720, ph = 405;
+  const gx = px + 60, gy = py + 82, gw = pw - 470, gh = 280;
   const spectrum = model.spectrum;
   const halfN = spectrum.length;
-  const maxMag = Math.max(...spectrum.map(s => s.magnitude), 1);
+  const rawMax = Math.max(...spectrum.map(s => s.magnitude), 1);
+  const yMax = rawMax * 1.15; // Defect 10: headroom
   const barSpacing = gw / halfN;
-  const barW = barSpacing * 0.6;
+  const barW = Math.max(2, barSpacing * 0.6);
+  const tickStep = halfN <= 32 ? 4 : 8; // Defect 11: fewer x-ticks
+  const yTickCount = 5;
 
   return (
     <Panel x={px} y={py} w={pw} h={ph}>
       <NumberBadge x={px - 5} y={py + 25} n={4} />
-      <text x={px + 30} y={py + 32} fontSize="20" fontWeight="800" fill={C.primary}>
-        Hasil Akhir: Magnitude Spectrum (Limit Nyquist)
+      {/* Defect 8: clearer title — bin index not Hz */}
+      <text x={px + 30} y={py + 32} fontSize="22" fontWeight="800" fill={C.primary}>
+        Spektrum DFT - Bin Frekuensi
+      </text>
+      <text x={px + 30} y={py + 57} fontSize="16" fontWeight="600" fill={C.muted}>
+        Batas Nyquist: pasangan bin mirror untuk sinyal real
       </text>
 
-      {/* Chart area */}
       <rect x={gx} y={gy} width={gw} height={gh} rx={8} fill="#fff" stroke={C.border} strokeWidth={1} />
 
-      {/* Grid lines */}
-      {[1, 2, 3, 4].map(i => (
-        <line key={`grid-${i}`} x1={gx} y1={gy + gh - (i / 4) * gh} x2={gx + gw} y2={gy + gh - (i / 4) * gh} stroke="#f1f5f9" strokeWidth={1} />
-      ))}
+      {/* Defect 9: Y-axis ticks */}
+      {Array.from({ length: yTickCount + 1 }, (_, i) => {
+        const tickVal = (yMax / yTickCount) * i;
+        const ty = gy + gh - (tickVal / yMax) * gh;
+        return (
+          <g key={`ytick-${i}`}>
+            <line x1={gx - 6} y1={ty} x2={gx} y2={ty} stroke={C.grid} strokeWidth={1.5} />
+            <line x1={gx} y1={ty} x2={gx + gw} y2={ty} stroke="#f1f5f9" strokeWidth={1} />
+            <text x={gx - 12} y={ty + 5} textAnchor="end" fontSize="14" fill={C.muted}>
+              {Math.round(tickVal)}
+            </text>
+          </g>
+        );
+      })}
 
       {/* Axes */}
       <line x1={gx} y1={gy} x2={gx} y2={gy + gh} stroke={C.primary} strokeWidth={2} />
@@ -295,22 +362,22 @@ function SpectrumPanel({ model }: { model: QFTBookFigureModel }) {
 
       {/* Bars */}
       {spectrum.map((pt, i) => {
-        const barH = (pt.magnitude / maxMag) * (gh - 40);
+        const barH = (pt.magnitude / yMax) * gh;
         const bx = gx + i * barSpacing + (barSpacing - barW) / 2;
-        const by = gy + gh - barH - 2;
+        const by = gy + gh - barH;
         const isDom = model.dominantBins.includes(pt.bin);
         const color = isDom ? C.red : C.blue;
 
         return (
           <g key={`bar-${pt.bin}`}>
             <rect x={bx} y={by} width={barW} height={barH} fill={color} opacity={isDom ? 1 : 0.65} rx={1} />
-            {/* X label */}
-            {(halfN <= 32 || i % 2 === 0) && (
-              <text x={bx + barW / 2} y={gy + gh + 18} textAnchor="middle" fontSize="12" fontFamily="monospace" fill={C.text}>{i}</text>
+            {/* Defect 11: tick every tickStep bins only */}
+            {i % tickStep === 0 && (
+              <text x={bx + barW / 2} y={gy + gh + 20} textAnchor="middle" fontSize="14" fontFamily="monospace" fill={C.text}>{i}</text>
             )}
-            {/* Peak label */}
+            {/* Defect 10: peak labels with headroom won't clip */}
             {isDom && (
-              <text x={bx + barW / 2} y={by - 8} textAnchor="middle" fontSize="14" fontWeight="700" fontFamily="monospace" fill={C.red}>
+              <text x={bx + barW / 2} y={by - 8} textAnchor="middle" fontSize="16" fontWeight="800" fontFamily="monospace" fill={C.red}>
                 {pt.magnitude.toFixed(1)}
               </text>
             )}
@@ -319,55 +386,59 @@ function SpectrumPanel({ model }: { model: QFTBookFigureModel }) {
       })}
 
       {/* Axis labels */}
-      <text x={gx + gw / 2} y={gy + gh + 42} textAnchor="middle" fontSize="14" fill={C.text}>Indeks Frekuensi (k)</text>
-      <g transform={`translate(${gx - 18},${gy + gh / 2 + 50}) rotate(-90)`}>
-        <text fontSize="14" fill={C.text}>Magnitudo |X(k)|</text>
+      <text x={gx + gw / 2} y={gy + gh + 44} textAnchor="middle" fontSize="16" fill={C.text}>
+        Indeks Bin (k) - bukan frekuensi Hz
+      </text>
+      <g transform={`translate(${gx - 35},${gy + gh / 2}) rotate(-90)`}>
+        <text textAnchor="middle" fontSize="16" fill={C.text}>Magnitudo |X[k]|</text>
       </g>
 
-      {/* Interpretation box */}
-      <InterpretationBox model={model} x={gx + gw + 30} y={gy} h={gh} />
+      <g>
+        <circle cx={gx + 980} cy={py + 56} r={6} fill={C.red} />
+        <text x={gx + 994} y={py + 61} fontSize="15" fontWeight="700" fill={C.text}>Merah = bin dominan</text>
+        <rect x={gx + 1160} y={py + 50} width={12} height={12} fill={C.blue} opacity={0.65} rx={1} />
+        <text x={gx + 1180} y={py + 61} fontSize="15" fontWeight="700" fill={C.text}>Biru = komponen lain</text>
+      </g>
+
+      <InterpretationBox model={model} x={gx + gw + 32} y={gy} h={gh} />
     </Panel>
   );
 }
 
+/* Defect 15: Explain mirror pair rule N-k */
 function InterpretationBox({ model, x, y, h }: { model: QFTBookFigureModel; x: number; y: number; h: number }) {
   return (
     <g>
-      <rect x={x} y={y} width={310} height={h} rx={12} fill="#fff" stroke={C.border} strokeWidth={1.5} />
-      <text x={x + 20} y={y + 35} fontSize="18" fontWeight="800" fill={C.primary}>Interpretasi Spektrum</text>
-      <text x={x + 20} y={y + 65} fontSize="14" fill={C.text}>Frekuensi Dominan Terdeteksi:</text>
+      <rect x={x} y={y} width={350} height={h} rx={12} fill="#fff" stroke={C.border} strokeWidth={1.5} />
+      <text x={x + 22} y={y + 34} fontSize="19" fontWeight="800" fill={C.primary}>Analisis Hasil Spektrum</text>
+      <text x={x + 22} y={y + 62} fontSize="15" fill={C.text}>Pasangan mirror dominan:</text>
 
       {model.dominantPairLines.map((line, i) => (
         <g key={`dom-${line.label}`}>
-          <circle cx={x + 30} cy={y + 95 + i * 35} r={6} fill={C.red} />
-          <text x={x + 45} y={y + 100 + i * 35} fontSize="14" fontWeight="700" fontFamily="monospace" fill={C.primary}>
+          <circle cx={x + 30} cy={y + 88 + i * 52} r={6} fill={C.red} />
+          <text x={x + 48} y={y + 94 + i * 52} fontSize="16" fontWeight="800" fill={C.primary}>
             {line.label}
           </text>
-          <text x={x + 170} y={y + 100 + i * 35} fontSize="14" fontFamily="monospace" fill={C.text}>
-            Mag: {line.magnitude}
-          </text>
+          <Latex x={x + 48} y={y + 116 + i * 52} latex={`|X[k]| \\approx ${line.magnitude}`} fontSize={16} color={C.text} width={190} />
         </g>
       ))}
 
-      {/* Divider */}
-      <line x1={x + 20} y1={y + 100 + model.dominantPairLines.length * 35 + 10}
-        x2={x + 290} y2={y + 100 + model.dominantPairLines.length * 35 + 10}
-        stroke={C.border} strokeWidth={1} />
+      <line x1={x + 22} y1={y + h - 92} x2={x + 328} y2={y + h - 92} stroke={C.border} strokeWidth={1} />
 
-      <WrapText
-        x={x + 20}
-        y={y + 100 + model.dominantPairLines.length * 35 + 35}
-        text="Puncak magnitudo yang dihitung secara aktual dari data mengindikasikan komponen frekuensi paling kuat yang membentuk pola periodik pada domain waktu."
-        maxChars={38} fontSize={13} fontStyle="italic" fill={C.muted}
-      />
+      {/* Defect 15: mirror rule explanation */}
+      <text x={x + 22} y={y + h - 72} fontSize="14" fontWeight="800" fill={C.primary}>Aturan mirror FFT real:</text>
+      <text x={x + 22} y={y + h - 51} fontSize="13" fill={C.muted}>
+        Untuk sinyal real, pasangan mirror: k dan N-k.
+      </text>
+      <text x={x + 22} y={y + h - 32} fontSize="13" fill={C.muted}>
+        Dengan N={model.nPadded}: {model.dominantPairLines.map(l => l.label).join(', ')}.
+      </text>
     </g>
   );
 }
 
-/* ── scale the wave path from engine coords to new chart coords ── */
 function buildScaledWavePath(originalPath: string, targetW: number, targetH: number): string {
   if (!originalPath) return '';
-  // The engine builds path in 240×64 space. We scale it.
   const scaleX = targetW / 240;
   const scaleY = targetH / 64;
   return originalPath.replace(/([ML])\s*([\d.]+)\s+([\d.]+)/g, (_m, cmd, xStr, yStr) => {
@@ -377,7 +448,6 @@ function buildScaledWavePath(originalPath: string, targetW: number, targetH: num
   });
 }
 
-/* ── MAIN EXPORT ── */
 export function QFTBookFigureSvg({ model, mode }: { model: QFTBookFigureModel; mode: FigureMode }) {
   const flowMarkerId = `fft-flow-arrow-${mode}`;
 
@@ -392,26 +462,20 @@ export function QFTBookFigureSvg({ model, mode }: { model: QFTBookFigureModel; m
       <Header model={model} />
 
       <InputPanel model={model} />
-
-      {/* Flow 1→2 */}
       <FlowArrow x1={590} y1={375} x2={615} y2={375} markerId={flowMarkerId} />
 
       <DividePanel model={model} />
-
-      {/* Flow 2→3 */}
       <FlowArrow x1={1190} y1={375} x2={1215} y2={375} markerId={flowMarkerId} />
 
-      <CombinePanel model={model} />
-
-      {/* Flow down to 4 */}
+      <CombinePanel />
       <FlowArrow x1={VW / 2} y1={595} x2={VW / 2} y2={635} markerId={flowMarkerId} />
 
       <SpectrumPanel model={model} />
 
-      {/* Footer */}
-      <line x1={40} y1={VH - 30} x2={VW - 40} y2={VH - 30} stroke={C.border} strokeWidth={1} />
-      <text x={VW / 2} y={VH - 10} textAnchor="middle" fontSize="13" fill={C.muted} fontStyle="italic">
-        100% React SVG | Dataset: datasets/qft/{model.caseId}.json | Gambar Statis Akademik | Resolusi {VW}×{VH}
+      {/* Defect 13: footer with proper margin, not clipped */}
+      <line x1={40} y1={VH - 40} x2={VW - 40} y2={VH - 40} stroke={C.border} strokeWidth={1} />
+      <text x={VW / 2} y={VH - 18} textAnchor="middle" fontSize="13" fill={C.muted} fontStyle="italic">
+        React SVG + KaTeX • {model.footnote}
       </text>
     </svg>
   );

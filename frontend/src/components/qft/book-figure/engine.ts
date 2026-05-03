@@ -59,8 +59,10 @@ export interface QFTBookFigureModel {
   title: string;
   metaLine: string;
   inputPreview: string;
+  inputPreviewPlain: string;
   paddedPreview: string;
   sampleLine: string;
+  recursionLevelsLabel: string;
   wavePath: string;
   treeRootPreview: string;
   treeEvenPreview: string;
@@ -142,6 +144,14 @@ function formatIndexPreview(indices: number[], maxItems = 8): string {
   const shown = indices.slice(0, maxItems).map(String);
   if (indices.length > maxItems) shown.push('...');
   return `[${shown.join(', ')}]`;
+}
+
+function formatSignalType(signalType: string): string {
+  const labels: Record<string, string> = {
+    synthetic_periodic: 'periodik sintetis',
+    synthetic_mixed: 'campuran sintetis',
+  };
+  return labels[signalType] ?? signalType.replace(/_/g, ' ');
 }
 
 function buildWaveformPath(values: number[], width: number, height: number): string {
@@ -269,15 +279,19 @@ export function buildQFTBookFigureModel(result: QFTBenchmarkResult): QFTBookFigu
 
   return {
     caseId: result.case_id,
-    signalType: result.signal_type,
+    signalType: formatSignalType(result.signal_type),
     nOriginal: result.n_points_original,
     nPadded: n,
     isPadded: result.n_points_original !== n,
-    title: 'Alur FFT Klasik Dinamis - Cooley-Tukey Radix-2',
-    metaLine: `Case ${result.case_id} | N asli = ${result.n_points_original} | N FFT = ${n} | log2(N) = ${Math.log2(n)} | Kompleksitas O(N log N)`,
-    inputPreview: `x_raw[n] = ${formatValuePreview(result.input_signal, 5)}`,
-    paddedPreview: `x_pad[n] = ${formatValuePreview(result.padded_signal, 5)}`,
-    sampleLine: `${result.n_points_original} sampel asli -> zero padding -> ${n} sampel untuk radix-2 FFT.`,
+    title: 'Solusi Klasik: Fast Fourier Transform (FFT)',
+    metaLine: `Case ${result.case_id} | N_{\\text{asli}} = ${result.n_points_original} | N_{\\text{FFT}} = ${n} | \\log_2(N) = ${Math.log2(n)} | \\text{Kompleksitas } O(N \\log N)`,
+    inputPreview: `x_{\\text{raw}}[n] = ${formatValuePreview(result.input_signal, 5)}`,
+    inputPreviewPlain: `x_raw[n] = ${formatValuePreview(result.input_signal, 5)}`,
+    paddedPreview: `x_{\\text{pad}}[n] = ${formatValuePreview(result.padded_signal, 5)}`,
+    sampleLine: result.n_points_original !== n
+      ? `\\text{${result.n_points_original} sampel} \\to \\text{zero-pad} \\to \\text{${n} sampel} \\;(2^{${Math.log2(n)}} \\text{ stages})`
+      : `\\text{${n} sampel, sudah } 2^{${Math.log2(n)}} \\text{ - tidak perlu padding}`,
+    recursionLevelsLabel: Array.from({ length: Math.log2(n) + 1 }, (_, i) => String(n >> i)).join(' -> '),
     wavePath: buildWaveformPath(result.input_signal, 240, 64),
     
     treeRootPreview: formatIndexPreview(trace.indices, 8),
@@ -303,15 +317,15 @@ export function buildQFTBookFigureModel(result: QFTBenchmarkResult): QFTBookFigu
           bottom: fmtComplex(focusRow.bottom),
         }
       : null,
-    outputPreview: `FFT(x_pad) = ${formatComplexPreview(trace.output, 3)}`,
+    outputPreview: `\\text{FFT}(x_{\\text{pad}}) = ${formatComplexPreview(trace.output, 3)}`,
     mirrorPairLabel: mirrorPairs.map((pair) => pair.label).join(' ; '),
     uniqueBinLabel: mirrorPairs.map((pair) => `${pair.canonicalBin}`).join(', '),
     dominantPairLines: mirrorPairs.map((pair) => ({
       label: pair.label,
-      normalizedFrequency: `${fmtNumber(pair.normalizedFrequency)} cycles/sample`,
+      normalizedFrequency: `${fmtNumber(pair.normalizedFrequency)} siklus/sampel`,
       magnitude: fmtNumber(pair.magnitude),
     })),
-    footnote: 'Semua split dan contoh merge dibangun dari padded_signal hasil dataset aktif. Pasangan bin dominan ditampilkan sebagai mirror pair FFT real; Hz tidak dipakai karena dataset belum memiliki sampling_rate_hz.',
+    footnote: 'Visualisasi diderivasi dari padded_signal. Bin dominan ditampilkan sebagai pasangan mirror FFT real pada batas Nyquist.',
     spectrum: result.fft.spectrum,
     dominantBins: result.fft.dominant_bins,
   };

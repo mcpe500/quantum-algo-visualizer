@@ -41,9 +41,9 @@ export function QFTClassicTab({ result }: QFTClassicTabProps) {
         <div className="mb-6 rounded-2xl border border-cyan-200 bg-cyan-50/60 p-4">
           <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
             <div>
-              <h3 className="text-base font-bold text-slate-900">Gambar Buku TA: Alur FFT Landscape</h3>
+              <h3 className="text-base font-bold text-slate-900">Visualisasi Solusi Klasik: FFT (Cooley-Tukey)</h3>
               <p className="mt-1 text-sm text-slate-600">
-                Diagram akademik ringan: gelombang, array, divide, conquer butterfly, lalu output bin dalam satu alur yang lebih natural untuk buku.
+                Diagram akademik terintegrasi: menyatukan dekomposisi domain waktu, operasi butterfly, dan spektrum frekuensi dalam satu alur komprehensif untuk dokumentasi tugas akhir.
               </p>
             </div>
             <button
